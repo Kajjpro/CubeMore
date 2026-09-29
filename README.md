@@ -77,6 +77,18 @@ npm run dev -w client -- --host       # terminal 2 (--host makes Vite reachable 
 
 Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on your phone.
 
+## Rooms
+
+- Every room has a **name** (default: "<host>'s room").
+- **Public** rooms are listed on the home page; anyone can join with one tap.
+- **Private** rooms aren't listed. Joining needs the room code **and** a 4-digit PIN chosen
+  by the host. The host's "Copy invite link" includes the PIN, so friends just tap the link.
+  Someone coming back to their own seat (refresh, dropped connection) doesn't need the PIN again.
+- **Best of** is chosen when the room is created and can't be changed. The host can change the
+  event, format and time limit in the lobby, pick another event for a rematch, or restart in the
+  middle of a match with another event (points go back to 0).
+- You can join a room whose match has already started: you watch that set and race from the next one.
+
 ## How a match works
 
 - A **match** is a series of **sets**. A set has 1 solve (single), 5 (ao5) or 12 (ao12).

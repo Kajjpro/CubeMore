@@ -30,12 +30,14 @@ import type {
   changePenaltySchema,
   createRoomSchema,
   joinRoomSchema,
+  restartSchema,
+  warmUpSchema,
   submitSolveSchema,
   targetPlayerSchema,
   timerStatusSchema,
   updateSettingsSchema,
 } from "./schemas";
-import type { RoomSnapshot } from "./types";
+import type { PublicRoomInfo, RoomSnapshot, Scramble } from "./types";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -45,6 +47,8 @@ export const ClientEvents = {
   UPDATE_SETTINGS: "room:update_settings",
   KICK_PLAYER: "room:kick",
   START_MATCH: "room:start",
+  /** The public rooms, for the list on the home page. */
+  LIST_ROOMS: "rooms:list",
 
   SUBMIT_SOLVE: "match:submit_solve",
   CHANGE_PENALTY: "match:change_penalty",
@@ -53,6 +57,9 @@ export const ClientEvents = {
   END_MATCH: "match:end",
   REMATCH: "match:rematch",
   BACK_TO_LOBBY: "match:back_to_lobby",
+
+  /** A random scramble for the warm-up on the home page (not tied to a room). */
+  WARMUP_SCRAMBLE: "scramble:warmup",
 
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
@@ -73,8 +80,9 @@ export const ServerEvents = {
  *  NOT_CURRENT  - that solve / set isn't current anymore: drop the request, trust the snapshot.
  *  RATE_LIMITED - too many requests: try again a bit later.
  *  INVALID      - the payload didn't pass the checks.
+ *  PIN_REQUIRED - a private room: ask for the PIN (missing or wrong) and try again.
  */
-export type ErrorCode = "NOT_CURRENT" | "RATE_LIMITED" | "INVALID";
+export type ErrorCode = "NOT_CURRENT" | "RATE_LIMITED" | "INVALID" | "PIN_REQUIRED";
 
 /** What the server sends back through the ack callback. */
 export type AckResponse<Data extends object = object> =
@@ -90,6 +98,8 @@ export type TargetPlayerPayload = z.input<typeof targetPlayerSchema>;
 export type SubmitSolvePayload = z.input<typeof submitSolveSchema>;
 export type ChangePenaltyPayload = z.input<typeof changePenaltySchema>;
 export type TimerStatusPayload = z.input<typeof timerStatusSchema>;
+export type RestartPayload = z.input<typeof restartSchema>;
+export type WarmUpPayload = z.input<typeof warmUpSchema>;
 export type EmptyPayload = Record<string, never>;
 
 // ---- Response data ----
@@ -111,13 +121,16 @@ export interface ClientRequests {
   [ClientEvents.UPDATE_SETTINGS]: { payload: UpdateSettingsPayload; response: object };
   [ClientEvents.KICK_PLAYER]: { payload: TargetPlayerPayload; response: object };
   [ClientEvents.START_MATCH]: { payload: EmptyPayload; response: object };
+  [ClientEvents.LIST_ROOMS]: { payload: EmptyPayload; response: { rooms: PublicRoomInfo[] } };
   [ClientEvents.SUBMIT_SOLVE]: { payload: SubmitSolvePayload; response: object };
   [ClientEvents.CHANGE_PENALTY]: { payload: ChangePenaltyPayload; response: object };
   [ClientEvents.TIMER_STATUS]: { payload: TimerStatusPayload; response: object };
   [ClientEvents.SKIP_PLAYER]: { payload: TargetPlayerPayload; response: object };
   [ClientEvents.END_MATCH]: { payload: EmptyPayload; response: object };
-  [ClientEvents.REMATCH]: { payload: EmptyPayload; response: object };
+  /** Rematch after a match, or restart in the middle of one (optionally with another event). */
+  [ClientEvents.REMATCH]: { payload: RestartPayload; response: object };
   [ClientEvents.BACK_TO_LOBBY]: { payload: EmptyPayload; response: object };
+  [ClientEvents.WARMUP_SCRAMBLE]: { payload: WarmUpPayload; response: { scramble: Scramble } };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 

@@ -31,7 +31,9 @@ import {
   describeProblem,
   emptySchema,
   joinRoomSchema,
+  restartSchema,
   submitSolveSchema,
+  warmUpSchema,
   targetPlayerSchema,
   timerStatusSchema,
   updateSettingsSchema,
@@ -42,7 +44,7 @@ import { LiveRoom } from "./rooms/liveRoom";
 import * as logic from "./rooms/roomLogic";
 import { RoomStore } from "./rooms/roomStore";
 import type { ServerRoom } from "./rooms/types";
-import { generateSetScrambles } from "./scrambles";
+import { generateScramble, generateSetScrambles } from "./scrambles";
 
 /** What the server remembers about each connection (browser tab). */
 interface SocketData {
@@ -87,9 +89,9 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
     on(socket, ClientEvents.CREATE_ROOM, createRoomSchema, async (input) => {
       await leaveCurrentRoom(socket);
       const code = rooms.generateUniqueCode();
-      const room = logic.createRoom(code, { ...DEFAULT_SETTINGS, ...input.settings }, input, Date.now());
+      const room = logic.createRoom(code, { ...DEFAULT_SETTINGS, ...input.settings }, input, Date.now(), input.pin ?? null);
       const live = openRoom(room);
-      log(code, `created by ${input.nickname}`);
+      log(code, `${room.settings.visibility} room "${room.settings.name}" created by ${input.nickname}`);
 
       return live.run(() => {
         enterSocketRoom(socket, code, input.playerId);
@@ -111,7 +113,7 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
 
       return live.run(() => {
         if (live.deleted) return logic.fail(ROOM_NOT_FOUND_ERROR);
-        const result = logic.joinRoom(live.state, input, Date.now());
+        const result = logic.joinRoom(live.state, input, Date.now(), input.pin);
         if (!result.ok) return result;
 
         const isNewPlayer = !logic.findPlayer(live.state, input.playerId);
@@ -168,17 +170,26 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
       }),
     );
 
-    on(socket, ClientEvents.REMATCH, emptySchema, () =>
+    /** Rematch after a match, or restart in the middle of one, maybe with another event. */
+    on(socket, ClientEvents.REMATCH, restartSchema, (input) =>
       inMyRoom(socket, async (live, playerId) => {
         const error = logic.rematchError(live.state, playerId);
         if (error) return logic.fail(error);
-        const scrambles = await live.takeScrambles(live.state.settings);
+        // Scrambles for the NEW event (if the host picked another one).
+        const next = logic.settingsAfterRestart(live.state, input.settings);
+        const scrambles = await live.takeScrambles(next);
         const start = { matchId: randomUUID(), scrambles, timing: live.timing };
-        const result = logic.rematch(live.state, playerId, start, Date.now());
-        if (result.ok) log(live.code, "rematch started, set 1 started");
+        const result = logic.rematch(live.state, playerId, start, Date.now(), input.settings);
+        if (result.ok) log(live.code, `new match (${next.cubeEvent}, ${next.format}), set 1 started`);
         return commitResult(live, result);
       }),
     );
+
+    /** The public rooms for the home page. Anyone may ask; private rooms are never listed. */
+    on(socket, ClientEvents.LIST_ROOMS, emptySchema, () => ({
+      ok: true,
+      rooms: logic.publicRoomList(rooms.all().filter((live) => !live.deleted).map((live) => live.state)),
+    }));
 
     on(socket, ClientEvents.END_MATCH, emptySchema, () =>
       inMyRoom(socket, (live, playerId) => commitResult(live, logic.endMatch(live.state, playerId))),
@@ -219,6 +230,16 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
         return { ok: true };
       }),
     );
+
+    /**
+     * A warm-up scramble for the home page. Made here (like every scramble), so
+     * the browser never has to run cubing.js's scramble worker. Rate-limited like
+     * every request.
+     */
+    on(socket, ClientEvents.WARMUP_SCRAMBLE, warmUpSchema, async (input) => ({
+      ok: true,
+      scramble: await generateScramble(input.cubeEvent),
+    }));
 
     on(socket, ClientEvents.PING, emptySchema, () => ({ ok: true, serverTime: Date.now() }));
 

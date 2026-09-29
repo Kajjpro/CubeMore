@@ -33,7 +33,8 @@ export interface RoomActions {
   kick: (player: PlayerSnapshot) => void;
   skip: (player: PlayerSnapshot) => void;
   endMatch: () => void;
-  rematch: () => void;
+  /** After a match, or in the middle of one; optionally with another event / format / time limit. */
+  rematch: (changes?: Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>) => void;
   backToLobby: () => void;
   changePenalty: (solveIndex: number, penalty: Penalty) => void;
   dismissError: () => void;
@@ -118,6 +119,8 @@ export function RoomView(props: RoomViewProps) {
     <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={running}>
       <TopBar
         code={room.code}
+        pin={room.pin}
+        name={room.settings.name}
         summary={settingsSummary(room.settings)}
         connected={props.connected}
         menuOpen={menuOpen}
@@ -207,6 +210,7 @@ export function RoomView(props: RoomViewProps) {
                     youId={youId}
                     isHost={isHost}
                     busy={props.starting}
+                    cubeEvent={room.settings.cubeEvent}
                     onRematch={actions.rematch}
                     onBackToLobby={actions.backToLobby}
                   />
@@ -289,7 +293,15 @@ function SidePanel(props: {
         />
       </div>
       {props.isHost && (
-        <HostPanel room={room} match={match} youId={youId} onSkip={actions.skip} onKick={actions.kick} onEndMatch={actions.endMatch} />
+        <HostPanel
+          room={room}
+          match={match}
+          youId={youId}
+          onSkip={actions.skip}
+          onKick={actions.kick}
+          onEndMatch={actions.endMatch}
+          onRestart={actions.rematch}
+        />
       )}
       <SessionPanel stats={props.stats} />
     </>

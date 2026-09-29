@@ -6,10 +6,17 @@ export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export const NICKNAME_MAX_LENGTH = 20;
 
+export const ROOM_NAME_MAX_LENGTH = 30;
+
+/** Private rooms are protected by a PIN of this many digits. */
+export const PIN_LENGTH = 4;
+
 export const MIN_PLAYERS_LIMIT = 2;
 export const MAX_PLAYERS_LIMIT = 100;
 
 export const DEFAULT_SETTINGS: RoomSettings = {
+  name: "",
+  visibility: "public",
   cubeEvent: "333",
   format: "ao5",
   winCondition: "bo3",

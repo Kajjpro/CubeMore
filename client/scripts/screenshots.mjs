@@ -140,6 +140,8 @@ function checkBottomBar() {
   const issues = [];
   for (const el of document.querySelectorAll("main button, main input, main li, main h2")) {
     if (bar.contains(el)) continue;
+    // Inside a collapsed section: not drawn, so it can't be hidden by the bar.
+    if (el.closest("details:not([open])") && !el.closest("summary")) continue;
     const r = el.getBoundingClientRect();
     if (r.height > 0 && r.bottom > top + 1 && r.top < innerHeight) issues.push(`hidden behind the bottom bar: ${el.tagName} "${el.textContent.trim().slice(0, 30)}"`);
   }

@@ -6,8 +6,9 @@ import { Segmented } from "./ui";
  * Copies the room link. Where the clipboard API isn't allowed (plain http on a
  * local network), it falls back to the older copy command. No dialogs.
  */
-export async function copyRoomLink(code: string): Promise<boolean> {
-  const link = `${window.location.origin}/room/${code}`;
+export async function copyRoomLink(code: string, pin: string | null = null): Promise<boolean> {
+  // A private room's invite link includes the PIN, so friends just tap it.
+  const link = `${window.location.origin}/room/${code}${pin ? `?pin=${pin}` : ""}`;
   try {
     await navigator.clipboard.writeText(link);
     return true;
@@ -26,14 +27,14 @@ export async function copyRoomLink(code: string): Promise<boolean> {
 }
 
 /** "Copied" for a moment after copying. */
-export function useCopy(code: string): [boolean, () => void] {
+export function useCopy(code: string, pin: string | null = null): [boolean, () => void] {
   const [copied, setCopied] = useState(false);
   const timeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timeout.current), []);
   return [
     copied,
     () => {
-      void copyRoomLink(code).then((ok) => {
+      void copyRoomLink(code, pin).then((ok) => {
         if (!ok) return;
         setCopied(true);
         clearTimeout(timeout.current);
@@ -45,6 +46,8 @@ export function useCopy(code: string): [boolean, () => void] {
 
 interface TopBarProps {
   code: string;
+  pin: string | null;
+  name: string;
   summary: string;
   connected: boolean;
   menuOpen: boolean;
@@ -54,13 +57,14 @@ interface TopBarProps {
 }
 
 export const TopBar = memo(function TopBar(props: TopBarProps) {
-  const [copied, copy] = useCopy(props.code);
+  const [copied, copy] = useCopy(props.code, props.pin);
   return (
     <header className="topbar">
       <button type="button" className="code-button" onClick={copy} aria-label={`Room ${props.code}. Copy link`}>
         {copied ? "Copied" : props.code}
       </button>
-      <p className="summary" title={props.summary}>
+      <p className="summary" title={`${props.name} · ${props.summary}`}>
+        <span className="room-name">{props.name}</span>
         <span>{props.summary}</span>
       </p>
       <span className="connection" role="status" title={props.connected ? "Connected" : "Reconnecting"}>

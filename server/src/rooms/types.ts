@@ -31,6 +31,8 @@ export interface ServerRoom {
   players: ServerPlayer[];
   /** Secret playerIds of kicked players. They can't join again. */
   kickedPlayerIds: string[];
+  /** A private room's 4-digit PIN, or null for a public room. */
+  pin: string | null;
   /** When the last player left, or null if someone is in the room. */
   emptySince: number | null;
 }

@@ -93,11 +93,18 @@ export interface MockRoomOptions {
   spectators?: number[];
   scramble?: Scramble;
   solveDeadlineIn?: number;
+  /** Makes it a private room with this PIN. */
+  pin?: string;
 }
 
 export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: string } {
   const names = o.names ?? NAMES.slice(0, 6);
-  const settings: RoomSettings = { ...DEFAULT_SETTINGS, ...o.settings };
+  const settings: RoomSettings = {
+    ...DEFAULT_SETTINGS,
+    name: "Sunday practice",
+    ...(o.pin ? { visibility: "private" as const } : {}),
+    ...o.settings,
+  };
   const ids = names.map((_, i) => `p${i}`);
   const players: PlayerSnapshot[] = names.map((nickname, i) => ({
     id: ids[i],
@@ -112,6 +119,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     version: 42,
     serverTime: Date.now(),
     settings,
+    pin: o.pin ?? null,
     hostId: ids[o.hostIndex ?? 0],
     players,
   };
