@@ -23,6 +23,8 @@ export interface StartOptions {
    * one service to deploy and no cross-origin (CORS) problems.
    */
   clientDist?: string | null;
+  /** Websites on other addresses allowed to connect (e.g. the Vercel site). */
+  clientOrigins?: string[];
 }
 
 export interface RunningServer {
@@ -52,6 +54,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     // signal, we notice within about 10 seconds (the defaults take ~45 seconds).
     pingInterval: 5_000,
     pingTimeout: 5_000,
+    // Browsers only let a website on another address connect if the server
+    // says that address is allowed (CORS). Used when the website is on Vercel.
+    ...(options.clientOrigins?.length ? { cors: { origin: options.clientOrigins } } : {}),
   });
 
   const sockets = registerSocketHandlers(io, {

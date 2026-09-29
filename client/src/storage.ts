@@ -52,6 +52,29 @@ export function saveNickname(nickname: string): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...identity, nickname }));
 }
 
+const PINS_KEY = profileKey("pins");
+
+/** The PIN you used for a private room, so a refresh or a later visit doesn't ask again. */
+export function loadRoomPin(code: string): string | undefined {
+  try {
+    const pins = JSON.parse(localStorage.getItem(PINS_KEY) ?? "{}") as Record<string, string>;
+    return pins[code];
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveRoomPin(code: string, pin: string): void {
+  try {
+    const pins = JSON.parse(localStorage.getItem(PINS_KEY) ?? "{}") as Record<string, string>;
+    // Keep only the last 20 rooms.
+    const kept = Object.fromEntries(Object.entries({ ...pins, [code]: pin }).slice(-20));
+    localStorage.setItem(PINS_KEY, JSON.stringify(kept));
+  } catch {
+    // Storage blocked: the PIN just has to be typed again next time.
+  }
+}
+
 /**
  * A random UUID (v4). We don't use crypto.randomUUID() because browsers only
  * allow it on https or localhost, and phones testing over your Wi-Fi use plain http.

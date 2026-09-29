@@ -14,6 +14,17 @@ latency, snapshot version and outbox size in the bottom-left corner.
 - [ ] A non-host can't change settings (the fields are greyed out).
 - [ ] Set max players below the number of people: "Max players can't be lower than…".
 
+### Public and private rooms
+
+- [ ] Create a **public** room: it appears in "Public rooms" on another phone's home page; Join works in one tap.
+- [ ] Create a **private** room: it is NOT in the list. Opening its code without the PIN asks for the PIN;
+      a wrong PIN is refused; the right one lets you in. The host's "Copy invite link" opens it directly.
+- [ ] Refresh inside a private room: you're back without typing the PIN.
+- [ ] The host can change the event in the lobby, but Best of shows as fixed.
+- [ ] During a match, host: Host panel > "Change event and restart": everyone gets the new event, points back to 0.
+- [ ] After a match, host: pick "Next event" and Rematch.
+- [ ] Join a public room that is racing (it says "racing"): you watch, then race from the next set.
+
 ## 2. Racing
 
 - [ ] Host presses **Start**: everyone sees the same scramble and picture at the same moment, with a beep.

@@ -1,13 +1,16 @@
 // The smaller pieces of the room: player list, host tools, session stats, and
 // the solve review / set result / match over screens.
 
-import { memo } from "react";
-import type { MatchSnapshot, PlayerSnapshot, RoomSnapshot } from "@cube-racing/shared";
-import { FORMAT_LABELS, nameList } from "../labels";
+import { memo, useState } from "react";
+import type { CubeEventId, MatchSnapshot, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import { EVENT_SHORT, FORMAT_LABELS, nameList } from "../labels";
 import type { SessionStats } from "../stats";
 import { formatMark, formatResultLong } from "../time";
 import { scoredMs } from "../stats";
 import { ConfirmButton } from "./ConfirmButton";
+import { EventSelect } from "./SettingsForm";
+
+type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
 import { ProgressBar } from "./ui";
 
 type Names = Record<string, string>;
@@ -69,6 +72,7 @@ export const HostPanel = memo(function HostPanel(props: {
   onSkip: (player: PlayerSnapshot) => void;
   onKick: (player: PlayerSnapshot) => void;
   onEndMatch: () => void;
+  onRestart: (changes: RestartChanges) => void;
 }) {
   const { room, match } = props;
   const waiting =
@@ -99,11 +103,32 @@ export const HostPanel = memo(function HostPanel(props: {
         <PlayerList players={room.players} hostId={room.hostId} youId={props.youId} onKick={props.onKick} />
       </details>
       {match.phase !== "match_over" && (
-        <ConfirmButton className="danger" label="End match" confirmLabel="Tap again to end the match" onConfirm={props.onEndMatch} />
+        <>
+          <RestartControl current={room.settings.cubeEvent} onRestart={props.onRestart} />
+          <ConfirmButton className="danger" label="End match" confirmLabel="Tap again to end the match" onConfirm={props.onEndMatch} />
+        </>
       )}
     </div>
   );
 });
+
+/** Host, during a match: switch to another event and start over (points back to 0). */
+function RestartControl({ current, onRestart }: { current: CubeEventId; onRestart: (changes: RestartChanges) => void }) {
+  const [cubeEvent, setCubeEvent] = useState<CubeEventId>(current);
+  return (
+    <details className="restart">
+      <summary>Change event and restart</summary>
+      <div className="settings-form">
+        <EventSelect label="Next event" value={cubeEvent} onChange={setCubeEvent} />
+        <ConfirmButton
+          label={`Restart with ${EVENT_SHORT[cubeEvent]}`}
+          confirmLabel="Tap again: points go back to 0"
+          onConfirm={() => onRestart({ cubeEvent })}
+        />
+      </div>
+    </details>
+  );
+}
 
 // ---------------------------------------------------------------------------
 
@@ -234,10 +259,13 @@ export function MatchOver(props: {
   youId: string | null;
   isHost: boolean;
   busy: boolean;
-  onRematch: () => void;
+  /** The event of the match that just ended (the host may pick another one). */
+  cubeEvent: CubeEventId;
+  onRematch: (changes: RestartChanges) => void;
   onBackToLobby: () => void;
 }) {
   const { match, names } = props;
+  const [nextEvent, setNextEvent] = useState<CubeEventId>(props.cubeEvent);
   const winners = match.winnerIds.map((id) => nameOf(id, names));
   const rows = Object.entries(match.points).sort(([, a], [, b]) => b - a);
 
@@ -265,14 +293,22 @@ export function MatchOver(props: {
         </tbody>
       </table>
       {props.isHost ? (
-        <div className="row">
-          <button type="button" className="grow" onClick={props.onBackToLobby} disabled={props.busy}>
-            Back to lobby
-          </button>
-          <button type="button" className="primary grow" onClick={props.onRematch} disabled={props.busy}>
-            {props.busy ? "Starting…" : "Rematch"}
-          </button>
-        </div>
+        <>
+          <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />
+          <div className="row">
+            <button type="button" className="grow" onClick={props.onBackToLobby} disabled={props.busy}>
+              Back to lobby
+            </button>
+            <button
+              type="button"
+              className="primary grow"
+              onClick={() => props.onRematch({ cubeEvent: nextEvent })}
+              disabled={props.busy}
+            >
+              {props.busy ? "Starting…" : nextEvent === props.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
+            </button>
+          </div>
+        </>
       ) : (
         <p className="small muted">Waiting for host</p>
       )}

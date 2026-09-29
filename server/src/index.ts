@@ -6,6 +6,8 @@ const server = await startServer({
   timing: config.timing,
   // In production the server also serves the website (built into client/dist).
   clientDist: config.isProduction ? config.clientDist : null,
+  // The website's address when it's hosted elsewhere (e.g. Vercel).
+  clientOrigins: config.clientOrigins,
 });
 console.log(`Server running on http://localhost:${server.port}${config.isProduction ? " (production)" : ""}`);
 

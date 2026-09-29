@@ -21,6 +21,7 @@ import {
   EMPTY_ROOM_TTL_MS,
   RECONNECT_GRACE_MS,
   type ErrorCode,
+  type PublicRoomInfo,
   type RoomSettings,
   type RoomSnapshot,
   type Scramble,
@@ -64,21 +65,27 @@ export function publicIdFor(playerId: string): string {
 // Creating and joining
 // ---------------------------------------------------------------------------
 
+/**
+ * A new room with its creator as host. A room without a name is called
+ * "<host>'s room". A private room needs a PIN (checked by the schema).
+ */
 export function createRoom(
   code: string,
   settings: RoomSettings,
   host: PlayerInfo,
   now: number,
+  pin: string | null = null,
 ): ServerRoom {
   const hostPlayer = newPlayer(host, now);
   return {
     code,
     version: 1,
-    settings,
+    settings: { ...settings, name: settings.name || `${host.nickname}'s room` },
     match: null,
     hostId: hostPlayer.publicId,
     players: [hostPlayer],
     kickedPlayerIds: [],
+    pin: settings.visibility === "private" ? pin : null,
     emptySince: null,
   };
 }
@@ -91,12 +98,18 @@ export function createRoom(
  * (so they keep their place in line for host), their host badge, and their
  * place in the current set.
  */
-export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number): LogicResult {
+export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?: string): LogicResult {
   if (room.kickedPlayerIds.includes(player.playerId)) {
     return fail("You were removed from this room by the host.");
   }
 
   const existing = findPlayer(room, player.playerId);
+  // Private room: a NEW player needs the PIN. Someone coming back to their own
+  // seat (refresh, network drop) doesn't have to type it again.
+  if (!existing && room.pin !== null && pin !== room.pin) {
+    return fail(pin ? "Wrong PIN. Try again." : "This room is private. Enter its PIN.", "PIN_REQUIRED");
+  }
+
   if (existing) {
     const nothingChanged = existing.status === "connected" && existing.nickname === player.nickname;
     if (nothingChanged) {
@@ -211,8 +224,18 @@ export function updateSettings(
   if (room.match) {
     return fail("Settings can only be changed in the lobby.");
   }
+  if (changes.winCondition !== undefined && changes.winCondition !== room.settings.winCondition) {
+    return fail("Best of is chosen when the room is created and can't be changed.");
+  }
 
-  const settings = { ...room.settings, ...changes };
+  // The name, public/private and best of stay as they were created.
+  const settings: RoomSettings = {
+    ...room.settings,
+    ...changes,
+    name: room.settings.name,
+    visibility: room.settings.visibility,
+    winCondition: room.settings.winCondition,
+  };
   if (settings.maxPlayers < room.players.length) {
     return fail(`Max players can't be lower than the ${room.players.length} players already here.`);
   }
@@ -254,22 +277,65 @@ export function startMatch(room: ServerRoom, requesterId: string, start: MatchSt
 }
 
 /** Host, after a match: play again with the same settings, points back to 0. */
-export function rematch(room: ServerRoom, requesterId: string, start: MatchStartInfo, now: number): LogicResult {
+/** What the host may change when restarting: the event, format and time limit (not best of). */
+export type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
+
+/** The room's settings for the next match after a restart. */
+export function settingsAfterRestart(room: ServerRoom, changes: RestartChanges): RoomSettings {
+  return {
+    ...room.settings,
+    ...(changes.cubeEvent ? { cubeEvent: changes.cubeEvent } : {}),
+    ...(changes.format ? { format: changes.format } : {}),
+    ...(changes.solveTimeLimit !== undefined ? { solveTimeLimit: changes.solveTimeLimit } : {}),
+  };
+}
+
+/**
+ * Host: a new match right now, with points back to 0. After a match ("Rematch")
+ * or in the middle of one ("Restart"), optionally with another event, format
+ * or time limit. Best of stays as the room was created.
+ */
+export function rematch(
+  room: ServerRoom,
+  requesterId: string,
+  start: MatchStartInfo,
+  now: number,
+  changes: RestartChanges = {},
+): LogicResult {
   const error = rematchError(room, requesterId);
   if (error) {
     return fail(error);
   }
-  return beginMatch(room, start, now);
+  return beginMatch({ ...room, settings: settingsAfterRestart(room, changes) }, start, now);
 }
 
 export function rematchError(room: ServerRoom, requesterId: string): string | null {
   if (!isHost(room, requesterId)) {
-    return "Only the host can start a rematch.";
+    return "Only the host can restart the match.";
   }
-  if (room.match?.phase !== "match_over") {
-    return "A rematch can only start after the match is over.";
+  if (!room.match) {
+    return "There is no match to restart. Press Start.";
   }
   return null;
+}
+
+/** The public rooms for the home page list: never private rooms, never empty ones. */
+export function publicRoomList(rooms: ServerRoom[]): PublicRoomInfo[] {
+  return rooms
+    .filter((room) => room.settings.visibility === "public" && room.players.length > 0)
+    .map((room) => ({
+      code: room.code,
+      name: room.settings.name,
+      cubeEvent: room.settings.cubeEvent,
+      format: room.settings.format,
+      winCondition: room.settings.winCondition,
+      players: room.players.length,
+      maxPlayers: room.settings.maxPlayers,
+      racing: room.match !== null && room.match.phase !== "match_over",
+      hostName: room.players.find((p) => p.publicId === room.hostId)?.nickname ?? null,
+    }))
+    .sort((a, b) => b.players - a.players || a.name.localeCompare(b.name))
+    .slice(0, 50);
 }
 
 function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
@@ -432,6 +498,7 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
     version: room.version,
     serverTime: now,
     settings: room.settings,
+    pin: room.pin,
     hostId: room.hostId,
     players: room.players.map((p) => ({
       id: p.publicId,

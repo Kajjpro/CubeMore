@@ -18,11 +18,13 @@ import {
   MAX_SOLVE_TIME_MS,
   MIN_PLAYERS_LIMIT,
   NICKNAME_MAX_LENGTH,
+  PIN_LENGTH,
   ROOM_CODE_ALPHABET,
+  ROOM_NAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
 } from "./constants";
 import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
-import { PENALTIES, ROOM_FORMATS, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
+import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROOM_CODE_PATTERN = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
@@ -48,6 +50,20 @@ export const nicknameSchema = z
   .refine((name) => [...name].length >= 1 && [...name].length <= NICKNAME_MAX_LENGTH, {
     message: `Nickname must be 1 to ${NICKNAME_MAX_LENGTH} characters.`,
   });
+
+/** A room name: cleaned like a nickname, 0-30 characters (empty = the server picks "<host>'s room"). */
+export const roomNameSchema = z
+  .string()
+  .max(300)
+  .transform((name) => name.replace(/\p{Cc}/gu, "").replace(/\s+/g, " ").trim())
+  .refine((name) => [...name].length <= ROOM_NAME_MAX_LENGTH, {
+    message: `Room names can be up to ${ROOM_NAME_MAX_LENGTH} characters.`,
+  });
+
+/** A private room's PIN: exactly 4 digits. */
+export const pinSchema = z
+  .string()
+  .regex(new RegExp(`^\\d{${PIN_LENGTH}}$`), `The PIN must be ${PIN_LENGTH} digits.`);
 
 /** Accepts lowercase too ("abc234" -> "ABC234"). */
 export const roomCodeSchema = z
@@ -78,16 +94,43 @@ const solveIdFields = {
 
 export const emptySchema = z.object({});
 
-export const createRoomSchema = z.object({
-  playerId: playerIdSchema,
-  nickname: nicknameSchema,
-  settings: settingsChangesSchema.default({}),
-});
+export const createRoomSchema = z
+  .object({
+    playerId: playerIdSchema,
+    nickname: nicknameSchema,
+    settings: settingsChangesSchema
+      .extend({
+        name: roomNameSchema.optional(),
+        visibility: z.enum(ROOM_VISIBILITIES).optional(),
+      })
+      .default({}),
+    /** Required for a private room. */
+    pin: pinSchema.optional(),
+  })
+  .refine((input) => input.settings.visibility !== "private" || input.pin !== undefined, {
+    message: `A private room needs a ${PIN_LENGTH}-digit PIN.`,
+  });
 
 export const joinRoomSchema = z.object({
   playerId: playerIdSchema,
   nickname: nicknameSchema,
   code: roomCodeSchema,
+  /** Only needed for private rooms (and not when coming back to your own seat). */
+  pin: z.string().max(10).optional(),
+});
+
+/**
+ * Host: start a new match right away (after a match, or in the middle of one),
+ * optionally with another event, format or time limit. The win condition stays.
+ */
+export const restartSchema = z.object({
+  settings: z
+    .object({
+      cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]).optional(),
+      format: z.enum(ROOM_FORMATS).optional(),
+      solveTimeLimit: z.literal(SOLVE_TIME_LIMITS).optional(),
+    })
+    .default({}),
 });
 
 export const updateSettingsSchema = z.object({
@@ -113,6 +156,10 @@ export const submitSolveSchema = z
 export const changePenaltySchema = z.object({
   ...solveIdFields,
   penalty: z.enum(PENALTIES),
+});
+
+export const warmUpSchema = z.object({
+  cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]),
 });
 
 export const timerStatusSchema = z.object({

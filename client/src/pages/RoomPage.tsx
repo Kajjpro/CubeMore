@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
-import { ClientEvents, NICKNAME_MAX_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { ClientEvents, NICKNAME_MAX_LENGTH, PIN_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
 import { RoomView, type RoomActions } from "../components/RoomView";
 import { navigate } from "../router";
 import { request, useIsConnected } from "../socket";
-import { loadIdentity, saveNickname } from "../storage";
+import { loadIdentity, loadRoomPin, saveNickname, saveRoomPin } from "../storage";
 import { useRoom } from "../useRoom";
 
 /** /room/CODE. Asks for a nickname first if we don't have one saved. */
@@ -13,8 +13,30 @@ export function RoomPage({ code }: { code: string }) {
   return <Room code={code} nickname={nickname} />;
 }
 
+/**
+ * The PIN of a private room: from an invite link (?pin=1234, then removed from
+ * the address bar) or the one you used here before.
+ */
+function initialPin(code: string): string | undefined {
+  const params = new URLSearchParams(window.location.search);
+  const fromLink = params.get("pin");
+  if (fromLink) {
+    params.delete("pin");
+    const rest = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}`);
+    return fromLink;
+  }
+  return loadRoomPin(code);
+}
+
 function Room({ code, nickname }: { code: string; nickname: string }) {
-  const { room, youId, joinError, notice } = useRoom(code, nickname);
+  const [pin, setPin] = useState<string | undefined>(() => initialPin(code));
+  const { room, youId, joinError, needsPin, notice } = useRoom(code, nickname, pin);
+
+  // Joined with a PIN: remember it for this room.
+  useEffect(() => {
+    if (room?.pin && pin === room.pin) saveRoomPin(code, pin);
+  }, [room?.pin, pin, code]);
   const connected = useIsConnected();
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -35,9 +57,9 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
     }
 
     /** Start and Rematch make scrambles first, which can take a moment. */
-    async function startWith(event: typeof ClientEvents.START_MATCH | typeof ClientEvents.REMATCH): Promise<void> {
+    async function withStarting(work: () => Promise<void>): Promise<void> {
       setStarting(true);
-      await send(event, {});
+      await work();
       setStarting(false);
     }
 
@@ -46,8 +68,8 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
         await request(ClientEvents.LEAVE_ROOM, {});
         navigate("/");
       },
-      start: () => void startWith(ClientEvents.START_MATCH),
-      rematch: () => void startWith(ClientEvents.REMATCH),
+      start: () => void withStarting(() => send(ClientEvents.START_MATCH, {})),
+      rematch: (settings = {}) => void withStarting(() => send(ClientEvents.REMATCH, { settings })),
       backToLobby: () => void send(ClientEvents.BACK_TO_LOBBY, {}),
       updateSettings: (settings) => void send(ClientEvents.UPDATE_SETTINGS, { settings }),
       kick: (player) => void send(ClientEvents.KICK_PLAYER, { targetId: player.id }),
@@ -61,6 +83,7 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
     };
   }, []);
 
+  if (needsPin) return <PinForm code={code} error={pin ? joinError : null} onSubmit={setPin} />;
   if (joinError) return <JoinError code={code} error={joinError} />;
 
   if (!room) {
@@ -95,6 +118,48 @@ export function JoinError({ code, error }: { code: string; error: string }) {
       <button type="button" className="primary" onClick={() => navigate("/")}>
         Back to home
       </button>
+    </main>
+  );
+}
+
+/** A private room: ask for its PIN. */
+export function PinForm(props: { code: string; error: string | null; onSubmit: (pin: string) => void }) {
+  const [value, setValue] = useState("");
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    if (value.length === PIN_LENGTH) props.onSubmit(value);
+  }
+
+  return (
+    <main className="page">
+      <div className="page-head">
+        <h1>Private room</h1>
+      </div>
+      <p className="intro">
+        Room <span className="mono">{props.code}</span> is private. Enter its {PIN_LENGTH}-digit PIN.
+      </p>
+      {props.error && <p className="banner banner-error">{props.error}</p>}
+      <form className="field" onSubmit={submit} style={{ gap: 12 }}>
+        <label className="field">
+          <span className="field-label">PIN</span>
+          <input
+            className="pin-input"
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="0000"
+            autoFocus
+          />
+        </label>
+        <button className="primary" type="submit" disabled={value.length !== PIN_LENGTH}>
+          Join
+        </button>
+        <button type="button" className="quiet" onClick={() => navigate("/")}>
+          Back to home
+        </button>
+      </form>
     </main>
   );
 }

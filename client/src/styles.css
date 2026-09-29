@@ -565,6 +565,53 @@ input::placeholder {
   color: var(--muted);
 }
 
+.home-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.public-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.public-rooms-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-list li {
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.room-list .cubing-icon {
+  flex: none;
+  width: 26px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.room-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-info .name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .warmup {
   display: flex;
   flex-direction: column;
@@ -668,30 +715,41 @@ input::placeholder {
   text-transform: uppercase;
 }
 
-.event-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 6px;
+select {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 10px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
 }
 
-.event-grid button {
-  min-height: 56px;
-  padding: 6px 2px;
+/* The event menu with its WCA icon in front. */
+.event-select {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  gap: 10px;
+}
+
+.event-select .cubing-icon {
+  flex: none;
+  width: 28px;
+  text-align: center;
   color: var(--text-2);
 }
 
-.event-grid button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 650;
+.pin-input {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px;
+  letter-spacing: 0.4em;
+  max-width: 180px;
+}
+
+.more-options > .settings-form,
+.restart > .settings-form {
+  padding: 8px 0 4px;
 }
 
 .settings-form {
@@ -758,6 +816,16 @@ input::placeholder {
 .topbar .summary span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.topbar .room-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .connection {
@@ -1614,6 +1682,37 @@ details[open] > summary::after {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.share-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.share-title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-line {
+  font-size: 18px;
+  color: var(--text-2);
+}
+
+.pin-line .mono {
+  font-weight: 650;
+  letter-spacing: 0.2em;
+  color: var(--text);
+}
+
+.pin-small {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
 }
 
 .share-row .code {

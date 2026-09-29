@@ -27,16 +27,19 @@ interface RoomConnection {
   room: RoomSnapshot | null;
   /** Our own public player id (to find "you" in the player list). */
   youId: string | null;
-  /** Set when we can't be in this room (not found, full, kicked...). */
+  /** Set when we can't be in this room (not found, full, kicked, PIN needed...). */
   joinError: string | null;
+  /** True when the room is private and needs a (correct) PIN. */
+  needsPin: boolean;
   /** A message from the server for everyone, e.g. "the server is restarting". */
   notice: string | null;
 }
 
-export function useRoom(code: string, nickname: string): RoomConnection {
+export function useRoom(code: string, nickname: string, pin?: string): RoomConnection {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [youId, setYouId] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [needsPin, setNeedsPin] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,10 +56,11 @@ export function useRoom(code: string, nickname: string): RoomConnection {
 
     async function join(): Promise<void> {
       const { playerId } = loadIdentity();
-      const response = await request(ClientEvents.JOIN_ROOM, { code, playerId, nickname });
+      const response = await request(ClientEvents.JOIN_ROOM, { code, playerId, nickname, ...(pin ? { pin } : {}) });
       if (stopped) return;
       if (response.ok) {
         setJoinError(null);
+        setNeedsPin(false);
         setNotice(null);
         setYouId(response.youId);
         applySnapshot(response.room);
@@ -64,6 +68,7 @@ export function useRoom(code: string, nickname: string): RoomConnection {
         void flushOutbox(code);
       } else {
         setJoinError(response.error);
+        setNeedsPin(response.code === "PIN_REQUIRED");
       }
     }
 
@@ -94,7 +99,7 @@ export function useRoom(code: string, nickname: string): RoomConnection {
       socket.off(ServerEvents.NOTICE, onNotice);
       socket.off("connect", join);
     };
-  }, [code, nickname]);
+  }, [code, nickname, pin]);
 
-  return { room, youId, joinError, notice };
+  return { room, youId, joinError, needsPin, notice };
 }

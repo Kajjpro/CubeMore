@@ -7,14 +7,21 @@
  */
 
 import { useEffect, type ReactNode } from "react";
-import type { RoomSnapshot } from "@cube-racing/shared";
+import type { PublicRoomInfo, RoomSnapshot } from "@cube-racing/shared";
 import { RoomView, type RoomActions, type RoomDemo } from "../components/RoomView";
 import { HomePage } from "../pages/HomePage";
-import { JoinError } from "../pages/RoomPage";
+import { JoinError, PinForm } from "../pages/RoomPage";
 import { applyTheme, type ThemePref } from "../prefs";
 import { AO5_FULL, AO5_TIMES, LONG_NAMES, NAMES, SCRAMBLES, ao12Times, mockRoom, type MockRoomOptions } from "./mocks";
 
 const noop = () => {};
+
+const PUBLIC_ROOMS: PublicRoomInfo[] = [
+  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin" },
+  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat" },
+  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa" },
+  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu" },
+];
 const actions: RoomActions = {
   leave: noop,
   start: noop,
@@ -40,6 +47,8 @@ const SOLVING: MockRoomOptions = { phase: "solving", times: AO5_TIMES, points: [
 
 const ROOM_STATES: Record<string, RoomState> = {
   "lobby-alone": { mock: { names: ["Temuulen"], phase: "lobby" } },
+  "lobby-private-alone": { mock: { names: ["Temuulen"], phase: "lobby", pin: "4821" } },
+  "lobby-private-players": { mock: { phase: "lobby", pin: "4821" } },
   "lobby-players": { mock: { phase: "lobby", reconnecting: [4] } },
   "lobby-guest": { mock: { phase: "lobby", meIndex: 2, hostIndex: 0 } },
   solving: { mock: { ...SOLVING, solveDeadlineIn: 90_000, settings: { solveTimeLimit: 2 } } },
@@ -83,11 +92,25 @@ const ROOM_STATES: Record<string, RoomState> = {
   "scramble-sq1": { mock: { ...SOLVING, settings: { cubeEvent: "sq1" }, scramble: { cubeEvent: "sq1", text: SCRAMBLES.sq1 } } },
 };
 
-export const STATE_NAMES = ["home", "create-room", "join-error", ...Object.keys(ROOM_STATES)];
+export const STATE_NAMES = [
+  "home",
+  "home-no-rooms",
+  "create-room",
+  "create-room-private",
+  "pin-prompt",
+  "pin-wrong",
+  "join-error",
+  ...Object.keys(ROOM_STATES),
+];
 
 function renderState(name: string): ReactNode {
-  if (name === "home") return <HomePage demo={{ nickname: "Temuulen", warmUp: { cubeEvent: "333", text: SCRAMBLES["333"] } }} />;
+  const warmUp = { cubeEvent: "333" as const, text: SCRAMBLES["333"] };
+  if (name === "home") return <HomePage demo={{ nickname: "Temuulen", warmUp, rooms: PUBLIC_ROOMS }} />;
+  if (name === "home-no-rooms") return <HomePage demo={{ nickname: "Temuulen", warmUp, rooms: [] }} />;
   if (name === "create-room") return <HomePage demo={{ screen: "create", nickname: "Temuulen" }} />;
+  if (name === "create-room-private") return <HomePage demo={{ screen: "create", nickname: "Temuulen", visibility: "private" }} />;
+  if (name === "pin-prompt") return <PinForm code="K7M2QX" error={null} onSubmit={noop} />;
+  if (name === "pin-wrong") return <PinForm code="K7M2QX" error="Wrong PIN. Try again." onSubmit={noop} />;
   if (name === "join-error") return <JoinError code="ZZZZZZ" error="Room not found. Check the code, or the room may have closed." />;
   const state = ROOM_STATES[name];
   if (!state) return <p>Unknown state {name}</p>;

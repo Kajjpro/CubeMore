@@ -16,6 +16,8 @@ import {
   removeExpiredPlayers,
   shouldDeleteRoom,
   startMatch,
+  publicRoomList,
+  rematch,
   submitSolve,
   tickRoom,
   toSnapshot,
@@ -285,5 +287,72 @@ describe("empty room cleanup", () => {
     const room = ok(joinRoom(empty, bob, START + 1000));
     expect(room.hostId).toBe(publicIdFor(bob.playerId));
     expect(room.emptySince).toBeNull();
+  });
+});
+
+describe("public and private rooms", () => {
+  const privateSettings = { ...DEFAULT_SETTINGS, visibility: "private" as const };
+
+  it("names a room after its host if no name is given", () => {
+    expect(createRoom("ABC234", DEFAULT_SETTINGS, alice, START).settings.name).toBe("Alice's room");
+    const named = createRoom("ABC234", { ...DEFAULT_SETTINGS, name: "Sunday OH" }, alice, START);
+    expect(named.settings.name).toBe("Sunday OH");
+  });
+
+  it("a new player needs the right PIN to join a private room", () => {
+    const room = createRoom("ABC234", privateSettings, alice, START, "4821");
+    expect(joinRoom(room, bob, START + 1000)).toMatchObject({ ok: false, code: "PIN_REQUIRED" });
+    expect(joinRoom(room, bob, START + 1000, "1111")).toMatchObject({ ok: false, code: "PIN_REQUIRED", error: "Wrong PIN. Try again." });
+    expect(joinRoom(room, bob, START + 1000, "4821").ok).toBe(true);
+  });
+
+  it("someone coming back to their seat doesn't need the PIN again", () => {
+    let room = createRoom("ABC234", privateSettings, alice, START, "4821");
+    room = ok(joinRoom(room, bob, START + 1000, "4821"));
+    room = markDisconnected(room, bob.playerId, START + 2000);
+    expect(joinRoom(room, bob, START + 3000).ok).toBe(true);
+  });
+
+  it("public rooms have no PIN; everyone in a private room can see its PIN", () => {
+    expect(toSnapshot(createRoom("ABC234", DEFAULT_SETTINGS, alice, START, "4821"), START).pin).toBeNull();
+    expect(toSnapshot(createRoom("ABC234", privateSettings, alice, START, "4821"), START).pin).toBe("4821");
+  });
+
+  it("lists only public rooms that have players", () => {
+    const open = createRoom("AAAAAA", { ...DEFAULT_SETTINGS, name: "Open" }, alice, START);
+    const hidden = createRoom("BBBBBB", privateSettings, alice, START, "4821");
+    const empty = leaveRoom(createRoom("CCCCCC", DEFAULT_SETTINGS, bob, START), bob.playerId, START);
+    const list = publicRoomList([open, hidden, empty]);
+    expect(list).toEqual([
+      expect.objectContaining({ code: "AAAAAA", name: "Open", players: 1, racing: false, hostName: "Alice" }),
+    ]);
+    expect(JSON.stringify(list)).not.toContain("4821");
+  });
+});
+
+describe("changing the event later", () => {
+  it("best of can't be changed after the room is created", () => {
+    const room = roomWithThreePlayers();
+    expect(updateSettings(room, alice.playerId, { winCondition: "bo5" })).toMatchObject({ ok: false });
+    expect(ok(updateSettings(room, alice.playerId, { cubeEvent: "pyram" })).settings.cubeEvent).toBe("pyram");
+  });
+
+  it("the host can restart in the middle of a match with another event; points go back to 0", () => {
+    let room = ok(startMatch(roomWithThreePlayers(), alice.playerId, matchStart(), START));
+    const firstMatch = room.match!.matchId;
+    const pyraminx = { ...matchStart("pyram"), matchId: "m2" };
+
+    expect(rematch(room, bob.playerId, pyraminx, START + 1000, { cubeEvent: "pyram" }).ok).toBe(false);
+    room = ok(rematch(room, alice.playerId, pyraminx, START + 1000, { cubeEvent: "pyram" }));
+
+    expect(room.settings.cubeEvent).toBe("pyram");
+    expect(room.settings.winCondition).toBe(DEFAULT_SETTINGS.winCondition);
+    expect(room.match).toMatchObject({ matchId: "m2", phase: "solving", setIndex: 0 });
+    expect(room.match!.matchId).not.toBe(firstMatch);
+    expect(Object.values(room.match!.points)).toEqual([0, 0, 0]);
+  });
+
+  it("there is nothing to restart in the lobby", () => {
+    expect(rematch(roomWithThreePlayers(), alice.playerId, matchStart(), START).ok).toBe(false);
   });
 });

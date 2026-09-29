@@ -1,0 +1,24 @@
+# Render "Blueprint": tells Render how to run Cube Racing. See DEPLOY.md.
+#
+# One free web service: the Node server, which also serves the website.
+# It is built from the Dockerfile in this folder.
+#
+# Free plan: it sleeps after ~15 minutes without visitors (the next visit waits
+# about a minute while it wakes up) and rooms are kept in memory, so they are
+# gone after it sleeps or restarts.
+
+services:
+  - type: web
+    name: cubits
+    runtime: docker
+    plan: free
+    # Closest Render region to Mongolia / East Asia.
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render calls this to know the server is up.
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render tells the app which port to use through PORT (the server reads it).

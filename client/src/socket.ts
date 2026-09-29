@@ -8,12 +8,19 @@ import type {
 } from "@cube-racing/shared";
 
 /**
+ * Where the game server is. Set VITE_SERVER_URL when the website and the server
+ * are on different addresses (website on Vercel, server on Fly.io), e.g.
+ *   VITE_SERVER_URL=https://cube-racing-khaliun.fly.dev
+ * Empty = the same address the page came from (development, where Vite forwards
+ * it to the Node server, and the one-service setup on Fly.io).
+ */
+const SERVER_URL: string | undefined = import.meta.env.VITE_SERVER_URL || undefined;
+
+/**
  * The ONE connection to the server, shared by the whole app.
- * With no URL, it connects to the same address the page came from, and
- * Vite forwards it to the Node server (see vite.config.ts).
  * If the connection drops, Socket.IO keeps retrying automatically.
  */
-export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io();
+export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = SERVER_URL ? io(SERVER_URL) : io();
 
 const REQUEST_TIMEOUT_MS = 5000;
 

@@ -20,7 +20,14 @@ export type PlayerStatus = "connected" | "reconnecting";
 /** Whether a player's timer is running right now (never their live time, just this). */
 export type TimerStatus = "solving" | "idle";
 
+/** public = listed on the home page for everyone; private = hidden, joining needs a PIN. */
+export const ROOM_VISIBILITIES = ["public", "private"] as const;
+export type RoomVisibility = (typeof ROOM_VISIBILITIES)[number];
+
 export interface RoomSettings {
+  /** The room's name, shown in the public list and at the top of the room. */
+  name: string;
+  visibility: RoomVisibility;
   /** Which puzzle everyone races on, e.g. "333" or "pyram". */
   cubeEvent: CubeEventId;
   format: RoomFormat;
@@ -141,10 +148,26 @@ export interface RoomSnapshot {
   /** The server's clock when this was sent. Clients use it to show correct countdowns. */
   serverTime: number;
   settings: RoomSettings;
+  /** A private room's 4-digit PIN (everyone in the room already knows it), or null. */
+  pin: string | null;
   /** Public id of the host, or null if the room is empty. */
   hostId: string | null;
   /** In join order: players[0] has been in the room the longest. */
   players: PlayerSnapshot[];
   /** null = the room is in the lobby. */
   match: MatchSnapshot | null;
+}
+
+/** One line of the public room list on the home page. Never includes private rooms. */
+export interface PublicRoomInfo {
+  code: string;
+  name: string;
+  cubeEvent: RoomSettings["cubeEvent"];
+  format: RoomFormat;
+  winCondition: WinCondition;
+  players: number;
+  maxPlayers: number;
+  /** true = a match is running (new players watch until the next set). */
+  racing: boolean;
+  hostName: string | null;
 }

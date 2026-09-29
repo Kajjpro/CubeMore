@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   CUBE_EVENTS,
   MAX_PLAYERS_LIMIT,
@@ -6,66 +6,90 @@ import {
   ROOM_FORMATS,
   SOLVE_TIME_LIMITS,
   WIN_CONDITIONS,
+  type CubeEventId,
   type RoomSettings,
 } from "@cube-racing/shared";
-import { EVENT_SHORT, FORMAT_LABELS, timeLimitLabel, WIN_CONDITION_LABELS } from "../labels";
+import { FORMAT_LABELS, timeLimitLabel, WIN_CONDITION_LABELS } from "../labels";
 import { EventIcon, Segmented } from "./ui";
 
-const WIN_EXPLAINED: Record<RoomSettings["winCondition"], string> = {
-  bo1: `${WIN_CONDITION_LABELS.bo1}: the first set winner wins the match.`,
-  bo3: `${WIN_CONDITION_LABELS.bo3}: first to win 2 sets.`,
-  bo5: `${WIN_CONDITION_LABELS.bo5}: first to win 3 sets.`,
-  unlimited: "Unlimited: sets continue until the host ends the match.",
-};
-
-interface Props {
-  settings: RoomSettings;
-  /** Called with only the field that changed, e.g. { format: "ao12" }. */
-  onChange: (changes: Partial<RoomSettings>) => void;
+/** The event as a compact menu (with its WCA icon), not a grid of every puzzle. */
+export function EventSelect(props: { value: CubeEventId; onChange: (id: CubeEventId) => void; label?: string }) {
+  const id = useId();
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        {props.label ?? "Event"}
+      </label>
+      <div className="event-select">
+        <EventIcon id={props.value} />
+        <select id={id} value={props.value} onChange={(e) => props.onChange(e.target.value as CubeEventId)}>
+          {CUBE_EVENTS.map((event) => (
+            <option key={event.id} value={event.id}>
+              {event.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 }
 
-/** Event, format, win condition, time limit, max players. Used when creating a room and by the host in the lobby. */
-export function SettingsForm({ settings, onChange }: Props) {
+export function FormatField(props: { value: RoomSettings["format"]; onChange: (format: RoomSettings["format"]) => void }) {
+  return (
+    <Segmented
+      label="Format"
+      value={props.value}
+      options={ROOM_FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
+      onChange={props.onChange}
+    />
+  );
+}
+
+export function BestOfField(props: { value: RoomSettings["winCondition"]; onChange: (w: RoomSettings["winCondition"]) => void }) {
+  return (
+    <Segmented
+      label="Best of (can't be changed later)"
+      value={props.value}
+      options={WIN_CONDITIONS.map((w) => ({ value: w, label: w === "unlimited" ? "Unlimited" : `Bo${w.slice(2)}` }))}
+      onChange={props.onChange}
+    />
+  );
+}
+
+/** Time limit and max players: the less common options. */
+export function MoreOptions(props: { settings: RoomSettings; onChange: (changes: Partial<RoomSettings>) => void }) {
+  return (
+    <details className="more-options">
+      <summary>More options</summary>
+      <div className="settings-form">
+        <Segmented
+          label="Time limit per solve"
+          value={props.settings.solveTimeLimit}
+          options={SOLVE_TIME_LIMITS.map((l) => ({ value: l, label: timeLimitLabel(l) }))}
+          onChange={(solveTimeLimit) => props.onChange({ solveTimeLimit })}
+        />
+        <MaxPlayersInput value={props.settings.maxPlayers} onCommit={(maxPlayers) => props.onChange({ maxPlayers })} />
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The host's settings in the lobby: event, format, time limit, max players.
+ * Best of was chosen when the room was created and stays as it is.
+ */
+export function LobbySettings({ settings, onChange }: { settings: RoomSettings; onChange: (changes: Partial<RoomSettings>) => void }) {
   return (
     <div className="settings-form">
-      <div className="field">
-        <span className="field-label">Event</span>
-        <div className="event-grid">
-          {CUBE_EVENTS.map((event) => (
-            <button
-              key={event.id}
-              type="button"
-              aria-pressed={settings.cubeEvent === event.id}
-              title={event.name}
-              onClick={() => onChange({ cubeEvent: event.id })}
-            >
-              <EventIcon id={event.id} />
-              {EVENT_SHORT[event.id]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Segmented
-        label="Format"
-        value={settings.format}
-        options={ROOM_FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }))}
-        onChange={(format) => onChange({ format })}
-      />
-      <Segmented
-        label="Win condition"
-        value={settings.winCondition}
-        options={WIN_CONDITIONS.map((w) => ({ value: w, label: w === "unlimited" ? "Unlimited" : `Bo${w.slice(2)}` }))}
-        onChange={(winCondition) => onChange({ winCondition })}
-      />
-      <Segmented
-        label="Time limit per solve"
-        value={settings.solveTimeLimit}
-        options={SOLVE_TIME_LIMITS.map((l) => ({ value: l, label: timeLimitLabel(l) }))}
-        onChange={(solveTimeLimit) => onChange({ solveTimeLimit })}
-      />
-      <MaxPlayersInput value={settings.maxPlayers} onCommit={(maxPlayers) => onChange({ maxPlayers })} />
-      <p className="tiny muted">{WIN_EXPLAINED[settings.winCondition]}</p>
+      <EventSelect value={settings.cubeEvent} onChange={(cubeEvent) => onChange({ cubeEvent })} />
+      <FormatField value={settings.format} onChange={(format) => onChange({ format })} />
+      <p className="small">
+        <span className="field-label">Best of</span>
+        <br />
+        {WIN_CONDITION_LABELS[settings.winCondition]}
+        <span className="muted"> · set when the room was created</span>
+      </p>
+      <MoreOptions settings={settings} onChange={onChange} />
     </div>
   );
 }

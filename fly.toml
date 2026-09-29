@@ -5,7 +5,7 @@
 # players of the same room could end up on different machines.
 
 # Change this to a unique name (it becomes https://<name>.fly.dev).
-app = "cube-racing-change-me"
+app = "cubits"
 
 # Tokyo.
 primary_region = "nrt"

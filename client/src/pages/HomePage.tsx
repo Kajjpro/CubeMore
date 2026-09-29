@@ -3,12 +3,16 @@ import {
   ClientEvents,
   DEFAULT_SETTINGS,
   NICKNAME_MAX_LENGTH,
+  PIN_LENGTH,
   ROOM_CODE_LENGTH,
+  ROOM_NAME_MAX_LENGTH,
+  type PublicRoomInfo,
   type RoomSettings,
   type Scramble,
 } from "@cube-racing/shared";
-import { SettingsForm } from "../components/SettingsForm";
-import { EventIcon } from "../components/ui";
+import { PublicRooms } from "../components/PublicRooms";
+import { BestOfField, EventSelect, FormatField, MoreOptions } from "../components/SettingsForm";
+import { EventIcon, Segmented } from "../components/ui";
 import { WarmUp } from "../components/WarmUp";
 import { settingsSummary } from "../labels";
 import { setPref, usePrefs, type ThemePref } from "../prefs";
@@ -22,6 +26,8 @@ export interface HomeDemo {
   nickname?: string;
   /** A fixed warm-up scramble, so screenshots are the same every time. */
   warmUp?: Scramble;
+  rooms?: PublicRoomInfo[];
+  visibility?: RoomSettings["visibility"];
 }
 
 export function HomePage({ demo }: { demo?: HomeDemo }) {
@@ -48,6 +54,10 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
     return name;
   }
 
+  function openRoom(roomCode: string): void {
+    if (checkNickname()) navigate(`/room/${roomCode}`);
+  }
+
   function join(event: FormEvent): void {
     event.preventDefault();
     if (!checkNickname()) return;
@@ -61,7 +71,16 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
   }
 
   if (screen === "create") {
-    return <CreateRoom checkNickname={checkNickname} error={error} onError={setError} onBack={() => setScreen("home")} />;
+    return (
+      <CreateRoom
+        nickname={nickname.trim()}
+        checkNickname={checkNickname}
+        error={error}
+        onError={setError}
+        onBack={() => setScreen("home")}
+        initialVisibility={demo?.visibility}
+      />
+    );
   }
 
   return (
@@ -126,7 +145,10 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           </section>
         </div>
 
-        <WarmUp initial={demo?.warmUp} />
+        <div className="home-side">
+          <PublicRooms onJoin={openRoom} demoRooms={demo?.rooms} />
+          <WarmUp initial={demo?.warmUp} />
+        </div>
       </main>
 
       <footer className="home-foot">
@@ -137,26 +159,45 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
   );
 }
 
+/** A random 4-digit PIN (the host can change it). */
+function randomPin(): string {
+  return String(crypto.getRandomValues(new Uint32Array(1))[0] % 10 ** PIN_LENGTH).padStart(PIN_LENGTH, "0");
+}
+
+/** Creating a room: a few choices with good defaults, so it's quick. */
 function CreateRoom(props: {
+  nickname: string;
   checkNickname: () => string | null;
   error: string | null;
   onError: (error: string) => void;
   onBack: () => void;
+  initialVisibility?: RoomSettings["visibility"];
 }) {
-  const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<RoomSettings>({
+    ...DEFAULT_SETTINGS,
+    visibility: props.initialVisibility ?? DEFAULT_SETTINGS.visibility,
+  });
+  const [pin, setPin] = useState(randomPin);
   const [creating, setCreating] = useState(false);
+  const change = (changes: Partial<RoomSettings>) => setSettings((old) => ({ ...old, ...changes }));
+  const isPrivate = settings.visibility === "private";
 
   async function create(): Promise<void> {
     const name = props.checkNickname();
     if (!name) return;
+    if (isPrivate && pin.length !== PIN_LENGTH) {
+      props.onError(`The PIN must be ${PIN_LENGTH} digits.`);
+      return;
+    }
     setCreating(true);
     const response = await request(ClientEvents.CREATE_ROOM, {
       playerId: loadIdentity().playerId,
       nickname: name,
       settings,
+      ...(isPrivate ? { pin } : {}),
     });
     setCreating(false);
-    if (response.ok) navigate(`/room/${response.room.code}`);
+    if (response.ok) navigate(`/room/${response.room.code}${isPrivate ? `?pin=${pin}` : ""}`);
     else props.onError(response.error);
   }
 
@@ -169,10 +210,56 @@ function CreateRoom(props: {
         <h1>New room</h1>
       </div>
       {props.error && <p className="banner banner-error">{props.error}</p>}
-      <SettingsForm settings={settings} onChange={(changes) => setSettings({ ...settings, ...changes })} />
+
+      <div className="settings-form">
+        <label className="field">
+          <span className="field-label">Room name</span>
+          <input
+            value={settings.name}
+            onChange={(e) => change({ name: e.target.value })}
+            maxLength={ROOM_NAME_MAX_LENGTH}
+            placeholder={props.nickname ? `${props.nickname}'s room` : "My room"}
+            autoComplete="off"
+          />
+        </label>
+
+        <Segmented
+          label="Who can join"
+          value={settings.visibility}
+          options={[
+            { value: "public", label: "Public" },
+            { value: "private", label: "Private (PIN)" },
+          ]}
+          onChange={(visibility) => change({ visibility })}
+        />
+        {isPrivate ? (
+          <label className="field">
+            <span className="field-label">PIN</span>
+            <input
+              className="pin-input"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <span className="tiny muted">Not listed publicly. Friends need the room code and this PIN; the invite link includes both.</span>
+          </label>
+        ) : (
+          <p className="tiny muted">Listed on the home page, so anyone can join.</p>
+        )}
+
+        <EventSelect value={settings.cubeEvent} onChange={(cubeEvent) => change({ cubeEvent })} />
+        <FormatField value={settings.format} onChange={(format) => change({ format })} />
+        <BestOfField value={settings.winCondition} onChange={(winCondition) => change({ winCondition })} />
+        <MoreOptions settings={settings} onChange={change} />
+      </div>
+
       <div className="start-bar">
         <div className="inner" style={{ maxWidth: 528 }}>
-          <p className="grow small muted">{settingsSummary(settings)}</p>
+          <p className="grow small muted">
+            {settingsSummary(settings)}
+            {isPrivate ? " · Private" : ""}
+          </p>
           <button type="button" className="primary" onClick={create} disabled={creating}>
             {creating ? "Creating…" : "Create room"}
           </button>

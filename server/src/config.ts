@@ -23,6 +23,15 @@ export const config = {
   isProduction: process.env.NODE_ENV === "production",
   /** Where the built website is. Only used in production. */
   clientDist: process.env.CLIENT_DIST ?? new URL("../../client/dist", import.meta.url).pathname,
+  /**
+   * Websites on OTHER addresses that may connect to this server, separated by
+   * commas, e.g. "https://cube-racing.vercel.app". Needed when the website is
+   * hosted somewhere else (like Vercel). Empty = only this server's own address.
+   */
+  clientOrigins: (process.env.CLIENT_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
   timing: {
     solveReviewMs: numberFromEnv("SOLVE_REVIEW_MS", SOLVE_REVIEW_MS),
     setResultMs: numberFromEnv("SET_RESULT_MS", SET_RESULT_MS),

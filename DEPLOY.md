@@ -1,3 +1,71 @@
+# Deploying
+
+Ways to put Cube Racing online:
+
+- **Free: everything on Render** (no credit card): follow "Deploying to Render (free)" right below.
+- **Paid: everything on Fly.io** (never sleeps): follow "Deploying to Fly.io" further down.
+- **Website on Vercel + game server elsewhere**: follow "Website on Vercel" at the end.
+
+# Deploying to Render (free)
+
+The server runs on Render's free plan and also serves the website, so there is one
+address, e.g. `https://cubits.onrender.com`. Render builds it from the `Dockerfile`,
+with the settings in `render.yaml` (free plan, Singapore, health check `/health`).
+
+**Good to know about the free plan**
+
+- It **sleeps after about 15 minutes with no visitors**. The next visit waits roughly
+  a minute while it wakes up. While people are connected, it should stay awake.
+- Rooms live in memory, so they are **gone after it sleeps, restarts or redeploys**.
+- The CPU is small: scrambles for big puzzles (4x4 and up) can take a few seconds, but
+  the next ones are made in the background during a set.
+- Check Render's pricing page for the current free-plan limits.
+
+### 1. Put the latest code on GitHub
+
+Render deploys whatever is on the `main` branch of your GitHub repository:
+
+```bash
+git add -A
+git commit -m "Latest version"
+git push
+```
+
+### 2. Create the service on Render
+
+1. Go to https://render.com and **sign up with GitHub** (free, no card).
+2. Click **New → Blueprint**, choose your repository (e.g. `Kajjpro/Cubits`) and click **Connect**.
+   Render reads `render.yaml` and shows one web service, `cubits`, on the **Free** plan.
+3. Click **Apply** (or **Deploy Blueprint**). The first build takes about 5-10 minutes.
+
+(Without the Blueprint: **New → Web Service** → your repository → Language **Docker**,
+Region **Singapore**, Instance type **Free**, Health Check Path `/health`,
+Environment variable `NODE_ENV` = `production`.)
+
+### 3. Open it
+
+When the log says `Server running on http://localhost:10000 (production)` and the service
+is **Live**, open the address shown at the top of the service page, e.g.
+`https://cubits.onrender.com` (Render adds a few letters if the name is taken).
+`https://<address>/health` answers `{"ok":true,...}`.
+
+### Updating
+
+Every `git push` to `main` deploys again automatically (and clears the rooms, so push
+when nobody is racing). The **Logs** tab shows the room logs.
+
+### Using Vercel for the website at the same time (optional)
+
+Not needed, since Render already serves the website. If you want it anyway: set
+`VITE_SERVER_URL` on Vercel to your Render address, and add an environment variable
+`CLIENT_ORIGINS` = your Vercel address on Render (**Environment** tab), then redeploy both.
+
+**Why the server can't run on Vercel.** Vercel runs code as short functions that start
+and stop for each request and can't keep WebSocket connections open. The game server
+must run all the time, keep every room in memory, and hold a live connection to every
+player during a race. So on Vercel only the website can live; the server needs a host
+that runs one program continuously (Fly.io, Render, Railway...).
+
 # Deploying to Fly.io (Tokyo)
 
 This puts the app on the internet at `https://<your-app-name>.fly.dev`, so friends
@@ -109,3 +177,71 @@ fly machine list             # how many machines (must be 1)
 - `fly.toml`: app name, Tokyo region, one always-on machine, `/health` check,
   and `SIGTERM` + 10 s to shut down gracefully (players get the "restarting" message).
 - `.env.example`: the settings you can change (on Fly, put them under `[env]` in `fly.toml`).
+
+# Website on Vercel (with the server on Fly.io)
+
+The website (React) is served by Vercel; it connects to the game server on Fly.io.
+Two settings connect them:
+
+| Setting | Where | Value | Why |
+| --- | --- | --- | --- |
+| `VITE_SERVER_URL` | Vercel | `https://<your-fly-app>.fly.dev` | tells the website where the server is |
+| `CLIENT_ORIGINS` | Fly.io | `https://<your-vercel-site>.vercel.app` | lets browsers on the Vercel site connect to the server |
+
+### 1. Deploy the server on Fly.io first
+
+Do steps 1-6 of "Deploying to Fly.io" above. Note the address, e.g. `https://cube-racing-khaliun.fly.dev`,
+and check `https://cube-racing-khaliun.fly.dev/health` answers.
+
+### 2. Put the website on Vercel
+
+Run these in the project's root folder (the one with `vercel.json`, not `client/`):
+
+```bash
+npx vercel login                                  # opens the browser; log in to your Vercel account
+npx vercel                                        # creates the project (answers below)
+```
+
+Answers to its questions: set up and deploy: **yes**; which scope: your account; link to an
+existing project: **no**; project name: e.g. `cube-racing`; code directory: **`./`**; modify
+settings: **no** (`vercel.json` already says how to build: `npm run build`, output `client/dist`).
+
+### 3. Tell the website where the server is
+
+```bash
+npx vercel env add VITE_SERVER_URL production     # paste: https://cube-racing-khaliun.fly.dev
+npx vercel --prod                                 # build and publish with that setting
+```
+
+`VITE_SERVER_URL` is baked into the website when it's built, so after changing it, run
+`npx vercel --prod` again. Vercel prints your site's address, e.g. `https://cube-racing.vercel.app`.
+
+### 4. Allow that website on the server
+
+```bash
+fly secrets set CLIENT_ORIGINS=https://cube-racing.vercel.app
+```
+
+Exactly the address Vercel printed: `https://`, no slash at the end. Several addresses
+(e.g. your own domain too) are separated by commas. Setting a secret restarts the server.
+
+### 5. Try it
+
+Open the Vercel address, add `?debug=1`, create a room: the debug panel should say
+`connection: connected`. Send the room link to a friend.
+
+### Using GitHub instead of the command line
+
+Push the project to GitHub, then in Vercel: **Add New → Project → import the repository**.
+Keep the Root Directory as the repository root, and add `VITE_SERVER_URL` under
+**Settings → Environment Variables** (then redeploy). Every push to `main` deploys the website.
+
+### If it stays on "Connecting…"
+
+- Open the browser console (F12). A **CORS** error means `CLIENT_ORIGINS` on Fly doesn't match
+  the address in the address bar exactly. Fix it with `fly secrets set ...`.
+- `VITE_SERVER_URL` missing or wrong: check it with `npx vercel env ls`, fix it, `npx vercel --prod`.
+- Vercel **preview** deployments have other addresses (`...-git-branch-...vercel.app`). They can
+  only connect if you add their address to `CLIENT_ORIGINS` too; the production address is enough
+  for playing.
+- Deploying the server (Fly) still clears all rooms; deploying the website (Vercel) doesn't.
