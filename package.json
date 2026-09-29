@@ -1,0 +1,20 @@
+{
+  "name": "cube-racing",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently --names server,client --prefix-colors blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "test": "npm test -w server && npm test -w client",
+    "chaos": "npm run chaos -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "build": "npm run build -w client",
+    "start": "NODE_ENV=production npm start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

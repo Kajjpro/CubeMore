@@ -1,0 +1,12 @@
+{
+  "name": "@cube-racing/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./schemas": "./schemas.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
