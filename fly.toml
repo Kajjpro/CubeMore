@@ -1,0 +1,52 @@
+# Fly.io settings. See DEPLOY.md for the step-by-step guide.
+#
+# IMPORTANT: this app must run as EXACTLY ONE machine. Rooms live in the
+# server's memory, so two machines would each have different rooms, and
+# players of the same room could end up on different machines.
+
+# Change this to a unique name (it becomes https://<name>.fly.dev).
+app = "cube-racing-change-me"
+
+# Tokyo.
+primary_region = "nrt"
+
+# Fly sends SIGTERM on deploys and restarts; the server then tells players
+# "the server is restarting" before stopping (see server/src/index.ts).
+kill_signal = "SIGTERM"
+kill_timeout = "10s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never stop the machine: stopping it would delete every room in memory.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    # Each player keeps one long-lived WebSocket connection.
+    type = "connections"
+    soft_limit = 1000
+    hard_limit = 1500
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[deploy]
+  # With a single machine, replace it directly.
+  strategy = "immediate"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

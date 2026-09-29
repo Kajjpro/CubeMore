@@ -1,0 +1,40 @@
+import { useEffect, useState } from "react";
+
+/**
+ * A button that asks for a second tap instead of opening a dialog (no modals
+ * on top of anyone's timer). First tap: the label changes to `confirmLabel`;
+ * a second tap within 4 seconds does it; otherwise it goes back.
+ */
+export function ConfirmButton(props: {
+  label: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timeout = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timeout);
+  }, [armed]);
+
+  return (
+    <button
+      type="button"
+      className={props.className}
+      aria-label={armed ? props.confirmLabel : props.ariaLabel}
+      onClick={() => {
+        if (armed) {
+          setArmed(false);
+          props.onConfirm();
+        } else {
+          setArmed(true);
+        }
+      }}
+    >
+      {armed ? props.confirmLabel : props.label}
+    </button>
+  );
+}
