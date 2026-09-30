@@ -24,6 +24,8 @@
 import type { ErrorCode, RoomSettings, Scramble, SetStanding, SolveResult } from "@cube-racing/shared";
 import {
   findMatchWinner,
+  handicapWinners,
+  paceOf,
   pointLeaders,
   setStanding,
   setWinners,
@@ -319,7 +321,9 @@ function finishSet(match: Match, now: number): Match {
     standings[id] = setStanding(results[id], match.settings.format);
   }
 
-  const winnerIds = setWinners(standings);
+  // Handicap: each player's pace going into this set; whoever beats theirs by the most wins.
+  const paces = match.settings.scoring === "handicap" ? currentPaces(match) : null;
+  const winnerIds = paces ? handicapWinners(standings, paces) : setWinners(standings);
   const points = { ...match.points };
   for (const id of winnerIds) {
     points[id] += 1;
@@ -331,7 +335,7 @@ function finishSet(match: Match, now: number): Match {
     points,
     finishedSets: [
       ...match.finishedSets,
-      { setIndex: match.setIndex, roster: match.roster, results, standings, winnerIds },
+      { setIndex: match.setIndex, roster: match.roster, results, standings, winnerIds, paces },
     ],
     phaseEndsAt: now + match.timing.setResultMs,
     solveDeadline: null,
@@ -366,6 +370,13 @@ export function currentStandings(match: Match): Record<string, SetStanding | nul
     standings[id] = row.every((r) => r !== null) ? setStanding(row as SolveResult[], match.settings.format) : null;
   }
   return standings;
+}
+
+/** Handicap: each roster player's pace for the current set (null = no finished set yet). */
+export function currentPaces(match: Match): Record<string, number | null> {
+  const paces: Record<string, number | null> = {};
+  for (const id of match.roster) paces[id] = paceOf(match.finishedSets, id);
+  return paces;
 }
 
 /** A label for "where the match is". It changes exactly when the phase, solve or set changes. */

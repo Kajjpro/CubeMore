@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_START_DELAY_MS,
   DEFAULT_SETTINGS,
   EMPTY_ROOM_TTL_MS,
   RECONNECT_GRACE_MS,
@@ -7,7 +8,11 @@ import {
   type Scramble,
 } from "@cube-racing/shared";
 import {
+  autoStart,
+  autoStartDue,
+  backToLobby,
   createRoom,
+  endMatch,
   joinRoom,
   kickPlayer,
   leaveRoom,
@@ -16,7 +21,11 @@ import {
   removeExpiredPlayers,
   shouldDeleteRoom,
   startMatch,
-  publicRoomList,
+  nextDeadline,
+  quickRaceCode,
+  reactionText,
+  setTimerStatus,
+  roomList,
   rematch,
   submitSolve,
   tickRoom,
@@ -318,22 +327,44 @@ describe("public and private rooms", () => {
     expect(toSnapshot(createRoom("ABC234", privateSettings, alice, START, "4821"), START).pin).toBe("4821");
   });
 
-  it("lists only public rooms that have players", () => {
+  it("lists public AND private rooms that have players, never a PIN", () => {
     const open = createRoom("AAAAAA", { ...DEFAULT_SETTINGS, name: "Open" }, alice, START);
-    const hidden = createRoom("BBBBBB", privateSettings, alice, START, "4821");
+    const locked = createRoom("BBBBBB", { ...privateSettings, name: "Locked" }, alice, START, "4821");
     const empty = leaveRoom(createRoom("CCCCCC", DEFAULT_SETTINGS, bob, START), bob.playerId, START);
-    const list = publicRoomList([open, hidden, empty]);
+    const list = roomList([open, locked, empty]);
     expect(list).toEqual([
-      expect.objectContaining({ code: "AAAAAA", name: "Open", players: 1, racing: false, hostName: "Alice" }),
+      expect.objectContaining({ code: "BBBBBB", name: "Locked", visibility: "private" }),
+      expect.objectContaining({ code: "AAAAAA", name: "Open", players: 1, racing: false, hostName: "Alice", visibility: "public" }),
     ]);
     expect(JSON.stringify(list)).not.toContain("4821");
+  });
+
+  it("the host can rename the room and make it private (with a PIN) or public again", () => {
+    let room = createRoom("ABC234", DEFAULT_SETTINGS, alice, START);
+    room = ok(updateSettings(room, alice.playerId, { name: "Sunday OH" }));
+    expect(room.settings.name).toBe("Sunday OH");
+    expect(updateSettings(room, alice.playerId, { visibility: "private" })).toMatchObject({ ok: false });
+    room = ok(updateSettings(room, alice.playerId, { visibility: "private" }, "4821"));
+    expect(room.pin).toBe("4821");
+    room = ok(updateSettings(room, alice.playerId, { format: "ao12" })); // keeps its PIN
+    expect(room.pin).toBe("4821");
+    room = ok(updateSettings(room, alice.playerId, { visibility: "public" }));
+    expect(room.pin).toBeNull();
+    room = ok(updateSettings(room, alice.playerId, { name: "" }));
+    expect(room.settings.name).toBe("Alice's room");
   });
 });
 
 describe("changing the event later", () => {
-  it("best of can't be changed after the room is created", () => {
-    const room = roomWithThreePlayers();
-    expect(updateSettings(room, alice.playerId, { winCondition: "bo5" })).toMatchObject({ ok: false });
+  it("best of can be changed until the first race starts, then it's fixed", () => {
+    let room = roomWithThreePlayers();
+    room = ok(updateSettings(room, alice.playerId, { winCondition: "bo5" }));
+    expect(toSnapshot(room, START).bestOfLocked).toBe(false);
+    room = ok(startMatch(room, alice.playerId, matchStart(), START));
+    room = ok(endMatch(room, alice.playerId));
+    room = ok(backToLobby(room, alice.playerId));
+    expect(toSnapshot(room, START).bestOfLocked).toBe(true);
+    expect(updateSettings(room, alice.playerId, { winCondition: "bo3" })).toMatchObject({ ok: false });
     expect(ok(updateSettings(room, alice.playerId, { cubeEvent: "pyram" })).settings.cubeEvent).toBe("pyram");
   });
 
@@ -354,5 +385,91 @@ describe("changing the event later", () => {
 
   it("there is nothing to restart in the lobby", () => {
     expect(rematch(roomWithThreePlayers(), alice.playerId, matchStart(), START).ok).toBe(false);
+  });
+});
+
+describe("the race starts by itself", () => {
+  it("counts down when a second player joins, then starts for everyone", () => {
+    let room = createRoom("ABC234", DEFAULT_SETTINGS, alice, START);
+    expect(room.autoStartAt).toBeNull();
+    room = ok(joinRoom(room, bob, START + 1000));
+    expect(room.autoStartAt).toBe(START + 1000 + AUTO_START_DELAY_MS);
+    expect(nextDeadline(room)).toBe(room.autoStartAt);
+    expect(toSnapshot(room, START).autoStartAt).toBe(room.autoStartAt);
+
+    // A third player joining doesn't push the start back.
+    room = ok(joinRoom(room, carol, START + 2000));
+    expect(room.autoStartAt).toBe(START + 1000 + AUTO_START_DELAY_MS);
+
+    const at = room.autoStartAt!;
+    expect(autoStartDue(room, at - 1)).toBe(false);
+    expect(autoStartDue(room, at)).toBe(true);
+    room = ok(autoStart(room, matchStart(), at));
+    expect(room.match).toMatchObject({ phase: "solving", setIndex: 0 });
+    expect(room.match!.roster).toHaveLength(3);
+    expect(room.autoStartAt).toBeNull();
+    expect(room.hasRaced).toBe(true);
+  });
+
+  it("stops the countdown if the other player leaves", () => {
+    let room = ok(joinRoom(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), bob, START + 1000));
+    room = leaveRoom(room, bob.playerId, START + 2000);
+    expect(room.autoStartAt).toBeNull();
+    expect(autoStartDue(room, START + 60_000)).toBe(false);
+  });
+
+  it("the host can still start right away (alone to practise, or during the countdown)", () => {
+    const alone = ok(startMatch(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), alice.playerId, matchStart(), START));
+    expect(alone.match?.phase).toBe("solving");
+    const counting = ok(joinRoom(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), bob, START + 1000));
+    const started = ok(startMatch(counting, alice.playerId, matchStart(), START + 1500));
+    expect(started.autoStartAt).toBeNull();
+    expect(autoStartDue(started, START + 60_000)).toBe(false);
+  });
+
+  it("someone joining during a match doesn't start a countdown", () => {
+    let room = ok(startMatch(roomWithThreePlayers(), alice.playerId, matchStart(), START));
+    room = ok(joinRoom(room, { playerId: "dan-id", nickname: "Dan" }, START + 1000));
+    expect(room.autoStartAt).toBeNull();
+  });
+});
+
+describe("race now", () => {
+  it("prefers a public lobby for the event (fullest first), then a racing room, never private or full ones", () => {
+    const lobbyOne = createRoom("AAAAAA", DEFAULT_SETTINGS, alice, START);
+    const lobbyTwo = ok(joinRoom(createRoom("BBBBBB", DEFAULT_SETTINGS, bob, START), carol, START));
+    const racing = ok(startMatch(createRoom("CCCCCC", DEFAULT_SETTINGS, carol, START), carol.playerId, matchStart(), START));
+    const locked = createRoom("DDDDDD", { ...DEFAULT_SETTINGS, visibility: "private" }, alice, START, "1234");
+    const pyra = createRoom("EEEEEE", { ...DEFAULT_SETTINGS, cubeEvent: "pyram" }, alice, START);
+    const full = createRoom("FFFFFF", { ...DEFAULT_SETTINGS, maxPlayers: 2 }, alice, START);
+    const fullRoom = ok(joinRoom(full, bob, START));
+
+    expect(quickRaceCode([lobbyOne, lobbyTwo, racing, locked, pyra, fullRoom], "333", null)).toBe("BBBBBB");
+    expect(quickRaceCode([racing, locked, fullRoom], "333", null)).toBe("CCCCCC");
+    expect(quickRaceCode([lobbyTwo], "333", "BBBBBB")).toBeNull(); // not the room you're already in
+    expect(quickRaceCode([locked, pyra], "333", null)).toBeNull();
+    // Everyone's connection dropped: not a room to send someone into.
+    const ghost = markDisconnected(createRoom("GGGGGG", DEFAULT_SETTINGS, alice, START), alice.playerId, START);
+    expect(quickRaceCode([ghost], "333", null)).toBeNull();
+  });
+});
+
+describe("reactions and live clocks", () => {
+  it("a reaction names the player and their latest time", () => {
+    let room = ok(startMatch(roomWithThreePlayers(), alice.playerId, matchStart(), START));
+    const bobId = publicIdFor(bob.playerId);
+    expect(reactionText(room, bobId, "🔥")).toBe("🔥 Bob");
+    room = submit(room, bob.playerId, 9120, START + 10_000);
+    expect(reactionText(room, bobId, "🔥")).toBe("🔥 Bob's 9.12");
+    expect(reactionText(room, "nobody", "🔥")).toBeNull();
+  });
+
+  it("remembers when a player's timer started, and forgets it when they submit", () => {
+    let room = ok(startMatch(roomWithThreePlayers(), alice.playerId, matchStart(), START));
+    room = setTimerStatus(room, bob.playerId, "solving", START + 500);
+    const bobRow = () => toSnapshot(room, START).players.find((p) => p.nickname === "Bob")!;
+    expect(bobRow().solvingSince).toBe(START + 500);
+    room = submit(room, bob.playerId, 9120, START + 9_700);
+    expect(bobRow()).toMatchObject({ timerStatus: "idle", solvingSince: null });
   });
 });

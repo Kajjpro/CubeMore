@@ -2,6 +2,7 @@
 // that React components can subscribe to with usePrefs().
 
 import { useSyncExternalStore } from "react";
+import type { CubeEventId } from "@cube-racing/shared";
 import { profileKey } from "./storage";
 
 export type ThemePref = "system" | "light" | "dark";
@@ -16,9 +17,19 @@ export interface Prefs {
   inputMode: InputMode;
   sound: boolean;
   preview: PreviewPref;
+  /** The event "Race now" looks for. */
+  raceEvent: CubeEventId;
 }
 
-const DEFAULTS: Prefs = { theme: "system", runningDisplay: "full", inputMode: "timer", sound: true, preview: "2d" };
+// Dark by default (the race page is designed dark-first); Light and System stay in the Menu.
+const DEFAULTS: Prefs = {
+  theme: "dark",
+  runningDisplay: "full",
+  inputMode: "timer",
+  sound: true,
+  preview: "2d",
+  raceEvent: "333",
+};
 const KEY = profileKey("prefs");
 
 function load(): Prefs {

@@ -28,16 +28,23 @@
 import type { z } from "zod";
 import type {
   changePenaltySchema,
+  chatSchema,
+  quickRaceSchema,
+  watchRoomSchema,
+  dailySchema,
+  dailyStartSchema,
+  dailySubmitSchema,
+  cubeMovesSchema,
+  reactSchema,
   createRoomSchema,
   joinRoomSchema,
   restartSchema,
-  warmUpSchema,
   submitSolveSchema,
   targetPlayerSchema,
   timerStatusSchema,
   updateSettingsSchema,
 } from "./schemas";
-import type { PublicRoomInfo, RoomSnapshot, Scramble } from "./types";
+import type { ChatMessage, DailyStatus, PublicRoomInfo, RoomSnapshot } from "./types";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -47,7 +54,7 @@ export const ClientEvents = {
   UPDATE_SETTINGS: "room:update_settings",
   KICK_PLAYER: "room:kick",
   START_MATCH: "room:start",
-  /** The public rooms, for the list on the home page. */
+  /** Every open room (public and private), for the list on the home page. */
   LIST_ROOMS: "rooms:list",
 
   SUBMIT_SOLVE: "match:submit_solve",
@@ -58,8 +65,22 @@ export const ClientEvents = {
   REMATCH: "match:rematch",
   BACK_TO_LOBBY: "match:back_to_lobby",
 
-  /** A random scramble for the warm-up on the home page (not tied to a room). */
-  WARMUP_SCRAMBLE: "scramble:warmup",
+  /** Send a chat message to everyone in your room. */
+  SEND_CHAT: "chat:send",
+  /** React to another player's latest time (shows on their row and in the chat). */
+  REACT: "chat:react",
+  /** Smart cube: your moves during a solve, so others can watch your cube live. */
+  CUBE_MOVES: "match:cube_moves",
+  /** The daily scramble: your status and today's leaderboard. */
+  DAILY_STATUS: "daily:status",
+  /** Start your one daily attempt: the scramble shows and the 10 minutes start. */
+  DAILY_START: "daily:start",
+  /** Send your daily time. */
+  DAILY_SUBMIT: "daily:submit",
+  /** Watch a room without a seat in it (the streamer overlay). Gets snapshots like a player. */
+  WATCH_ROOM: "room:watch",
+  /** "Race now": the code of an open public room for this event, or null (then create one). */
+  QUICK_RACE: "rooms:quick_race",
 
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
@@ -73,6 +94,10 @@ export const ServerEvents = {
   KICKED: "room:kicked",
   /** A message for everyone, e.g. "the server is restarting". */
   NOTICE: "server:notice",
+  /** One new chat line (a player's message, or a notice like "Anu joined the room"). */
+  CHAT: "chat:message",
+  /** A player's smart cube moves during the current solve (not part of the room state). */
+  CUBE_MOVES: "match:cube_moves",
 } as const;
 
 /**
@@ -99,7 +124,14 @@ export type SubmitSolvePayload = z.input<typeof submitSolveSchema>;
 export type ChangePenaltyPayload = z.input<typeof changePenaltySchema>;
 export type TimerStatusPayload = z.input<typeof timerStatusSchema>;
 export type RestartPayload = z.input<typeof restartSchema>;
-export type WarmUpPayload = z.input<typeof warmUpSchema>;
+export type ChatPayload = z.input<typeof chatSchema>;
+export type ReactPayload = z.input<typeof reactSchema>;
+export type QuickRacePayload = z.input<typeof quickRaceSchema>;
+export type WatchRoomPayload = z.input<typeof watchRoomSchema>;
+export type DailyPayload = z.input<typeof dailySchema>;
+export type CubeMovesPayload = z.input<typeof cubeMovesSchema>;
+export type DailyStartPayload = z.input<typeof dailyStartSchema>;
+export type DailySubmitPayload = z.input<typeof dailySubmitSchema>;
 export type EmptyPayload = Record<string, never>;
 
 // ---- Response data ----
@@ -108,6 +140,8 @@ export interface JoinedRoomResponse {
   room: RoomSnapshot;
   /** Your own public id, so the UI can tell which player is "you". */
   youId: string;
+  /** The room's recent chat (oldest first). Chat isn't part of the synced room state. */
+  chat: ChatMessage[];
 }
 
 /**
@@ -130,7 +164,14 @@ export interface ClientRequests {
   /** Rematch after a match, or restart in the middle of one (optionally with another event). */
   [ClientEvents.REMATCH]: { payload: RestartPayload; response: object };
   [ClientEvents.BACK_TO_LOBBY]: { payload: EmptyPayload; response: object };
-  [ClientEvents.WARMUP_SCRAMBLE]: { payload: WarmUpPayload; response: { scramble: Scramble } };
+  [ClientEvents.SEND_CHAT]: { payload: ChatPayload; response: object };
+  [ClientEvents.REACT]: { payload: ReactPayload; response: object };
+  [ClientEvents.QUICK_RACE]: { payload: QuickRacePayload; response: { code: string | null } };
+  [ClientEvents.WATCH_ROOM]: { payload: WatchRoomPayload; response: { room: RoomSnapshot } };
+  [ClientEvents.CUBE_MOVES]: { payload: CubeMovesPayload; response: object };
+  [ClientEvents.DAILY_STATUS]: { payload: DailyPayload; response: { daily: DailyStatus } };
+  [ClientEvents.DAILY_START]: { payload: DailyStartPayload; response: { daily: DailyStatus } };
+  [ClientEvents.DAILY_SUBMIT]: { payload: DailySubmitPayload; response: { daily: DailyStatus } };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 
@@ -147,4 +188,6 @@ export interface ServerToClientEvents {
   [ServerEvents.ROOM_STATE]: (room: RoomSnapshot) => void;
   [ServerEvents.KICKED]: (info: { code: string }) => void;
   [ServerEvents.NOTICE]: (info: { message: string }) => void;
+  [ServerEvents.CHAT]: (message: ChatMessage) => void;
+  [ServerEvents.CUBE_MOVES]: (batch: { playerId: string; solveKey: string; moves: string[] }) => void;
 }

@@ -31,7 +31,7 @@ function initialPin(code: string): string | undefined {
 
 function Room({ code, nickname }: { code: string; nickname: string }) {
   const [pin, setPin] = useState<string | undefined>(() => initialPin(code));
-  const { room, youId, joinError, needsPin, notice } = useRoom(code, nickname, pin);
+  const { room, youId, joinError, needsPin, notice, chat, cubeMoves } = useRoom(code, nickname, pin);
 
   // Joined with a PIN: remember it for this room.
   useEffect(() => {
@@ -71,7 +71,7 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
       start: () => void withStarting(() => send(ClientEvents.START_MATCH, {})),
       rematch: (settings = {}) => void withStarting(() => send(ClientEvents.REMATCH, { settings })),
       backToLobby: () => void send(ClientEvents.BACK_TO_LOBBY, {}),
-      updateSettings: (settings) => void send(ClientEvents.UPDATE_SETTINGS, { settings }),
+      updateSettings: (settings, pin) => void send(ClientEvents.UPDATE_SETTINGS, { settings, ...(pin ? { pin } : {}) }),
       kick: (player) => void send(ClientEvents.KICK_PLAYER, { targetId: player.id }),
       skip: (player) => void send(ClientEvents.SKIP_PLAYER, { targetId: player.id }),
       endMatch: () => void send(ClientEvents.END_MATCH, {}),
@@ -80,6 +80,11 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
         if (match) void send(ClientEvents.CHANGE_PENALTY, { matchId: match.matchId, setIndex: match.setIndex, solveIndex, penalty });
       },
       dismissError: () => setError(null),
+      react: (targetId, emoji) => void request(ClientEvents.REACT, { targetId, emoji }),
+      sendChat: async (text) => {
+        const response = await request(ClientEvents.SEND_CHAT, { text });
+        return response.ok ? null : response.error;
+      },
     };
   }, []);
 
@@ -103,6 +108,8 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
       error={error}
       starting={starting}
       actions={actions}
+      chat={chat}
+      cubeMoves={cubeMoves}
     />
   );
 }

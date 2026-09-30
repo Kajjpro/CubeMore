@@ -1,5 +1,7 @@
 import { lazy, Suspense } from "react";
+import { DailyPage } from "./pages/DailyPage";
 import { HomePage } from "./pages/HomePage";
+import { OverlayPage } from "./pages/OverlayPage";
 import { RoomPage } from "./pages/RoomPage";
 import { usePath } from "./router";
 
@@ -17,6 +19,12 @@ export function App() {
       </Suspense>
     );
   }
+
+  if (path === "/daily" || path === "/daily/") return <DailyPage />;
+
+  // "/room/ABC234/overlay" -> the streamer overlay for that room.
+  const overlay = path.match(/^\/room\/([A-Za-z0-9]+)\/overlay\/?$/);
+  if (overlay) return <OverlayPage code={overlay[1].toUpperCase()} />;
 
   // "/room/ABC234" -> room page for ABC234. Anything else -> home page.
   const match = path.match(/^\/room\/([A-Za-z0-9]+)\/?$/);

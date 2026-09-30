@@ -27,13 +27,20 @@ import {
 } from "@cube-racing/shared";
 import {
   changePenaltySchema,
+  chatSchema,
   createRoomSchema,
   describeProblem,
   emptySchema,
   joinRoomSchema,
+  quickRaceSchema,
+  reactSchema,
+  watchRoomSchema,
+  dailySchema,
+  dailyStartSchema,
+  dailySubmitSchema,
+  cubeMovesSchema,
   restartSchema,
   submitSolveSchema,
-  warmUpSchema,
   targetPlayerSchema,
   timerStatusSchema,
   updateSettingsSchema,
@@ -44,13 +51,20 @@ import { LiveRoom } from "./rooms/liveRoom";
 import * as logic from "./rooms/roomLogic";
 import { RoomStore } from "./rooms/roomStore";
 import type { ServerRoom } from "./rooms/types";
-import { generateScramble, generateSetScrambles } from "./scrambles";
+import type { DailyService } from "./daily/daily";
+import { generateSetScrambles } from "./scrambles";
 
 /** What the server remembers about each connection (browser tab). */
 interface SocketData {
   roomCode: string | null;
   playerId: string | null;
   limiter: RateLimiter;
+  /** A stricter limit just for chat, so nobody can flood the room chat. */
+  chatLimiter: RateLimiter;
+  /** A room this connection watches without playing (the streamer overlay), or null. */
+  watching: string | null;
+  /** Smart cube moves have their own limit (up to ~10 batches a second while solving). */
+  movesLimiter: RateLimiter;
 }
 
 type NoEvents = Record<string, never>;
@@ -64,6 +78,8 @@ export interface SocketOptions {
   log: (code: string, message: string) => void;
   /** Lets tests use fake scrambles. */
   makeScrambles?: typeof generateSetScrambles;
+  /** The daily scramble (see daily/daily.ts). */
+  daily: DailyService;
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -72,6 +88,10 @@ const ROOM_NOT_FOUND_ERROR = "Room not found. Check the code, or the room may ha
 /** Rate limit per connection: bursts of 30, then 15 requests per second. */
 const RATE_LIMIT_BURST = 30;
 const RATE_LIMIT_PER_SECOND = 15;
+
+/** Chat: bursts of 5 messages, then one every 2 seconds. */
+const CHAT_BURST = 5;
+const CHAT_PER_SECOND = 0.5;
 
 export function registerSocketHandlers(io: IoServer, options: SocketOptions): { rooms: RoomStore; stop: () => void } {
   const rooms = new RoomStore();
@@ -82,6 +102,9 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
       roomCode: null,
       playerId: null,
       limiter: new RateLimiter(RATE_LIMIT_BURST, RATE_LIMIT_PER_SECOND),
+      chatLimiter: new RateLimiter(CHAT_BURST, CHAT_PER_SECOND),
+      watching: null,
+      movesLimiter: new RateLimiter(20, 12),
     };
 
     // ---- Rooms ----
@@ -92,10 +115,11 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
       const room = logic.createRoom(code, { ...DEFAULT_SETTINGS, ...input.settings }, input, Date.now(), input.pin ?? null);
       const live = openRoom(room);
       log(code, `${room.settings.visibility} room "${room.settings.name}" created by ${input.nickname}`);
+      live.addChat("system", `${input.nickname} created the room`);
 
       return live.run(() => {
         enterSocketRoom(socket, code, input.playerId);
-        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId) };
+        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId), chat: live.chatHistory() };
       });
     });
 
@@ -113,18 +137,114 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
 
       return live.run(() => {
         if (live.deleted) return logic.fail(ROOM_NOT_FOUND_ERROR);
+        const needsPin = live.state.pin !== null && !logic.findPlayer(live.state, input.playerId);
+        if (needsPin && input.pin && !live.wrongPins.hasToken()) {
+          return logic.fail("Too many wrong PINs for this room. Wait a minute and try again.", "PIN_REQUIRED");
+        }
         const result = logic.joinRoom(live.state, input, Date.now(), input.pin);
-        if (!result.ok) return result;
+        if (!result.ok) {
+          if (result.code === "PIN_REQUIRED" && input.pin) live.wrongPins.tryTake();
+          return result;
+        }
 
         const isNewPlayer = !logic.findPlayer(live.state, input.playerId);
         live.commit(result.room);
         enterSocketRoom(socket, input.code, input.playerId);
         if (isNewPlayer) log(input.code, `${input.nickname} joined`);
 
-        // The player gets the full current snapshot right away, in the reply.
-        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId) };
+        // The player gets the full current snapshot (and the recent chat) right away, in the reply.
+        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId), chat: live.chatHistory() };
       });
     });
+
+    /** A chat message to everyone in your room. Rendered as plain text by the clients. */
+    on(socket, ClientEvents.SEND_CHAT, chatSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => {
+        const player = logic.findPlayer(live.state, playerId);
+        if (!player) return logic.fail(NOT_IN_ROOM_ERROR);
+        if (!socket.data.chatLimiter.tryTake()) {
+          return logic.fail("You're sending messages too fast. Wait a moment.", "RATE_LIMITED");
+        }
+        live.addChat("user", input.text, { name: player.nickname, publicId: player.publicId });
+        return { ok: true };
+      }),
+    );
+
+    /** A reaction to another player's latest time. Shares the chat's rate limit. */
+    on(socket, ClientEvents.REACT, reactSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => {
+        const player = logic.findPlayer(live.state, playerId);
+        if (!player) return logic.fail(NOT_IN_ROOM_ERROR);
+        if (input.targetId === player.publicId) return logic.fail("You can't react to your own time.");
+        const text = logic.reactionText(live.state, input.targetId, input.emoji);
+        if (!text) return logic.fail("That player isn't in the room any more.");
+        if (!socket.data.chatLimiter.tryTake()) {
+          return logic.fail("You're reacting too fast. Wait a moment.", "RATE_LIMITED");
+        }
+        live.addChat("reaction", text, { name: player.nickname, publicId: player.publicId }, input.targetId);
+        return { ok: true };
+      }),
+    );
+
+    /**
+     * Watch a room without a seat (the streamer overlay): the connection gets
+     * every snapshot, but isn't a player. Private rooms need the PIN, with the
+     * same wrong-PIN limit as joining.
+     */
+    on(socket, ClientEvents.WATCH_ROOM, watchRoomSchema, (input) => {
+      const live = rooms.get(input.code);
+      if (!live || live.deleted) return logic.fail(ROOM_NOT_FOUND_ERROR);
+      const pin = live.state.pin;
+      if (pin !== null && input.pin !== pin) {
+        if (!input.pin) return logic.fail("This room is private. Add its PIN to the overlay link.", "PIN_REQUIRED");
+        if (!live.wrongPins.tryTake()) {
+          return logic.fail("Too many wrong PINs for this room. Wait a minute and try again.", "PIN_REQUIRED");
+        }
+        return logic.fail("Wrong PIN in the overlay link.", "PIN_REQUIRED");
+      }
+      if (socket.data.watching && socket.data.watching !== input.code && socket.data.watching !== socket.data.roomCode) {
+        socket.leave(socket.data.watching);
+      }
+      socket.join(input.code);
+      socket.data.watching = input.code;
+      return { ok: true, room: live.snapshot() };
+    });
+
+    /**
+     * Smart cube moves during a solve: passed on to everyone else in the room
+     * (not stored, not in snapshots). Only while this player's timer runs.
+     */
+    on(socket, ClientEvents.CUBE_MOVES, cubeMovesSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => {
+        const player = logic.findPlayer(live.state, playerId);
+        const match = live.state.match;
+        if (!player || !match || match.phase !== "solving" || player.timerStatus !== "solving") {
+          return logic.fail("Not solving right now.", "NOT_CURRENT");
+        }
+        if (!socket.data.movesLimiter.tryTake()) return logic.fail("Too many moves at once.", "RATE_LIMITED");
+        const solveKey = `${match.matchId}/${match.setIndex}/${match.solveIndex}`;
+        socket.to(live.code).emit(ServerEvents.CUBE_MOVES, { playerId: player.publicId, solveKey, moves: input.moves });
+        return { ok: true };
+      }),
+    );
+
+    // ---- The daily scramble ----
+
+    on(socket, ClientEvents.DAILY_STATUS, dailySchema, (input) => options.daily.status(input.playerId));
+    on(socket, ClientEvents.DAILY_START, dailyStartSchema, (input) => options.daily.start(input.playerId, input.nickname));
+    on(socket, ClientEvents.DAILY_SUBMIT, dailySubmitSchema, (input) =>
+      options.daily.submit(input.playerId, input.timeMs, input.penalty),
+    );
+
+    /** "Race now": an open public room for this event, or null (the client then creates one). */
+    on(socket, ClientEvents.QUICK_RACE, quickRaceSchema, (input) => ({
+      ok: true,
+      code: logic.quickRaceCode(
+        rooms.all().filter((live) => !live.deleted).map((live) => live.state),
+        input.cubeEvent,
+        socket.data.roomCode,
+      ),
+    }));
 
     on(socket, ClientEvents.LEAVE_ROOM, emptySchema, async () => {
       await leaveCurrentRoom(socket);
@@ -132,7 +252,9 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
     });
 
     on(socket, ClientEvents.UPDATE_SETTINGS, updateSettingsSchema, (input) =>
-      inMyRoom(socket, (live, playerId) => commitResult(live, logic.updateSettings(live.state, playerId, input.settings))),
+      inMyRoom(socket, (live, playerId) =>
+        commitResult(live, logic.updateSettings(live.state, playerId, input.settings, input.pin)),
+      ),
     );
 
     on(socket, ClientEvents.KICK_PLAYER, targetPlayerSchema, (input) =>
@@ -185,10 +307,10 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
       }),
     );
 
-    /** The public rooms for the home page. Anyone may ask; private rooms are never listed. */
+    /** Every open room for the home page, private ones too (never their PIN). */
     on(socket, ClientEvents.LIST_ROOMS, emptySchema, () => ({
       ok: true,
-      rooms: logic.publicRoomList(rooms.all().filter((live) => !live.deleted).map((live) => live.state)),
+      rooms: logic.roomList(rooms.all().filter((live) => !live.deleted).map((live) => live.state)),
     }));
 
     on(socket, ClientEvents.END_MATCH, emptySchema, () =>
@@ -226,20 +348,10 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
 
     on(socket, ClientEvents.TIMER_STATUS, timerStatusSchema, (input) =>
       inMyRoom(socket, (live, playerId) => {
-        live.commit(logic.setTimerStatus(live.state, playerId, input.status));
+        live.commit(logic.setTimerStatus(live.state, playerId, input.status, Date.now()));
         return { ok: true };
       }),
     );
-
-    /**
-     * A warm-up scramble for the home page. Made here (like every scramble), so
-     * the browser never has to run cubing.js's scramble worker. Rate-limited like
-     * every request.
-     */
-    on(socket, ClientEvents.WARMUP_SCRAMBLE, warmUpSchema, async (input) => ({
-      ok: true,
-      scramble: await generateScramble(input.cubeEvent),
-    }));
 
     on(socket, ClientEvents.PING, emptySchema, () => ({ ok: true, serverTime: Date.now() }));
 
@@ -269,6 +381,7 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
   function openRoom(room: ServerRoom): LiveRoom {
     const live = new LiveRoom(room, {
       broadcast: (snapshot) => io.to(room.code).emit(ServerEvents.ROOM_STATE, snapshot),
+      sendChat: (message) => io.to(room.code).emit(ServerEvents.CHAT, message),
       makeScrambles: options.makeScrambles ?? generateSetScrambles,
       onDelete: (code) => rooms.remove(code),
       log,
@@ -384,7 +497,9 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
       if (typeof ack !== "function") return; // no callback = nobody to answer
 
       let response: AckResponse;
-      if (!socket.data.limiter.tryTake()) {
+      // Smart cube moves have their own, higher limit (see CUBE_MOVES).
+      const limited = event !== ClientEvents.CUBE_MOVES && !socket.data.limiter.tryTake();
+      if (limited) {
         response = logic.fail("Too many requests. Slow down a little.", "RATE_LIMITED");
       } else {
         const parsed = schema.safeParse(payload ?? {});

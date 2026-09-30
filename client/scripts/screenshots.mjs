@@ -58,13 +58,18 @@ function checkPage() {
   const doc = document.documentElement;
   if (doc.scrollWidth > vw + 1) issues.push(`horizontal page scroll (${doc.scrollWidth} > ${vw})`);
 
-  // Tap targets: at least 44 x 44.
+  // Tap targets: at least 44 x 44. Controls in the dense race layout (header,
+  // standings rows, chat input, tabs) are marked data-dense and need 28 px height.
   for (const el of document.querySelectorAll("button, a[href], input, select, summary")) {
     if (!visible(el)) continue;
     // Partly scrolled out of a sideways strip: its real size is still 44 px.
     const strip = el.closest(".warmup-events");
     if (strip && el.getBoundingClientRect().right > strip.getBoundingClientRect().right) continue;
     const r = el.getBoundingClientRect();
+    if (el.hasAttribute("data-dense")) {
+      if (r.height < 27.5 || r.width < 27.5) issues.push(`small dense target ${Math.round(r.width)}x${Math.round(r.height)}: ${describe(el)}`);
+      continue;
+    }
     if (r.width < 43.5 || r.height < 43.5) issues.push(`small tap target ${Math.round(r.width)}x${Math.round(r.height)}: ${describe(el)}`);
   }
 

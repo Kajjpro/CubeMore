@@ -1,13 +1,15 @@
 // The smaller pieces of the room: player list, host tools, session stats, and
 // the solve review / set result / match over screens.
 
-import { memo, useState } from "react";
+import { memo, useState, type CSSProperties } from "react";
 import type { CubeEventId, MatchSnapshot, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
-import { EVENT_SHORT, FORMAT_LABELS, nameList } from "../labels";
+import { EVENT_SHORT, FORMAT_LABELS, nameList, paceDelta } from "../labels";
 import type { SessionStats } from "../stats";
-import { formatMark, formatResultLong } from "../time";
+import { formatMark, formatResultLong, formatTime } from "../time";
 import { scoredMs } from "../stats";
 import { ConfirmButton } from "./ConfirmButton";
+import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
+import { shareResultCard } from "../shareCard";
 import { EventSelect } from "./SettingsForm";
 
 type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
@@ -165,47 +167,92 @@ export const SessionPanel = memo(function SessionPanel({ stats }: { stats: Sessi
 
 // ---------------------------------------------------------------------------
 
-/** After each solve: everyone's time, fastest first. */
-export function SolveReview({ match, names, youId }: { match: MatchSnapshot; names: Names; youId: string | null }) {
+/**
+ * After each solve: a short replay of the race. Every bar runs at its player's
+ * speed and stops at the moment the fastest one finishes, so the bars show how
+ * far behind everyone was. Then the gaps ("+0.42"). Tap a player to react.
+ */
+export function FinishLine(props: {
+  match: MatchSnapshot;
+  names: Names;
+  youId: string | null;
+  pops: ReactionPops;
+  onReact: (targetId: string, emoji: Reaction) => void;
+}) {
+  const { match, names, youId } = props;
   const rows = match.roster
     .map((id) => ({ id, result: match.results[id]?.[match.solveIndex] ?? null }))
-    .filter((row) => row.result !== null)
-    .sort((a, b) => (scoredMs(a.result!) ?? Infinity) - (scoredMs(b.result!) ?? Infinity));
-  const fastestValue = rows.length ? scoredMs(rows[0].result!) : null;
-  const fastest = rows.filter((r) => fastestValue !== null && scoredMs(r.result!) === fastestValue);
+    .filter((row): row is { id: string; result: NonNullable<typeof row.result> } => row.result !== null)
+    .map((row) => ({ ...row, ms: scoredMs(row.result) }))
+    .sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity));
+  const fastest = rows[0]?.ms ?? null;
+  const others = rows.filter((row) => row.id !== youId);
+  // Who you react to: the one you picked, else the fastest other player.
+  const [picked, setPicked] = useState<string | null>(null);
+  const target = others.find((row) => row.id === picked) ?? others[0];
 
   return (
-    <div className="result-screen">
+    <div className="result-screen finish-line">
       <h2>
         Solve {match.solveIndex + 1} of {match.solvesPerSet}
       </h2>
-      <p className="small">
-        {fastest.length
-          ? `Fastest: ${fastest.map((r) => nameOf(r.id, names)).join(" and ")}, ${formatMark(fastestValue!)}`
-          : "Everyone DNF"}
-      </p>
-      <table className="ranking">
-        <tbody>
-          {rows.map(({ id, result }, index) => (
-            <tr key={id} className={id === youId ? "me" : ""}>
-              <td className="rank">{index + 1}</td>
-              <td className="who">{nameOf(id, names)}</td>
-              <td className={`num ${result!.penalty === "DNF" ? "t-red" : fastest.some((f) => f.id === id) ? "t-green" : result!.penalty === "+2" ? "t-amber" : ""}`}>
-                {formatResultLong(result!)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <p className="small">{finishHeadline(rows, names, youId)}</p>
+      <ol className="finish-rows">
+        {rows.map((row, index) => {
+          const isMe = row.id === youId;
+          const dnf = row.ms === null;
+          // Where this bar is when the fastest crosses the line (DNF: a short red stub).
+          const reach = fastest === null || dnf ? 0.08 : fastest / row.ms!;
+          const gap = !dnf && fastest !== null && index > 0 ? `+${formatTime(row.ms! - fastest)}` : "";
+          return (
+            <li key={row.id} className={isMe ? "me" : ""}>
+              <button
+                type="button"
+                className="finish-row"
+                disabled={isMe}
+                aria-pressed={!isMe && target?.id === row.id}
+                onClick={() => setPicked(row.id)}
+              >
+                <span className="rank">{index + 1}</span>
+                <span className="who">
+                  {isMe ? "You" : nameOf(row.id, names)}
+                  <Pops pops={props.pops[row.id]} />
+                </span>
+                <span className="track" aria-hidden>
+                  <span className={`bar ${dnf ? "dnf" : index === 0 ? "first" : ""}`} style={{ "--reach": reach } as CSSProperties} />
+                </span>
+                <span className={`time ${dnf ? "t-red" : index === 0 ? "t-green" : row.result.penalty === "+2" ? "t-amber" : ""}`}>
+                  {formatResultLong(row.result)}
+                </span>
+                <span className="gap">{gap}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      {target && (
+        <ReactionTray label={`React to ${nameOf(target.id, names)}`} onReact={(emoji) => props.onReact(target.id, emoji)} />
+      )}
       {match.phaseEndsAt !== null && <ProgressBar endsAt={match.phaseEndsAt} label="Next scramble" />}
     </div>
   );
+}
+
+/** "Nomin finished first, 0.42 ahead of Anu" / "You finished first…" / "Everyone DNF". */
+function finishHeadline(rows: { id: string; ms: number | null }[], names: Names, youId: string | null): string {
+  const [first, second] = rows;
+  if (!first || first.ms === null) return "Everyone DNF";
+  const who = (id: string, start = true) => (id === youId ? (start ? "You" : "you") : nameOf(id, names));
+  if (second?.ms === first.ms) return `${who(first.id)} and ${who(second.id, false)} tied`;
+  const lead = second && second.ms !== null ? `, ${formatTime(second.ms - first.ms)} ahead of ${who(second.id, false)}` : "";
+  return `${who(first.id)} finished first${lead}`;
 }
 
 /** After each set: the winner in plain text, averages and points. */
 export function SetResult({ match, names, youId }: { match: MatchSnapshot; names: Names; youId: string | null }) {
   const set = match.finishedSets[match.finishedSets.length - 1];
   if (!set) return null;
+  if (set.paces) return <HandicapSetResult match={match} set={set} names={names} youId={youId} />;
   const valueOf = (m: number | "DNF") => (m === "DNF" ? Infinity : m);
   const rows = Object.entries(set.standings).sort(
     ([, a], [, b]) => valueOf(a.result) - valueOf(b.result) || valueOf(a.best) - valueOf(b.best),
@@ -214,7 +261,7 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
   const heading = winners.length
     ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} set ${set.setIndex + 1}`
     : `No point in set ${set.setIndex + 1}: every result is DNF`;
-  const label = match.solvesPerSet > 1 ? FORMAT_LABELS[match.solvesPerSet === 5 ? "ao5" : "ao12"] : "single";
+  const label = resultLabel(match);
 
   return (
     <div className="result-screen">
@@ -252,6 +299,81 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
   );
 }
 
+/** "ao5", "ao12" or "single": what a set result is. */
+function resultLabel(match: MatchSnapshot): string {
+  return match.solvesPerSet > 1 ? FORMAT_LABELS[match.solvesPerSet === 5 ? "ao5" : "ao12"] : "single";
+}
+
+/**
+ * Handicap set result: everyone against their own pace. Sorted by how much they
+ * beat it; players without a pace yet (the first set, late joiners) come last.
+ */
+function HandicapSetResult(props: {
+  match: MatchSnapshot;
+  set: MatchSnapshot["finishedSets"][number];
+  names: Names;
+  youId: string | null;
+}) {
+  const { match, set, names, youId } = props;
+  const paces = set.paces!;
+  const ratio = (id: string) => {
+    const result = set.standings[id]?.result;
+    const pace = paces[id];
+    return result === "DNF" || result === undefined || pace == null ? Infinity : result / pace;
+  };
+  const rows = Object.keys(set.standings).sort((a, b) => ratio(a) - ratio(b));
+  const paceSet = Object.values(paces).every((pace) => pace === null);
+  const winners = set.winnerIds.map((id) => nameOf(id, names));
+  const heading = paceSet
+    ? `Pace set done`
+    : winners.length
+      ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} set ${set.setIndex + 1}`
+      : `No point in set ${set.setIndex + 1}`;
+  const note = paceSet
+    ? "Everyone has a pace now: their result from this set. From the next set, beat your own pace to win."
+    : "Whoever beats their own pace by the most wins the set.";
+
+  return (
+    <div className="result-screen">
+      <h2>{heading}</h2>
+      <p className="small muted">{note}</p>
+      <table className="ranking">
+        <thead>
+          <tr>
+            <th className="rank">#</th>
+            <th className="who">Player</th>
+            <th>{resultLabel(match)}</th>
+            <th>pace</th>
+            <th>vs pace</th>
+            <th>pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((id, index) => {
+            const won = set.winnerIds.includes(id);
+            const standing = set.standings[id];
+            const delta = paceDelta(standing.result, paces[id]);
+            return (
+              <tr key={id} className={`${won ? "winner" : ""} ${id === youId ? "me" : ""}`}>
+                <td className="rank">{index + 1}</td>
+                <td className="who">{nameOf(id, names)}</td>
+                <td className={`num ${standing.result === "DNF" ? "t-red" : ""}`}>{formatMark(standing.result)}</td>
+                <td className="num muted">{paces[id] == null ? "–" : formatMark(paces[id]!)}</td>
+                <td className={`num ${delta?.startsWith("−") ? "t-green" : ""}`}>{delta ?? <span className="tiny muted">new</span>}</td>
+                <td className="num">
+                  {match.points[id] ?? 0}
+                  {won ? " (+1)" : ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {match.phaseEndsAt !== null && <ProgressBar endsAt={match.phaseEndsAt} label="Next set" />}
+    </div>
+  );
+}
+
 /** The end: winner in plain text, final standings; the host picks what's next. */
 export function MatchOver(props: {
   match: MatchSnapshot;
@@ -259,13 +381,19 @@ export function MatchOver(props: {
   youId: string | null;
   isHost: boolean;
   busy: boolean;
-  /** The event of the match that just ended (the host may pick another one). */
-  cubeEvent: CubeEventId;
+  /** The match's settings (the event may change for the rematch; the card shows these). */
+  settings: RoomSettings;
   onRematch: (changes: RestartChanges) => void;
   onBackToLobby: () => void;
 }) {
   const { match, names } = props;
-  const [nextEvent, setNextEvent] = useState<CubeEventId>(props.cubeEvent);
+  const [nextEvent, setNextEvent] = useState<CubeEventId>(props.settings.cubeEvent);
+  const [shared, setShared] = useState<string | null>(null);
+
+  async function share(): Promise<void> {
+    const outcome = await shareResultCard({ match, settings: props.settings, names });
+    setShared(outcome === "downloaded" ? "Saved" : outcome === "shared" ? "Shared" : null);
+  }
   const winners = match.winnerIds.map((id) => nameOf(id, names));
   const rows = Object.entries(match.points).sort(([, a], [, b]) => b - a);
 
@@ -292,6 +420,9 @@ export function MatchOver(props: {
           ))}
         </tbody>
       </table>
+      <button type="button" onClick={share}>
+        {shared ?? "Share result card"}
+      </button>
       {props.isHost ? (
         <>
           <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />
@@ -305,7 +436,7 @@ export function MatchOver(props: {
               onClick={() => props.onRematch({ cubeEvent: nextEvent })}
               disabled={props.busy}
             >
-              {props.busy ? "Starting…" : nextEvent === props.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
+              {props.busy ? "Starting…" : nextEvent === props.settings.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
             </button>
           </div>
         </>

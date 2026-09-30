@@ -8,6 +8,12 @@ export const NICKNAME_MAX_LENGTH = 20;
 
 export const ROOM_NAME_MAX_LENGTH = 30;
 
+/** Longest chat message. */
+export const CHAT_MAX_LENGTH = 200;
+
+/** How many chat lines a room keeps (and sends to someone who joins). */
+export const CHAT_HISTORY_LENGTH = 100;
+
 /** Private rooms are protected by a PIN of this many digits. */
 export const PIN_LENGTH = 4;
 
@@ -22,6 +28,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   winCondition: "bo3",
   maxPlayers: 50,
   solveTimeLimit: "off",
+  scoring: "fastest",
 };
 
 /** How long we keep a disconnected player's seat before removing them. */
@@ -29,6 +36,17 @@ export const RECONNECT_GRACE_MS = 30_000;
 
 /** How long an empty room is kept before it is deleted. */
 export const EMPTY_ROOM_TTL_MS = 10 * 60_000;
+
+/** The daily scramble: how long you have from "Start" to sending your time. */
+export const DAILY_ATTEMPT_MS = 10 * 60_000;
+/** How many rows of the daily leaderboard are sent. */
+export const DAILY_LEADERBOARD_SIZE = 20;
+
+/** The reactions anyone can send to another player's time. */
+export const REACTIONS = ["🔥", "👏", "😮", "😂"] as const;
+
+/** When a second player joins the lobby, the race starts this long after. */
+export const AUTO_START_DELAY_MS = 3_000;
 
 /** How long everyone's times for a solve are shown before the next scramble. */
 export const SOLVE_REVIEW_MS = 3_000;

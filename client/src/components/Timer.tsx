@@ -4,7 +4,12 @@ import { addSolve, confirmSolve, solveKey, useOutbox } from "../outbox";
 import type { InputMode, RunningDisplay } from "../prefs";
 import { request } from "../socket";
 import { formatResult, formatRunning, formatSolve, parseTypedTime } from "../time";
+import { useSmartCube, type SmartState } from "../smartCube";
+import { useSmartSolve } from "../timer/useSmartSolve";
 import { useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
+
+/** Events a smart cube can time: the 3x3 ones. */
+const SMART_EVENTS = new Set(["333", "333oh"]);
 
 /** Only for /dev/states: shows a timer state without real input. */
 export interface TimerDemo {
@@ -40,17 +45,31 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   const myResult = match.results[youId]?.[match.solveIndex] ?? null;
   const canStart = match.phase === "solving" && !myResult && !pending;
 
-  const timer = useSpeedTimer({
-    canStart: !demo && canStart && inputMode === "timer",
+  const stopSolve = (timeMs: number) => {
+    // Saved in the outbox the very moment the timer stops.
+    addSolve({ ...solveId, timeMs, penalty: "OK" });
+    sendTimerStatus("idle");
+  };
+
+  // A connected smart cube times 3x3 solves by itself (no spacebar).
+  const smartCube = useSmartCube();
+  const smartUsable = !demo && smartCube.status === "on" && inputMode === "timer" && SMART_EVENTS.has(match.scramble?.cubeEvent ?? "");
+  const smart = useSmartSolve({
+    active: smartUsable && canStart,
+    scramble: match.scramble?.text ?? "",
     onStart: () => sendTimerStatus("solving"),
-    onStop: (timeMs) => {
-      // Saved in the outbox the very moment the timer stops.
-      addSolve({ ...solveId, timeMs, penalty: "OK" });
-      sendTimerStatus("idle");
-    },
+    onStop: stopSolve,
+  });
+
+  const timer = useSpeedTimer({
+    canStart: !demo && canStart && inputMode === "timer" && !smartUsable,
+    onStart: () => sendTimerStatus("solving"),
+    onStop: stopSolve,
     touchArea,
   });
-  const phase = demo?.phase ?? timer.phase;
+  const smartPhase: TimerPhase | null = smart && (smart.state === "running" ? "running" : smart.state === "solved" ? "stopped" : "idle");
+  const phase = demo?.phase ?? smartPhase ?? timer.phase;
+  const startedAt = smart ? smart.startedAt : timer.startedAt;
 
   // A new scramble: the timer starts fresh.
   const { reset } = timer;
@@ -82,14 +101,14 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
                 {formatRunning(demo.elapsedMs ?? 0, runningDisplay)}
               </div>
             ) : (
-              <RunningDigits startedAt={timer.startedAt} display={runningDisplay} />
+              <RunningDigits startedAt={startedAt} display={runningDisplay} />
             )
           ) : (
             <div className="timer-digits mono" aria-live="polite">
               {text}
             </div>
           )}
-          <p className="timer-hint">{hintFor(phase, canStart, !!myResult)}</p>
+          <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart?.state)}</p>
         </div>
       )}
 
@@ -102,15 +121,17 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   );
 }
 
-function hintFor(phase: TimerPhase, canStart: boolean, done: boolean): React.ReactNode {
-  if (phase === "holding") return "Hold";
-  if (phase === "ready") return "Ready. Let go to start";
+function hintFor(phase: TimerPhase, canStart: boolean, done: boolean, smart?: SmartState): React.ReactNode {
+  if (smart === "scrambling" && canStart) return "Scramble your smart cube to match";
+  if (smart === "armed" && canStart) return "Scrambled. Your first turn starts the timer";
+  if (phase === "holding") return "Hold…";
+  if (phase === "ready") return "Release to start";
   if (phase === "running" || phase === "stopped") return "";
   if (done || !canStart) return "";
   return (
     <>
-      <span className="hint-keys">Hold space, let go to start</span>
-      <span className="hint-touch">Hold, let go to start</span>
+      <span className="hint-keys">Hold spacebar to ready</span>
+      <span className="hint-touch">Hold the timer to ready</span>
     </>
   );
 }
@@ -120,7 +141,7 @@ function hintFor(phase: TimerPhase, canStart: boolean, done: boolean): React.Rea
  * (not through React), so nothing else re-renders during a solve.
  * Final times are measured from timestamps in useSpeedTimer, not from this.
  */
-function RunningDigits({ startedAt, display }: { startedAt: number; display: RunningDisplay }) {
+export function RunningDigits({ startedAt, display }: { startedAt: number; display: RunningDisplay }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -189,7 +210,7 @@ function ConfirmSolve({ solveKeyText, penalty, auto }: { solveKeyText: string; p
 }
 
 /** For stackmat users: type the time. Accepts 12.34, 1:02.34 and DNF. */
-function TypeIn({ onSubmit }: { onSubmit: (timeMs: number, penalty: Penalty) => void }) {
+export function TypeIn({ onSubmit }: { onSubmit: (timeMs: number, penalty: Penalty) => void }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
 

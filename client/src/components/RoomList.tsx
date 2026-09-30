@@ -7,10 +7,11 @@ import { EventIcon } from "./ui";
 const REFRESH_MS = 5000;
 
 /**
- * Public rooms anyone can join, refreshed every few seconds while the page is
- * visible. Private rooms never appear here.
+ * Every open room, public and private, refreshed every few seconds while the
+ * page is visible. Anyone can see all rooms; a private one asks for its PIN
+ * when you open it (the room page does that).
  */
-export function PublicRooms({ onJoin, demoRooms }: { onJoin: (code: string) => void; demoRooms?: PublicRoomInfo[] }) {
+export function RoomList({ onJoin, demoRooms }: { onJoin: (code: string) => void; demoRooms?: PublicRoomInfo[] }) {
   const [rooms, setRooms] = useState<PublicRoomInfo[] | null>(demoRooms ?? null);
   const connected = useIsConnected();
 
@@ -34,35 +35,46 @@ export function PublicRooms({ onJoin, demoRooms }: { onJoin: (code: string) => v
   }, [connected, demoRooms]);
 
   return (
-    <section className="panel public-rooms" aria-labelledby="public-rooms-title">
-      <div className="public-rooms-head">
-        <h2 id="public-rooms-title">Public rooms</h2>
+    <section className="panel room-list-panel" aria-labelledby="rooms-title">
+      <div className="room-list-head">
+        <h2 id="rooms-title">Rooms</h2>
         {rooms && rooms.length > 0 && <span className="small muted">{rooms.length} open</span>}
       </div>
 
       {rooms === null ? (
         <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
       ) : rooms.length === 0 ? (
-        <p className="small muted">No public rooms right now. Create one, or join a private room with its code.</p>
+        <p className="small muted">No rooms right now. Create one: the race starts as soon as someone joins.</p>
       ) : (
         <ul className="list room-list">
           {rooms.map((room) => {
             const full = room.players >= room.maxPlayers;
+            const isPrivate = room.visibility === "private";
             return (
               <li key={room.code}>
                 <EventIcon id={room.cubeEvent} />
                 <div className="room-info">
-                  <span className="name" title={room.name}>
-                    {room.name}
+                  <span className="room-title">
+                    <span className="name" title={room.name}>
+                      {room.name}
+                    </span>
+                    {isPrivate && <span className="tag">PIN</span>}
                   </span>
                   <span className="tiny muted">
-                    {EVENT_SHORT[room.cubeEvent]} · {FORMAT_LABELS[room.format]} ·{" "}
-                    {room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`} ·{" "}
-                    {room.players}/{room.maxPlayers}
-                    {room.racing ? " · racing, you join at the next set" : ""}
+                    <span className="mono room-code">{room.code}</span> · {EVENT_SHORT[room.cubeEvent]} ·{" "}
+                    {FORMAT_LABELS[room.format]} ·{" "}
+                    {room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`} · {room.players}/
+                    {room.maxPlayers}
+                    {room.racing ? " · racing" : ""}
                   </span>
                 </div>
-                <button type="button" onClick={() => onJoin(room.code)} disabled={full} aria-label={`Join ${room.name}`}>
+                <button
+                  type="button"
+                  className={isPrivate ? "" : "primary"}
+                  onClick={() => onJoin(room.code)}
+                  disabled={full}
+                  aria-label={`${isPrivate ? "Join with PIN" : "Join"}: ${room.name}`}
+                >
                   {full ? "Full" : "Join"}
                 </button>
               </li>

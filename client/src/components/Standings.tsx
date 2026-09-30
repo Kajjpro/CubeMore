@@ -1,9 +1,14 @@
-import { memo, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
+import { serverNow } from "../clock";
 import type { MatchSnapshot, Penalty, PlayerSnapshot, RoomSnapshot, SolveResult } from "@cube-racing/shared";
 import { FORMAT_LABELS } from "../labels";
 import { solveKey, useOutbox } from "../outbox";
-import { droppedIndexes, fastestInColumn, scoredMs } from "../stats";
-import { formatMark, formatResult, formatResultLong, formatSolve, formatTime } from "../time";
+import { droppedIndexes, fastestInColumn } from "../stats";
+import { formatMark, formatResult, formatResultLong, formatSolve } from "../time";
+import type { CubeMoves } from "../useRoom";
+import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
+import { LiveCube } from "./Scramble";
+import { EventIcon } from "./ui";
 
 interface Props {
   room: RoomSnapshot;
@@ -12,124 +17,264 @@ interface Props {
   names: Record<string, string>;
   /** Phones: your own row first. */
   pinMe: boolean;
-  /** Phone landscape: name, this solve, average, points only. */
-  compact: boolean;
+  /** Reactions floating on rows right now. */
+  pops: ReactionPops;
+  /** Smart cube moves of players solving now: their row gets a cube icon, tap to watch. */
+  cubeMoves: CubeMoves;
   onChangePenalty: (solveIndex: number, penalty: Penalty) => void;
+  onReact: (targetId: string, emoji: Reaction) => void;
 }
 
 /**
- * Rows are ordered by points, then by join order. Points only change at the set
+ * Rows are ordered by points, then join order. Points only change at the set
  * result, so rows never jump around while people submit during a set.
  */
-function rowOrder(room: RoomSnapshot, match: MatchSnapshot, youId: string | null, pinMe: boolean): string[] {
+export function rowOrder(room: RoomSnapshot, match: MatchSnapshot, youId: string | null, pinMe: boolean): string[] {
   const joinOrder = new Map(room.players.map((p, i) => [p.id, i]));
   const spectators = room.players.filter((p) => p.spectator).map((p) => p.id);
   const ids = [...match.roster, ...spectators];
   const position = (id: string) => joinOrder.get(id) ?? 1000 + match.roster.indexOf(id);
   ids.sort((a, b) => (match.points[b] ?? 0) - (match.points[a] ?? 0) || position(a) - position(b));
-  if (pinMe && youId && ids.includes(youId)) {
-    return [youId, ...ids.filter((id) => id !== youId)];
-  }
+  if (pinMe && youId && ids.includes(youId)) return [youId, ...ids.filter((id) => id !== youId)];
   return ids;
 }
 
+/** Rank by points: players with the same points share a rank (1, 2, 2, 4). */
+export function ranks(ids: string[], points: Record<string, number>): Map<string, number> {
+  const sorted = [...ids].sort((a, b) => (points[b] ?? 0) - (points[a] ?? 0));
+  const result = new Map<string, number>();
+  sorted.forEach((id, i) => {
+    const previous = sorted[i - 1];
+    result.set(id, previous !== undefined && (points[previous] ?? 0) === (points[id] ?? 0) ? result.get(previous)! : i + 1);
+  });
+  return result;
+}
+
+/** Dense live standings: #, player, this solve, average, points. Tap a row for the whole set. */
 export const Standings = memo(function Standings(props: Props) {
-  const { room, match, youId, names, compact } = props;
+  const { room, match, youId, names } = props;
   const outbox = useOutbox();
-  const [editing, setEditing] = useState<number | null>(null);
-  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [open, setOpen] = useState<string | null>(null);
 
   const players = new Map(room.players.map((p) => [p.id, p]));
   const rows = rowOrder(room, match, youId, props.pinMe);
-  const setOpen = match.phase === "solving" || match.phase === "solve_review";
-  const solveNumbers = compact ? [match.solveIndex] : Array.from({ length: match.solvesPerSet }, (_, i) => i);
-  const fastest = solveNumbers.map((i) => fastestInColumn(match.results, i));
+  const rankOf = ranks(rows, match.points);
+  const fastest = fastestInColumn(match.results, match.solveIndex);
   const hasAverage = match.solvesPerSet > 1;
-  const editingResult = editing !== null && youId ? match.results[youId]?.[editing] : null;
+  const columns = hasAverage ? 5 : 4;
+  const averageLabel = FORMAT_LABELS[match.solvesPerSet === 5 ? "ao5" : "ao12"];
 
-  function toggleReveal(cell: string): void {
-    setRevealed((old) => {
-      const next = new Set(old);
-      if (next.has(cell)) next.delete(cell);
-      else next.add(cell);
-      return next;
-    });
-  }
+  const solveKeyNow = `${match.matchId}/${match.setIndex}/${match.solveIndex}`;
+  const liveMovesOf = (id: string) => {
+    const entry = props.cubeMoves[id];
+    return match.phase === "solving" && entry?.solveKey === solveKeyNow ? entry.moves : null;
+  };
+
+  const myPending = (solveIndex: number) =>
+    outbox.find(
+      (e) => solveKey(e) === solveKey({ roomCode: room.code, matchId: match.matchId, setIndex: match.setIndex, solveIndex }),
+    );
 
   return (
-    <div className="standings-wrap">
-      <div className="table-scroll">
-        <table className="standings">
-          <thead>
-            <tr>
-              <th className="name-col" scope="col">
-                Player
-              </th>
-              {solveNumbers.map((i) => (
-                <th key={i} scope="col" className={i === match.solveIndex && setOpen ? "current" : ""}>
-                  {compact ? `Solve ${i + 1}` : i + 1}
-                </th>
-              ))}
-              {hasAverage && <th scope="col">{FORMAT_LABELS[match.solvesPerSet === 5 ? "ao5" : "ao12"]}</th>}
-              {!compact && <th scope="col">best</th>}
-              <th scope="col">pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((id) => {
-              const player = players.get(id);
-              const row = match.results[id];
-              const isMe = id === youId;
-              const dropped = droppedIndexes(row, room.settings.format);
-              const standing = match.standings[id];
-              const best = standing?.best ?? bestSoFar(row);
-              return (
-                <tr key={id} className={isMe ? "me" : ""}>
-                  <th className="name-col" scope="row">
-                    <span className="name" title={player?.nickname ?? names[id]}>
+    <div className="table-scroll dense-scroll">
+      <table className="standings dense">
+        <thead>
+          <tr>
+            <th scope="col" className="rank">#</th>
+            <th scope="col" className="name-col">Player</th>
+            <th scope="col">{hasAverage ? `Solve ${match.solveIndex + 1}` : "Time"}</th>
+            {hasAverage && <th scope="col">{averageLabel}</th>}
+            <th scope="col">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((id) => {
+            const player = players.get(id);
+            const row = match.results[id];
+            const isMe = id === youId;
+            const expanded = open === id;
+            const pending = isMe ? myPending(match.solveIndex) : undefined;
+            return (
+              <Fragment key={id}>
+                <tr className={`${isMe ? "me" : ""} ${expanded ? "open" : ""}`} onClick={() => setOpen(expanded ? null : id)}>
+                  <td className="rank">{rankOf.get(id)}</td>
+                  <th scope="row" className="name-col">
+                    <button type="button" className="row-toggle" aria-expanded={expanded} data-dense title={player?.nickname ?? names[id]}>
                       {player?.nickname ?? names[id] ?? "Player"}
-                    </span>
-                    <RowStatus player={player} match={match} isMe={isMe} isHost={id === room.hostId} hasResult={!!row?.[match.solveIndex]} />
+                      {id === room.hostId && <span className="tiny muted"> host</span>}
+                      {liveMovesOf(id) && (
+                        <span className="smart-mark" title="Smart cube: tap to watch it live">
+                          {" "}
+                          <EventIcon id="333" />
+                        </span>
+                      )}
+                    </button>
+                    <Pops pops={props.pops[id]} />
                   </th>
-                  {solveNumbers.map((i, column) => {
-                    const result = row?.[i] ?? null;
-                    const cellId = `${id}/${i}`;
-                    const pendingEntry = isMe
-                      ? outbox.find((e) => solveKey(e) === solveKey({ roomCode: room.code, matchId: match.matchId, setIndex: match.setIndex, solveIndex: i }))
-                      : undefined;
-                    return (
-                      <td key={i} className={`time-cell ${i === match.solveIndex && setOpen ? "current" : ""}`}>
-                        <TimeCell
-                          result={result}
-                          pending={pendingEntry ? formatSolve(pendingEntry.timeMs, pendingEntry.penalty) : null}
-                          dropped={dropped.includes(i)}
-                          fastest={fastest[column].has(id)}
-                          editable={isMe && setOpen && result?.source === "submitted"}
-                          revealed={revealed.has(cellId)}
-                          onEdit={() => setEditing(editing === i ? null : i)}
-                          onReveal={() => toggleReveal(cellId)}
-                        />
-                      </td>
-                    );
-                  })}
-                  {hasAverage && <td className="num">{formatMark(standing?.result)}</td>}
-                  {!compact && <td className="num">{best === null ? "–" : formatMark(best)}</td>}
+                  <td className="time-cell">
+                    <CurrentCell
+                      result={row?.[match.solveIndex] ?? null}
+                      pending={pending ? formatSolve(pending.timeMs, pending.penalty) : null}
+                      fastest={fastest.has(id)}
+                      player={player}
+                      solvingPhase={match.phase === "solving"}
+                    />
+                  </td>
+                  {hasAverage && <td className="num">{formatMark(match.standings[id]?.result)}</td>}
                   <td className="num">{match.points[id] ?? 0}</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                {expanded && (
+                  <tr className="details">
+                    <td colSpan={columns}>
+                      {liveMovesOf(id) && match.scramble && (
+                        <div className="live-cube-wrap">
+                          <LiveCube scramble={match.scramble} moves={liveMovesOf(id)!} />
+                          <span className="tiny muted">Live: {liveMovesOf(id)!.length} moves</span>
+                        </div>
+                      )}
+                      <SetDetails
+                        pace={match.paces ? (match.paces[id] ?? null) : undefined}
+                        name={player?.nickname ?? names[id] ?? "Player"}
+                        onReact={player && !isMe ? (emoji) => props.onReact(id, emoji) : undefined}
+                        row={row}
+                        format={room.settings.format}
+                        isMe={isMe}
+                        editable={isMe && (match.phase === "solving" || match.phase === "solve_review")}
+                        onChangePenalty={props.onChangePenalty}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+});
 
-      {editing !== null && editingResult && setOpen && (
+/** The "this solve" cell: the time, or what the player is doing. Colour always comes with text. */
+function CurrentCell(props: {
+  result: SolveResult | null;
+  pending: string | null;
+  fastest: boolean;
+  player?: PlayerSnapshot;
+  solvingPhase: boolean;
+}) {
+  const { result, player } = props;
+  if (result) {
+    const tone = result.penalty === "DNF" ? "t-red" : props.fastest ? "fastest" : result.penalty === "+2" ? "t-amber" : "";
+    return (
+      <span className={tone} title={formatResultLong(result)}>
+        {formatResult(result)}
+        {props.fastest && result.penalty !== "DNF" && <span className="sr-only"> fastest</span>}
+      </span>
+    );
+  }
+  if (props.pending) return <span className="pending" title="Sending">{props.pending}</span>;
+  if (!player) return <span className="status muted">left</span>;
+  if (player.status === "reconnecting") return <span className="status t-amber">offline</span>;
+  if (player.spectator) return <span className="status muted">watching</span>;
+  if (props.solvingPhase && player.timerStatus === "solving") {
+    return player.solvingSince !== null ? (
+      <LiveClock since={player.solvingSince} />
+    ) : (
+      <span className="status">
+        <span className="dot live" aria-hidden /> solving
+      </span>
+    );
+  }
+  return <span className="muted">–</span>;
+}
+
+/** "7.4", "1:02.4": whole tenths, so it reads as "still going" and not as a final time. */
+function clockText(ms: number): string {
+  const tenths = Math.floor(ms / 100);
+  const seconds = Math.floor(tenths / 10);
+  const text = `${seconds % 60}.${tenths % 10}`;
+  return seconds >= 60 ? `${Math.floor(seconds / 60)}:${text.padStart(4, "0")}` : text;
+}
+
+/**
+ * An opponent's running time, ticking live. Written straight into the page
+ * (not through React) ten times a second, so the table doesn't re-render.
+ */
+export function LiveClock({ since }: { since: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const draw = () => {
+      if (ref.current) ref.current.textContent = clockText(Math.max(0, serverNow() - since));
+    };
+    draw();
+    const interval = setInterval(draw, 100);
+    return () => clearInterval(interval);
+  }, [since]);
+  return (
+    <span className="live-clock" title="Solving now">
+      <span className="dot live" aria-hidden />
+      <span ref={ref} />
+      <span className="sr-only"> solving</span>
+    </span>
+  );
+}
+
+/** A player's whole set: dropped times in parentheses; your own times can be tapped to change the penalty. */
+function SetDetails(props: {
+  /** Handicap: their pace for this set (null = still setting it). Undefined in normal rooms. */
+  pace?: number | null;
+  name: string;
+  /** Other players who are still here: react to their latest time. */
+  onReact?: (emoji: Reaction) => void;
+  row: (SolveResult | null)[] | undefined;
+  format: RoomSnapshot["settings"]["format"];
+  isMe: boolean;
+  editable: boolean;
+  onChangePenalty: (solveIndex: number, penalty: Penalty) => void;
+}) {
+  const [editing, setEditing] = useState<number | null>(null);
+  const row = props.row ?? [];
+  const dropped = droppedIndexes(props.row, props.format);
+  if (row.length === 0) return <p className="tiny muted">Watching this set; races from the next one.</p>;
+
+  return (
+    <div className="set-details" onClick={(e) => e.stopPropagation()}>
+      {props.pace !== undefined && (
+        <p className="tiny muted">
+          {props.pace === null ? "Setting their pace this set" : `Pace ${formatMark(props.pace)}: beat it by the most to win the set`}
+        </p>
+      )}
+      <ol className="solve-chips">
+        {row.map((result, i) => {
+          const text = result ? formatResult(result) : "–";
+          const shown = dropped.includes(i) ? `(${text})` : text;
+          const tone = !result ? "muted" : dropped.includes(i) ? "dropped" : result.penalty === "DNF" ? "t-red" : result.penalty === "+2" ? "t-amber" : "";
+          const canEdit = props.editable && result?.source === "submitted";
+          return (
+            <li key={i}>
+              <span className="solve-no">{i + 1}</span>
+              {canEdit ? (
+                <button type="button" className={`chip-button ${tone}`} onClick={() => setEditing(editing === i ? null : i)} data-dense>
+                  {shown}
+                </button>
+              ) : (
+                <span className={tone} title={result ? formatResultLong(result) : undefined}>
+                  {shown}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {editing !== null && row[editing] && (
         <div className="penalty-editor" role="group" aria-label={`Penalty for solve ${editing + 1}`}>
-          <span className="small">Solve {editing + 1}</span>
+          <span className="tiny">Solve {editing + 1}</span>
           {(["OK", "+2", "DNF"] as const).map((penalty) => (
             <button
               key={penalty}
               type="button"
-              aria-pressed={editingResult.penalty === penalty}
+              aria-pressed={row[editing]!.penalty === penalty}
+              data-dense
               onClick={() => {
                 props.onChangePenalty(editing, penalty);
                 setEditing(null);
@@ -138,103 +283,10 @@ export const Standings = memo(function Standings(props: Props) {
               {penalty}
             </button>
           ))}
-          <button type="button" className="quiet" onClick={() => setEditing(null)}>
-            Close
-          </button>
         </div>
       )}
+      {props.isMe && props.editable && editing === null && <p className="tiny muted">Tap one of your times to change its penalty.</p>}
+      {props.onReact && row.some((r) => r !== null) && <ReactionTray label={`React to ${props.name}`} onReact={props.onReact} />}
     </div>
-  );
-});
-
-function bestSoFar(row: (SolveResult | null)[] | undefined): number | "DNF" | null {
-  const done = (row ?? []).filter((r): r is SolveResult => r !== null);
-  if (done.length === 0) return null;
-  const values = done.map(scoredMs).filter((v): v is number => v !== null);
-  return values.length ? Math.min(...values) : "DNF";
-}
-
-function TimeCell(props: {
-  result: SolveResult | null;
-  pending: string | null;
-  dropped: boolean;
-  fastest: boolean;
-  editable: boolean;
-  revealed: boolean;
-  onEdit: () => void;
-  onReveal: () => void;
-}) {
-  const { result } = props;
-  if (!result) {
-    return props.pending ? (
-      <span className="pending" title="Sending">
-        {props.pending}
-      </span>
-    ) : null;
-  }
-
-  const isDnf = result.penalty === "DNF";
-  const text = props.revealed ? formatResultLong(result) : formatResult(result);
-  const shown = props.dropped ? `(${text})` : text;
-  const tone = props.dropped
-    ? "dropped"
-    : isDnf
-      ? "t-red"
-      : props.fastest
-        ? "fastest"
-        : result.penalty === "+2"
-          ? "t-amber"
-          : "";
-  const label = `${formatResultLong(result)}${props.fastest && !isDnf ? ", fastest" : ""}${props.dropped ? ", dropped" : ""}`;
-
-  if (props.editable) {
-    return (
-      <button type="button" className={`cell-button ${tone}`} onClick={props.onEdit} aria-label={`${label}. Change penalty`}>
-        {shown}
-      </button>
-    );
-  }
-  if (isDnf && result.timeMs > 0) {
-    return (
-      <button type="button" className={`cell-button ${tone}`} onClick={props.onReveal} title={formatResultLong(result)} aria-label={label}>
-        {shown}
-      </button>
-    );
-  }
-  return (
-    <span className={tone} title={result.penalty === "+2" ? `${formatTime(result.timeMs)} + 2` : undefined} aria-label={label}>
-      {shown}
-    </span>
-  );
-}
-
-function RowStatus(props: { player?: PlayerSnapshot; match: MatchSnapshot; isMe: boolean; isHost: boolean; hasResult: boolean }) {
-  const { player, match } = props;
-  const parts: React.ReactNode[] = [];
-  if (props.isMe) parts.push("you");
-  if (props.isHost) parts.push("host");
-
-  let status: React.ReactNode = null;
-  if (!player) status = "left";
-  else if (player.status === "reconnecting") status = <span className="t-amber">reconnecting</span>;
-  else if (player.spectator) status = "spectator";
-  else if (match.phase === "solving") {
-    if (props.hasResult) status = "done";
-    else if (player.timerStatus === "solving")
-      status = (
-        <>
-          <span className="dot live" aria-hidden />
-          solving
-        </>
-      );
-  }
-
-  if (!status && parts.length === 0) return null;
-  return (
-    <span className="row-status">
-      {parts.join(" · ")}
-      {parts.length > 0 && status ? " · " : ""}
-      {status}
-    </span>
   );
 }

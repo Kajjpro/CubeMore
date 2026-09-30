@@ -32,6 +32,11 @@ export const config = {
     .split(",")
     .map((origin) => origin.trim().replace(/\/$/, ""))
     .filter(Boolean),
+  /**
+   * A Postgres database for the daily scramble's leaderboard, e.g. from Neon,
+   * Supabase or Render. Empty = kept in memory (reset on every restart).
+   */
+  databaseUrl: process.env.DATABASE_URL ?? "",
   timing: {
     solveReviewMs: numberFromEnv("SOLVE_REVIEW_MS", SOLVE_REVIEW_MS),
     setResultMs: numberFromEnv("SET_RESULT_MS", SET_RESULT_MS),

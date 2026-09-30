@@ -34,6 +34,18 @@ export const WIN_CONDITION_LABELS: Record<WinCondition, string> = {
   unlimited: "Unlimited",
 };
 
+/**
+ * Handicap: how a result compares with the player's pace. "−6.1%" = 6.1%
+ * faster than their pace (good), "+3.2%" = slower. null without a pace.
+ */
+export function paceDelta(result: number | "DNF" | undefined, pace: number | null | undefined): string | null {
+  if (pace == null || result === undefined) return null;
+  if (result === "DNF") return "DNF";
+  const percent = ((result - pace) / pace) * 100;
+  const text = Math.abs(percent).toFixed(1);
+  return percent < 0 ? `−${text}%` : `+${text}%`;
+}
+
 export function timeLimitLabel(limit: SolveTimeLimit): string {
   return limit === "off" ? "Off" : `${limit} min`;
 }
@@ -41,6 +53,7 @@ export function timeLimitLabel(limit: SolveTimeLimit): string {
 /** The one-line summary used everywhere: "3x3 · ao5 · Best of 3". */
 export function settingsSummary(settings: RoomSettings): string {
   const parts = [EVENT_SHORT[settings.cubeEvent], FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
+  if (settings.scoring === "handicap") parts.push("Handicap");
   if (settings.solveTimeLimit !== "off") parts.push(`${settings.solveTimeLimit} min limit`);
   return parts.join(" · ");
 }

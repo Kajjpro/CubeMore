@@ -1,40 +1,34 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ClientEvents,
-  DEFAULT_SETTINGS,
   NICKNAME_MAX_LENGTH,
-  PIN_LENGTH,
   ROOM_CODE_LENGTH,
-  ROOM_NAME_MAX_LENGTH,
+  type CubeEventId,
+  type DailyStatus,
   type PublicRoomInfo,
-  type RoomSettings,
-  type Scramble,
 } from "@cube-racing/shared";
-import { PublicRooms } from "../components/PublicRooms";
-import { BestOfField, EventSelect, FormatField, MoreOptions } from "../components/SettingsForm";
-import { EventIcon, Segmented } from "../components/ui";
-import { WarmUp } from "../components/WarmUp";
-import { settingsSummary } from "../labels";
+import { RoomList } from "../components/RoomList";
+import { EventSelect } from "../components/SettingsForm";
+import { EventIcon } from "../components/ui";
 import { setPref, usePrefs, type ThemePref } from "../prefs";
 import { navigate } from "../router";
 import { request, socket } from "../socket";
 import { loadIdentity, saveNickname } from "../storage";
+import { formatResult } from "../time";
 
 /** Only for /dev/states. */
 export interface HomeDemo {
-  screen?: "home" | "create";
   nickname?: string;
-  /** A fixed warm-up scramble, so screenshots are the same every time. */
-  warmUp?: Scramble;
   rooms?: PublicRoomInfo[];
-  visibility?: RoomSettings["visibility"];
+  daily?: DailyStatus;
 }
 
 export function HomePage({ demo }: { demo?: HomeDemo }) {
   const [nickname, setNickname] = useState(() => demo?.nickname ?? loadIdentity().nickname);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [screen, setScreen] = useState<"home" | "create">(demo?.screen ?? "home");
+  const [busy, setBusy] = useState<"race" | "create" | null>(null);
+  const { raceEvent } = usePrefs();
 
   // If you got here with the browser's Back button, you were still in a room.
   // Tell the server you left (it does nothing if you weren't in one).
@@ -54,6 +48,40 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
     return name;
   }
 
+  /**
+   * One tap: the room is made with the defaults (public, 3x3, ao5, Best of 3)
+   * and you're in. Everything can be changed in the room before the race.
+   */
+  async function create(settings: { cubeEvent?: CubeEventId; name?: string } = {}): Promise<void> {
+    const name = checkNickname();
+    if (!name) return;
+    const response = await request(ClientEvents.CREATE_ROOM, { playerId: loadIdentity().playerId, nickname: name, settings });
+    if (response.ok) navigate(`/room/${response.room.code}`);
+    else setError(response.error);
+  }
+
+  /**
+   * "Race now": joins an open public room for your event (one waiting in the
+   * lobby first, so the race starts 3 s later), or opens a new one that the
+   * next "Race now" player will find.
+   */
+  async function raceNow(): Promise<void> {
+    if (!checkNickname() || busy) return;
+    setBusy("race");
+    const response = await request(ClientEvents.QUICK_RACE, { cubeEvent: raceEvent });
+    if (response.ok && response.code) navigate(`/room/${response.code}`);
+    else if (response.ok) await create({ cubeEvent: raceEvent, name: "Quick race" });
+    else setError(response.error);
+    setBusy(null);
+  }
+
+  async function createRoom(): Promise<void> {
+    if (busy) return;
+    setBusy("create");
+    await create();
+    setBusy(null);
+  }
+
   function openRoom(roomCode: string): void {
     if (checkNickname()) navigate(`/room/${roomCode}`);
   }
@@ -68,19 +96,6 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
     }
     // The room page does the joining (and shows errors like "room not found").
     navigate(`/room/${clean}`);
-  }
-
-  if (screen === "create") {
-    return (
-      <CreateRoom
-        nickname={nickname.trim()}
-        checkNickname={checkNickname}
-        error={error}
-        onError={setError}
-        onBack={() => setScreen("home")}
-        initialVisibility={demo?.visibility}
-      />
-    );
   }
 
   return (
@@ -109,8 +124,16 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
             />
           </label>
 
-          <button type="button" className="primary" onClick={() => checkNickname() && setScreen("create")}>
-            Create room
+          <div className="race-now">
+            <EventSelect label="Race" value={raceEvent} onChange={(id) => setPref("raceEvent", id)} />
+            <button type="button" className="primary" onClick={raceNow} disabled={busy !== null}>
+              {busy === "race" ? "Finding a race…" : "Race now"}
+            </button>
+          </div>
+          <p className="tiny muted race-now-hint">Joins an open room for this event, or opens one for the next racer.</p>
+
+          <button type="button" onClick={createRoom} disabled={busy !== null}>
+            {busy === "create" ? "Creating…" : "Create a room for friends"}
           </button>
 
           <div className="or">or</div>
@@ -135,20 +158,21 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
             </div>
           </form>
 
-          <section className="steps" aria-labelledby="steps-title">
-            <h3 id="steps-title">How a race works</h3>
-            <ol>
-              <li>Create a room and pick the event, ao5 or ao12, and best of 3.</li>
-              <li>Share the code. Everyone gets the same scramble at the same moment.</li>
-              <li>Solve, then pick OK, +2 or DNF. Averages and points follow WCA rules.</li>
-            </ol>
-          </section>
         </div>
 
         <div className="home-side">
-          <PublicRooms onJoin={openRoom} demoRooms={demo?.rooms} />
-          <WarmUp initial={demo?.warmUp} />
+          <DailyCard demo={demo?.daily} />
+          <RoomList onJoin={openRoom} demoRooms={demo?.rooms} />
         </div>
+
+        <section className="steps" aria-labelledby="steps-title">
+          <h3 id="steps-title">How a race works</h3>
+          <ol>
+            <li>Race now to meet whoever is online, or create a room and share its code with friends.</li>
+            <li>The race starts 3 seconds after someone joins. Everyone gets the same scramble.</li>
+            <li>Solve, then pick OK, +2 or DNF. Averages and points follow WCA rules.</li>
+          </ol>
+        </section>
       </main>
 
       <footer className="home-foot">
@@ -159,113 +183,37 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
   );
 }
 
-/** A random 4-digit PIN (the host can change it). */
-function randomPin(): string {
-  return String(crypto.getRandomValues(new Uint32Array(1))[0] % 10 ** PIN_LENGTH).padStart(PIN_LENGTH, "0");
-}
+/** Today's daily scramble: your status in one line, and a way in. */
+function DailyCard({ demo }: { demo?: DailyStatus }) {
+  const [daily, setDaily] = useState<DailyStatus | null>(demo ?? null);
+  useEffect(() => {
+    if (demo) return;
+    const load = () =>
+      void request(ClientEvents.DAILY_STATUS, { playerId: loadIdentity().playerId }).then((r) => r.ok && setDaily(r.daily));
+    socket.on("connect", load);
+    if (socket.connected) load();
+    return () => void socket.off("connect", load);
+  }, [demo]);
 
-/** Creating a room: a few choices with good defaults, so it's quick. */
-function CreateRoom(props: {
-  nickname: string;
-  checkNickname: () => string | null;
-  error: string | null;
-  onError: (error: string) => void;
-  onBack: () => void;
-  initialVisibility?: RoomSettings["visibility"];
-}) {
-  const [settings, setSettings] = useState<RoomSettings>({
-    ...DEFAULT_SETTINGS,
-    visibility: props.initialVisibility ?? DEFAULT_SETTINGS.visibility,
-  });
-  const [pin, setPin] = useState(randomPin);
-  const [creating, setCreating] = useState(false);
-  const change = (changes: Partial<RoomSettings>) => setSettings((old) => ({ ...old, ...changes }));
-  const isPrivate = settings.visibility === "private";
-
-  async function create(): Promise<void> {
-    const name = props.checkNickname();
-    if (!name) return;
-    if (isPrivate && pin.length !== PIN_LENGTH) {
-      props.onError(`The PIN must be ${PIN_LENGTH} digits.`);
-      return;
-    }
-    setCreating(true);
-    const response = await request(ClientEvents.CREATE_ROOM, {
-      playerId: loadIdentity().playerId,
-      nickname: name,
-      settings,
-      ...(isPrivate ? { pin } : {}),
-    });
-    setCreating(false);
-    if (response.ok) navigate(`/room/${response.room.code}${isPrivate ? `?pin=${pin}` : ""}`);
-    else props.onError(response.error);
-  }
-
+  const done = daily?.status === "done" && daily.result;
   return (
-    <main className="page page-wide" style={{ paddingBottom: "calc(84px + env(safe-area-inset-bottom))" }}>
-      <div className="page-head">
-        <button type="button" className="quiet" onClick={props.onBack}>
-          Back
-        </button>
-        <h1>New room</h1>
+    <section className="panel daily-card">
+      <div className="grow">
+        <h2>Daily scramble</h2>
+        <p className="small muted">
+          {!daily
+            ? "Same scramble for everyone, one attempt a day."
+            : done
+              ? `You: ${formatResult(daily.result!)} · #${daily.rank} of ${daily.total}`
+              : daily.status === "started"
+                ? "Your attempt is running. Finish it!"
+                : `One attempt · ${daily.total} finished today`}
+        </p>
       </div>
-      {props.error && <p className="banner banner-error">{props.error}</p>}
-
-      <div className="settings-form">
-        <label className="field">
-          <span className="field-label">Room name</span>
-          <input
-            value={settings.name}
-            onChange={(e) => change({ name: e.target.value })}
-            maxLength={ROOM_NAME_MAX_LENGTH}
-            placeholder={props.nickname ? `${props.nickname}'s room` : "My room"}
-            autoComplete="off"
-          />
-        </label>
-
-        <Segmented
-          label="Who can join"
-          value={settings.visibility}
-          options={[
-            { value: "public", label: "Public" },
-            { value: "private", label: "Private (PIN)" },
-          ]}
-          onChange={(visibility) => change({ visibility })}
-        />
-        {isPrivate ? (
-          <label className="field">
-            <span className="field-label">PIN</span>
-            <input
-              className="pin-input"
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
-              inputMode="numeric"
-              autoComplete="off"
-            />
-            <span className="tiny muted">Not listed publicly. Friends need the room code and this PIN; the invite link includes both.</span>
-          </label>
-        ) : (
-          <p className="tiny muted">Listed on the home page, so anyone can join.</p>
-        )}
-
-        <EventSelect value={settings.cubeEvent} onChange={(cubeEvent) => change({ cubeEvent })} />
-        <FormatField value={settings.format} onChange={(format) => change({ format })} />
-        <BestOfField value={settings.winCondition} onChange={(winCondition) => change({ winCondition })} />
-        <MoreOptions settings={settings} onChange={change} />
-      </div>
-
-      <div className="start-bar">
-        <div className="inner" style={{ maxWidth: 528 }}>
-          <p className="grow small muted">
-            {settingsSummary(settings)}
-            {isPrivate ? " · Private" : ""}
-          </p>
-          <button type="button" className="primary" onClick={create} disabled={creating}>
-            {creating ? "Creating…" : "Create room"}
-          </button>
-        </div>
-      </div>
-    </main>
+      <button type="button" className={done ? "" : "primary"} onClick={() => navigate("/daily")}>
+        {done ? "Leaderboard" : daily?.status === "started" ? "Continue" : "Play"}
+      </button>
+    </section>
   );
 }
 

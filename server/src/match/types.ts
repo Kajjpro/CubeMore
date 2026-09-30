@@ -21,6 +21,8 @@ export interface FinishedSet {
   results: Record<string, SolveResult[]>;
   standings: Record<string, SetStanding>;
   winnerIds: string[];
+  /** Handicap only: each player's pace going into this set. */
+  paces: Record<string, number | null> | null;
 }
 
 /**

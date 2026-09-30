@@ -21,11 +21,16 @@ export class RateLimiter {
 
   /** Takes a token if there is one. Returns false when the limit is reached. */
   tryTake(now = Date.now()): boolean {
+    if (!this.hasToken(now)) return false;
+    this.tokens -= 1;
+    return true;
+  }
+
+  /** True if a token is available, without taking it. */
+  hasToken(now = Date.now()): boolean {
     const secondsPassed = (now - this.lastRefill) / 1000;
     this.tokens = Math.min(this.capacity, this.tokens + secondsPassed * this.refillPerSecond);
     this.lastRefill = now;
-    if (this.tokens < 1) return false;
-    this.tokens -= 1;
-    return true;
+    return this.tokens >= 1;
   }
 }

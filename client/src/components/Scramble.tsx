@@ -131,3 +131,56 @@ export function ScramblePreview(props: { scramble: Scramble; mode: "2d" | "3d"; 
     </button>
   );
 }
+
+/**
+ * Another player's smart cube, live: the scramble, then their moves as they
+ * arrive (each new move is animated). A new scramble starts a new cube.
+ */
+export function LiveCube({ scramble, moves }: { scramble: Scramble; moves: string[] }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<{ experimentalAddMove: (move: string) => void; alg: unknown } | null>(null);
+  const shown = useRef(0);
+  const latestMoves = useRef(moves);
+  latestMoves.current = moves;
+
+  useEffect(() => {
+    let cancelled = false;
+    let player: HTMLElement | null = null;
+    shown.current = 0;
+    import("cubing/twisty")
+      .then(({ TwistyPlayer }) => {
+        if (cancelled || !boxRef.current) return;
+        const twisty = new TwistyPlayer({
+          puzzle: "3x3x3",
+          experimentalSetupAlg: scramble.text,
+          background: "none",
+          controlPanel: "none",
+          hintFacelets: "none",
+          viewerLink: "none",
+          experimentalDragInput: "none",
+        });
+        player = twisty;
+        playerRef.current = twisty;
+        boxRef.current.append(twisty);
+        // Moves that arrived while cubing.js was loading.
+        for (const move of latestMoves.current) twisty.experimentalAddMove(move);
+        shown.current = latestMoves.current.length;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      playerRef.current = null;
+      player?.remove();
+    };
+  }, [scramble.text]);
+
+  // Add only the moves the cube hasn't shown yet.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    for (const move of moves.slice(shown.current)) player.experimentalAddMove(move);
+    shown.current = moves.length;
+  }, [moves]);
+
+  return <div className="live-cube" ref={boxRef} aria-label={`Live cube: ${moves.length} moves so far`} />;
+}

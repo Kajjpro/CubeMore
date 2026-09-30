@@ -95,6 +95,34 @@ export function setWinners(standings: Record<string, SetStanding>): string[] {
 }
 
 /**
+ * Handicap: a player's pace is the mean of their set results (not DNF) in the
+ * earlier sets of this match, in whole ms. null until they have finished a set.
+ */
+export function paceOf(finishedSets: { standings: Record<string, SetStanding> }[], playerId: string): number | null {
+  const marks = finishedSets
+    .map((set) => set.standings[playerId]?.result)
+    .filter((mark): mark is number => typeof mark === "number");
+  if (marks.length === 0) return null;
+  return Math.round(marks.reduce((sum, mark) => sum + mark, 0) / marks.length);
+}
+
+/**
+ * Handicap: the set winners are whoever beat their own pace by the most
+ * (smallest result / pace). Players without a pace, and DNFs, can't win.
+ * Compared with whole numbers (a * pb vs b * pa), so ties are exact.
+ */
+export function handicapWinners(standings: Record<string, SetStanding>, paces: Record<string, number | null>): string[] {
+  const contenders = Object.entries(standings)
+    .filter(([id, s]) => s.result !== "DNF" && paces[id] != null)
+    .map(([id, s]) => ({ id, result: s.result as number, pace: paces[id]! }));
+  if (contenders.length === 0) return [];
+  // "a beat their pace by more than b": a.result / a.pace < b.result / b.pace.
+  const better = (a: (typeof contenders)[0], b: (typeof contenders)[0]) => a.result * b.pace - b.result * a.pace;
+  const best = contenders.reduce((top, c) => (better(c, top) < 0 ? c : top));
+  return contenders.filter((c) => better(c, best) === 0).map((c) => c.id);
+}
+
+/**
  * The match winner: someone with at least `target` points AND strictly more
  * points than every other contender. null if nobody has won yet (for example
  * two players tied at the target: they keep playing until one leads).
