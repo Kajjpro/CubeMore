@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Mark, Penalty, SolveResult } from "@cube-racing/shared";
 import {
   findMatchWinner,
+  handicapWinners,
+  paceOf,
   roundHalfUpDivide,
   scoredTime,
   setStanding,
@@ -191,5 +193,32 @@ describe("match winner", () => {
 
   it("never ends by itself in unlimited mode", () => {
     expect(findMatchWinner({ a: 100 }, ["a"], null)).toBeNull();
+  });
+});
+
+describe("handicap", () => {
+  const set = (results: Record<string, number | "DNF">) => ({
+    standings: Object.fromEntries(Object.entries(results).map(([id, result]) => [id, { result, best: result }])),
+  });
+
+  it("a pace is the mean of earlier set results, ignoring DNFs", () => {
+    const sets = [set({ a: 10_000, b: 20_000 }), set({ a: 12_000, b: "DNF" })];
+    expect(paceOf(sets, "a")).toBe(11_000);
+    expect(paceOf(sets, "b")).toBe(20_000);
+    expect(paceOf(sets, "c")).toBeNull();
+    expect(paceOf([], "a")).toBeNull();
+  });
+
+  it("whoever beats their own pace by the most wins, so a slower solver can win", () => {
+    const standings = set({ fast: 9_500, slow: 22_000, dnf: "DNF", newcomer: 5_000 }).standings;
+    const paces = { fast: 10_000, slow: 25_000, dnf: 12_000, newcomer: null };
+    // fast: 5% under pace; slow: 12% under pace -> slow wins. newcomer has no pace yet.
+    expect(handicapWinners(standings, paces)).toEqual(["slow"]);
+  });
+
+  it("exact ties share the set, and nobody wins without a pace", () => {
+    const standings = set({ a: 9_000, b: 18_000 }).standings;
+    expect(handicapWinners(standings, { a: 10_000, b: 20_000 }).sort()).toEqual(["a", "b"]);
+    expect(handicapWinners(standings, { a: null, b: null })).toEqual([]);
   });
 });

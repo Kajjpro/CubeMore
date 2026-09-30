@@ -29,10 +29,29 @@
  *    background. They are never sent to clients until their solve starts.
  */
 
-import type { CubeEventId, RoomSettings, RoomSnapshot, Scramble } from "@cube-racing/shared";
+import { randomUUID } from "node:crypto";
+import {
+  CHAT_HISTORY_LENGTH,
+  type ChatMessage,
+  type CubeEventId,
+  type RoomSettings,
+  type RoomSnapshot,
+  type Scramble,
+} from "@cube-racing/shared";
 import { solvesPerSet } from "../match/scoring";
 import type { MatchTiming } from "../match/types";
-import { needsNextSet, nextDeadline, shouldDeleteRoom, startNextSet, tickRoom, toSnapshot } from "./roomLogic";
+import { RateLimiter } from "../rateLimit";
+import { chatNotices } from "./chatNotices";
+import {
+  autoStart,
+  autoStartDue,
+  needsNextSet,
+  nextDeadline,
+  shouldDeleteRoom,
+  startNextSet,
+  tickRoom,
+  toSnapshot,
+} from "./roomLogic";
 import type { ServerRoom } from "./types";
 
 export interface LiveRoomDeps {
@@ -45,6 +64,8 @@ export interface LiveRoomDeps {
   log: (code: string, message: string) => void;
   timing: MatchTiming;
   broadcastIntervalMs: number;
+  /** Sends one new chat line to everyone in the room (right away, not batched). */
+  sendChat?: (message: ChatMessage) => void;
 }
 
 /** If making scrambles failed, wait this long before trying again. */
@@ -64,6 +85,19 @@ export class LiveRoom {
 
   /** Scrambles being made in the background for the next set. */
   private upcoming: { key: string; scrambles: Promise<Scramble[]> } | null = null;
+
+  /**
+   * The room chat: the last 100 lines. Kept here, outside the synced room state,
+   * so chat never makes the (frequent) room snapshots bigger.
+   */
+  private chatLog: ChatMessage[] = [];
+  private chatCount = 0;
+
+  /**
+   * Wrong PINs for this room: 10, then one more every 6 seconds. Private rooms
+   * are listed with their code, so this stops anyone from trying all 10,000 PINs.
+   */
+  readonly wrongPins = new RateLimiter(10, 1 / 6);
 
   constructor(
     initial: ServerRoom,
@@ -127,6 +161,41 @@ export class LiveRoom {
       const winners = next.match.winnerIds.map((id) => next.players.find((p) => p.publicId === id)?.nickname ?? id);
       this.deps.log(this.code, `match over, winner: ${winners.join(" & ") || "nobody"}`);
     }
+
+    // "Anu joined the room", "Nomin submitted 9.12", "Nomin wins set 2"...
+    for (const notice of chatNotices(before, next)) {
+      this.addChat("system", notice);
+    }
+  }
+
+  /** The recent chat, oldest first (sent to someone who joins or comes back). */
+  chatHistory(): ChatMessage[] {
+    return [...this.chatLog];
+  }
+
+  /** Adds a chat line and sends it to everyone in the room right away. */
+  addChat(
+    kind: ChatMessage["kind"],
+    text: string,
+    sender?: { name: string; publicId: string },
+    targetId: string | null = null,
+  ): ChatMessage | null {
+    if (this.isDeleted) return null;
+    const message: ChatMessage = {
+      id: `${Date.now().toString(36)}-${(this.chatCount++).toString(36)}`,
+      at: Date.now(),
+      kind,
+      name: sender?.name ?? null,
+      senderId: sender?.publicId ?? null,
+      targetId,
+      text,
+    };
+    this.chatLog.push(message);
+    if (this.chatLog.length > CHAT_HISTORY_LENGTH) {
+      this.chatLog.splice(0, this.chatLog.length - CHAT_HISTORY_LENGTH);
+    }
+    this.deps.sendChat?.(message);
+    return message;
   }
 
   /**
@@ -140,6 +209,25 @@ export class LiveRoom {
     if (shouldDeleteRoom(this.current, now)) {
       this.delete();
       this.deps.log(this.code, "deleted (empty for 10 minutes)");
+      return;
+    }
+
+    // The lobby countdown (someone joined) is over: the race starts.
+    if (autoStartDue(this.current, now) && now >= this.notBefore) {
+      let scrambles: Scramble[];
+      try {
+        scrambles = await this.takeScrambles(this.current.settings);
+      } catch (error) {
+        this.deps.log(this.code, `could not make scrambles, retrying: ${String(error)}`);
+        this.notBefore = Date.now() + SCRAMBLE_RETRY_MS;
+        return;
+      }
+      const start = { matchId: randomUUID(), scrambles, timing: this.deps.timing };
+      const result = autoStart(this.current, start, Date.now());
+      if (result.ok) {
+        this.commit(result.room);
+        if (result.room.match) this.deps.log(this.code, "match started (someone joined), set 1 started");
+      }
       return;
     }
 

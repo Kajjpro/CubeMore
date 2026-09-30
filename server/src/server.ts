@@ -5,7 +5,10 @@ import path from "node:path";
 import express from "express";
 import { Server } from "socket.io";
 import { ServerEvents } from "@cube-racing/shared";
+import { DailyService } from "./daily/daily";
+import { MemoryDailyStore, type DailyStore } from "./daily/store";
 import type { MatchTiming } from "./match/types";
+import { generateScramble } from "./scrambles";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
 export interface StartOptions {
@@ -25,6 +28,8 @@ export interface StartOptions {
   clientDist?: string | null;
   /** Websites on other addresses allowed to connect (e.g. the Vercel site). */
   clientOrigins?: string[];
+  /** Where daily scramble results are kept. Default: in memory (gone after a restart). */
+  dailyStore?: DailyStore;
 }
 
 export interface RunningServer {
@@ -64,6 +69,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     broadcastIntervalMs: options.broadcastIntervalMs ?? 50,
     log,
     makeScrambles: options.makeScrambles,
+    daily: new DailyService(options.dailyStore ?? new MemoryDailyStore(), () => generateScramble("333")),
   });
 
   // For uptime checks (Fly.io calls this to know the server is alive).

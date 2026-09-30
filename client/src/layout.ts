@@ -2,9 +2,9 @@ import { useSyncExternalStore } from "react";
 
 /**
  * The three layouts (see DESIGN.md):
- *  "phone"     portrait phones: stage + bottom sheet
- *  "landscape" phones on their side: stage 2/3 + compact standings 1/3
- *  "wide"      tablets and desktops: stage + room panel
+ *  "phone"     portrait phones: stage + bottom sheet (Standings | Chat tabs)
+ *  "landscape" phones on their side: stage 2/3 + sidebar with the same tabs 1/3
+ *  "wide"      tablets and desktops: stage + 320 px sidebar (standings above chat)
  */
 export type Layout = "phone" | "landscape" | "wide";
 

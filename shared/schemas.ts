@@ -14,6 +14,8 @@
 
 import { z } from "zod";
 import {
+  CHAT_MAX_LENGTH,
+  REACTIONS,
   MAX_PLAYERS_LIMIT,
   MAX_SOLVE_TIME_MS,
   MIN_PLAYERS_LIMIT,
@@ -24,7 +26,7 @@ import {
   ROOM_CODE_LENGTH,
 } from "./constants";
 import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
-import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
+import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SCORING_MODES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROOM_CODE_PATTERN = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${ROOM_CODE_LENGTH}}$`);
@@ -81,6 +83,7 @@ export const settingsChangesSchema = z.object({
   winCondition: z.enum(WIN_CONDITIONS).optional(),
   maxPlayers: z.number().int().min(MIN_PLAYERS_LIMIT).max(MAX_PLAYERS_LIMIT).optional(),
   solveTimeLimit: z.literal(SOLVE_TIME_LIMITS).optional(),
+  scoring: z.enum(SCORING_MODES).optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */
@@ -133,8 +136,17 @@ export const restartSchema = z.object({
     .default({}),
 });
 
+/**
+ * Host, in the lobby. Besides the race settings: the room name, public/private
+ * (a private room needs a PIN: a new one, or the one it already has), and
+ * Best of until the first race starts.
+ */
 export const updateSettingsSchema = z.object({
-  settings: settingsChangesSchema,
+  settings: settingsChangesSchema.extend({
+    name: roomNameSchema.optional(),
+    visibility: z.enum(ROOM_VISIBILITIES).optional(),
+  }),
+  pin: pinSchema.optional(),
 });
 
 export const targetPlayerSchema = z.object({
@@ -158,8 +170,58 @@ export const changePenaltySchema = z.object({
   penalty: z.enum(PENALTIES),
 });
 
-export const warmUpSchema = z.object({
+/** Watch a room without playing (the streamer overlay). Private rooms need the PIN. */
+export const watchRoomSchema = z.object({
+  code: roomCodeSchema,
+  pin: z.string().max(10).optional(),
+});
+
+/** The daily scramble: who's asking (the secret player id, so one attempt per player). */
+export const dailySchema = z.object({
+  playerId: playerIdSchema,
+});
+
+/** Starting today's attempt (shows the scramble; the 10 minutes start). */
+export const dailyStartSchema = z.object({
+  playerId: playerIdSchema,
+  nickname: nicknameSchema,
+});
+
+/** Today's time. */
+export const dailySubmitSchema = z.object({
+  playerId: playerIdSchema,
+  timeMs: z.number().int().min(0).max(MAX_SOLVE_TIME_MS),
+  penalty: z.enum(PENALTIES),
+});
+
+/** Smart cube: moves made during a solve ("R", "U'", "F2"...), sent in small batches. */
+export const cubeMovesSchema = z.object({
+  moves: z
+    .array(z.string().regex(/^[URFDLBMESxyzurfdlb]w?['2]?$/))
+    .min(1)
+    .max(30),
+});
+
+/** "Race now": the event you want to race. */
+export const quickRaceSchema = z.object({
   cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]),
+});
+
+/** A reaction to another player's latest time. */
+export const reactSchema = z.object({
+  targetId: publicIdSchema,
+  emoji: z.enum(REACTIONS),
+});
+
+/** A chat message: line breaks and control characters become spaces; 1-200 characters. */
+export const chatSchema = z.object({
+  text: z
+    .string()
+    .max(2000)
+    .transform((text) => text.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim())
+    .refine((text) => text.length >= 1 && [...text].length <= CHAT_MAX_LENGTH, {
+      message: `Messages can be 1 to ${CHAT_MAX_LENGTH} characters.`,
+    }),
 });
 
 export const timerStatusSchema = z.object({

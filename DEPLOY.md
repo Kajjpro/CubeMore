@@ -49,6 +49,20 @@ is **Live**, open the address shown at the top of the service page, e.g.
 `https://cubits.onrender.com` (Render adds a few letters if the name is taken).
 `https://<address>/health` answers `{"ok":true,...}`.
 
+### Keeping the daily leaderboard (optional, free)
+
+The daily scramble works without a database, but its leaderboard is kept in memory,
+and the free Render service forgets it when it sleeps. To keep it:
+
+1. Create a free Postgres database, e.g. on **neon.tech** (or Supabase, or Render
+   Postgres). Copy its connection string (`postgres://…?sslmode=require`).
+2. On Render: your service → **Environment** → add `DATABASE_URL` = that string → Save.
+3. After the restart the log says `Daily scramble results are saved in Postgres`.
+   The tables are created by themselves.
+
+Rooms still live in memory (they're short-lived by design); only the daily results
+are stored.
+
 ### Updating
 
 Every `git push` to `main` deploys again automatically (and clears the rooms, so push

@@ -10,6 +10,15 @@ export type RoomFormat = (typeof ROOM_FORMATS)[number];
 export const WIN_CONDITIONS = ["bo1", "bo3", "bo5", "unlimited"] as const;
 export type WinCondition = (typeof WIN_CONDITIONS)[number];
 
+/**
+ * How a set is won.
+ *   fastest:  the best average (or single) wins, WCA-style.
+ *   handicap: everyone races their own pace (their average from earlier sets);
+ *             whoever beats it by the most wins. Fair for mixed levels.
+ */
+export const SCORING_MODES = ["fastest", "handicap"] as const;
+export type ScoringMode = (typeof SCORING_MODES)[number];
+
 /** Minutes a player has for each solve before they get an automatic DNF. */
 export const SOLVE_TIME_LIMITS = ["off", 1, 2, 5, 10] as const;
 export type SolveTimeLimit = (typeof SOLVE_TIME_LIMITS)[number];
@@ -34,6 +43,7 @@ export interface RoomSettings {
   winCondition: WinCondition;
   maxPlayers: number;
   solveTimeLimit: SolveTimeLimit;
+  scoring: ScoringMode;
 }
 
 /** A scramble that every player in the room solves. Made by the server. */
@@ -91,6 +101,8 @@ export interface PlayerSnapshot {
   nickname: string;
   status: PlayerStatus;
   timerStatus: TimerStatus;
+  /** Server time their timer started, while it runs (for the live clock others see), or null. */
+  solvingSince: number | null;
   /** True if they joined during a set: they watch until the next set starts. */
   spectator: boolean;
 }
@@ -106,6 +118,8 @@ export interface SetSummary {
   setIndex: number;
   winnerIds: string[];
   standings: Record<string, SetStanding>;
+  /** Handicap only: each player's pace going into this set (ms), null = no pace yet. */
+  paces: Record<string, number | null> | null;
 }
 
 export interface MatchSnapshot {
@@ -133,6 +147,8 @@ export interface MatchSnapshot {
   /** Points of everyone who has played in this match. */
   points: Record<string, number>;
   finishedSets: SetSummary[];
+  /** Handicap only: each roster player's pace for the current set (ms), null = no pace yet. */
+  paces: Record<string, number | null> | null;
   /** Filled in when the match is over. Empty = nobody won. */
   winnerIds: string[];
 }
@@ -156,6 +172,29 @@ export interface RoomSnapshot {
   players: PlayerSnapshot[];
   /** null = the room is in the lobby. */
   match: MatchSnapshot | null;
+  /** Lobby only: when the race starts by itself (someone joined), or null. */
+  autoStartAt: number | null;
+  /** Best of can be changed until the first race starts, then it's fixed. */
+  bestOfLocked: boolean;
+}
+
+/**
+ * One chat line in a room. "system" lines are notices the server writes itself
+ * ("Anu joined the room", "Nomin submitted 9.12").
+ */
+export interface ChatMessage {
+  id: string;
+  /** Server time when it was sent. */
+  at: number;
+  /** "reaction": someone reacted to another player's time ("🔥 Nomin's 9.12"). */
+  kind: "user" | "system" | "reaction";
+  /** The sender's nickname (user messages and reactions). */
+  name: string | null;
+  /** The sender's PUBLIC id (user messages and reactions), so the UI can mark your own. */
+  senderId: string | null;
+  /** Reactions: the PUBLIC id of the player reacted to (their row shows the emoji). */
+  targetId: string | null;
+  text: string;
 }
 
 /** One line of the public room list on the home page. Never includes private rooms. */
@@ -169,5 +208,44 @@ export interface PublicRoomInfo {
   maxPlayers: number;
   /** true = a match is running (new players watch until the next set). */
   racing: boolean;
+  /** Private rooms are listed too, but joining one needs its PIN. */
+  visibility: RoomVisibility;
   hostName: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// The daily scramble: one 3x3 scramble per day (UTC) for everyone, one attempt
+// ---------------------------------------------------------------------------
+
+/** One line of the daily leaderboard. */
+export interface DailyRow {
+  rank: number;
+  name: string;
+  /** The player's PUBLIC id (so the page can mark your own row). */
+  playerId: string;
+  result: SolveResult;
+}
+
+/** Everything the daily page shows, for one player. */
+export interface DailyStatus {
+  /** "2026-09-30" (UTC). */
+  day: string;
+  /** The server's clock when this was sent (for correct countdowns). */
+  serverTime: number;
+  /** Server time when the next daily scramble comes out (midnight UTC). */
+  nextAt: number;
+  /** new = not started; started = the scramble is showing, the clock is on; done = result in. */
+  status: "new" | "started" | "done";
+  /** Only once you've started: nobody sees it before their own attempt. */
+  scramble: Scramble | null;
+  /** While started: the server time the attempt runs out (then it counts as DNF). */
+  deadline: number | null;
+  /** Your result (done only), your rank, and how many have finished today. */
+  result: SolveResult | null;
+  rank: number | null;
+  total: number;
+  /** The top of today's leaderboard. */
+  leaderboard: DailyRow[];
+  /** Your public id, to find your row. */
+  youId: string;
 }

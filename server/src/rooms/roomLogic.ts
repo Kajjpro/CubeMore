@@ -18,8 +18,12 @@
 
 import { createHash } from "node:crypto";
 import {
+  AUTO_START_DELAY_MS,
   EMPTY_ROOM_TTL_MS,
+  formatResult,
+  PIN_LENGTH,
   RECONNECT_GRACE_MS,
+  type CubeEventId,
   type ErrorCode,
   type PublicRoomInfo,
   type RoomSettings,
@@ -68,6 +72,7 @@ export function publicIdFor(playerId: string): string {
 /**
  * A new room with its creator as host. A room without a name is called
  * "<host>'s room". A private room needs a PIN (checked by the schema).
+ * The room waits in the lobby; the race starts by itself when someone joins.
  */
 export function createRoom(
   code: string,
@@ -87,6 +92,8 @@ export function createRoom(
     kickedPlayerIds: [],
     pin: settings.visibility === "private" ? pin : null,
     emptySince: null,
+    autoStartAt: null,
+    hasRaced: false,
   };
 }
 
@@ -134,13 +141,17 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
   // Joining during a match is allowed: the new player watches (spectator)
   // until the next set starts, because they aren't in this set's roster.
   const joined = newPlayer(player, now);
+  const players = [...room.players, joined];
+  // In the lobby, a second player joining starts the countdown to the race.
+  const countDown = !room.match && players.length >= 2 && room.autoStartAt === null;
   return {
     ok: true,
     room: changeRoom(room, {
-      players: [...room.players, joined],
+      players,
       // If the room was empty, there's no host yet, so the new player becomes host.
       hostId: room.hostId ?? joined.publicId,
       emptySince: null,
+      autoStartAt: countDown ? now + AUTO_START_DELAY_MS : room.autoStartAt,
     }),
   };
 }
@@ -156,7 +167,12 @@ export function markDisconnected(room: ServerRoom, playerId: string, now: number
     return room;
   }
   return changeRoom(room, {
-    players: updatePlayer(room, playerId, { status: "reconnecting", disconnectedAt: now, timerStatus: "idle" }),
+    players: updatePlayer(room, playerId, {
+      status: "reconnecting",
+      disconnectedAt: now,
+      timerStatus: "idle",
+      solvingSince: null,
+    }),
   });
 }
 
@@ -213,10 +229,18 @@ export function kickPlayer(
   };
 }
 
+/** What the host can change in the lobby. */
+export type SettingsChanges = Partial<RoomSettings>;
+
+/**
+ * Host, in the lobby: event, format, time limit, max players, the room name,
+ * public/private (with its PIN), and Best of until the first race starts.
+ */
 export function updateSettings(
   room: ServerRoom,
   requesterId: string,
-  changes: Partial<RoomSettings>,
+  changes: SettingsChanges,
+  pin?: string,
 ): LogicResult {
   if (!isHost(room, requesterId)) {
     return fail("Only the host can change settings.");
@@ -224,29 +248,30 @@ export function updateSettings(
   if (room.match) {
     return fail("Settings can only be changed in the lobby.");
   }
-  if (changes.winCondition !== undefined && changes.winCondition !== room.settings.winCondition) {
-    return fail("Best of is chosen when the room is created and can't be changed.");
+  if (room.hasRaced && changes.winCondition !== undefined && changes.winCondition !== room.settings.winCondition) {
+    return fail("Best of is fixed once the first race has started.");
   }
 
-  // The name, public/private and best of stay as they were created.
-  const settings: RoomSettings = {
-    ...room.settings,
-    ...changes,
-    name: room.settings.name,
-    visibility: room.settings.visibility,
-    winCondition: room.settings.winCondition,
-  };
+  const settings: RoomSettings = { ...room.settings, ...changes };
+  // An empty name goes back to "<host>'s room".
+  if (!settings.name) settings.name = `${hostName(room) ?? "Cube"}'s room`;
   if (settings.maxPlayers < room.players.length) {
     return fail(`Max players can't be lower than the ${room.players.length} players already here.`);
   }
 
+  // A private room keeps its PIN unless a new one is given; a public room has none.
+  const nextPin = settings.visibility === "private" ? (pin ?? room.pin) : null;
+  if (settings.visibility === "private" && nextPin === null) {
+    return fail(`A private room needs a ${PIN_LENGTH}-digit PIN.`);
+  }
+
   const keys = Object.keys(settings) as (keyof RoomSettings)[];
-  const nothingChanged = keys.every((key) => settings[key] === room.settings[key]);
+  const nothingChanged = nextPin === room.pin && keys.every((key) => settings[key] === room.settings[key]);
   if (nothingChanged) {
     return { ok: true, room };
   }
 
-  return { ok: true, room: changeRoom(room, { settings }) };
+  return { ok: true, room: changeRoom(room, { settings, pin: nextPin }) };
 }
 
 /**
@@ -319,10 +344,13 @@ export function rematchError(room: ServerRoom, requesterId: string): string | nu
   return null;
 }
 
-/** The public rooms for the home page list: never private rooms, never empty ones. */
-export function publicRoomList(rooms: ServerRoom[]): PublicRoomInfo[] {
+/**
+ * Every room with people in it, for the list on the home page. Private rooms
+ * are listed too (never their PIN): anyone can see them, only the PIN lets you in.
+ */
+export function roomList(rooms: ServerRoom[]): PublicRoomInfo[] {
   return rooms
-    .filter((room) => room.settings.visibility === "public" && room.players.length > 0)
+    .filter((room) => room.players.length > 0)
     .map((room) => ({
       code: room.code,
       name: room.settings.name,
@@ -332,10 +360,45 @@ export function publicRoomList(rooms: ServerRoom[]): PublicRoomInfo[] {
       players: room.players.length,
       maxPlayers: room.settings.maxPlayers,
       racing: room.match !== null && room.match.phase !== "match_over",
-      hostName: room.players.find((p) => p.publicId === room.hostId)?.nickname ?? null,
+      visibility: room.settings.visibility,
+      hostName: hostName(room),
     }))
     .sort((a, b) => b.players - a.players || a.name.localeCompare(b.name))
     .slice(0, 50);
+}
+
+/**
+ * "Race now": the best open room for this event, or null (the player then
+ * creates one). Only public rooms with a free seat. Rooms waiting in the lobby
+ * come first (the race starts 3 s after you join), fullest first; then rooms
+ * that are racing (you watch the current set and race from the next one).
+ */
+export function quickRaceCode(rooms: ServerRoom[], cubeEvent: CubeEventId, exceptCode: string | null): string | null {
+  const open = rooms.filter(
+    (room) =>
+      room.code !== exceptCode &&
+      room.pin === null &&
+      room.settings.cubeEvent === cubeEvent &&
+      // Someone must really be there (not only players whose connection dropped).
+      room.players.some((p) => p.status === "connected") &&
+      room.players.length < room.settings.maxPlayers &&
+      room.match?.phase !== "match_over",
+  );
+  const waiting = open.filter((room) => room.match === null).sort((a, b) => b.players.length - a.players.length);
+  const racing = open.filter((room) => room.match !== null).sort((a, b) => b.players.length - a.players.length);
+  return (waiting[0] ?? racing[0])?.code ?? null;
+}
+
+/**
+ * The chat line for a reaction: "🔥 Nomin's 9.12" (their latest time in this
+ * set), or "🔥 Nomin" if they have no time yet. Null if the target isn't here.
+ */
+export function reactionText(room: ServerRoom, targetPublicId: string, emoji: string): string | null {
+  const target = room.players.find((p) => p.publicId === targetPublicId);
+  if (!target) return null;
+  const row = room.match?.results[targetPublicId] ?? [];
+  const latest = [...row].reverse().find((result) => result !== null);
+  return latest ? `${emoji} ${target.nickname}'s ${formatResult(latest)}` : `${emoji} ${target.nickname}`;
 }
 
 function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
@@ -351,7 +414,22 @@ function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): Logic
     scrambles: start.scrambles,
     now,
   });
-  return { ok: true, room: withMatch(room, match) };
+  return { ok: true, room: withMatch({ ...room, autoStartAt: null, hasRaced: true }, match) };
+}
+
+/** True when the lobby countdown is over and the race should start (with new scrambles). */
+export function autoStartDue(room: ServerRoom, now: number): boolean {
+  return room.match === null && room.autoStartAt !== null && now >= room.autoStartAt;
+}
+
+/**
+ * The lobby countdown is over: start the race for everyone in the room.
+ * If people left in the meantime and there's only one player, just stop the countdown.
+ */
+export function autoStart(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
+  if (!autoStartDue(room, now)) return { ok: true, room };
+  if (room.players.length < 2) return { ok: true, room: changeRoom(room, { autoStartAt: null }) };
+  return beginMatch(room, start, now);
 }
 
 /** Host: the match ends now (the point leaders win). Allowed at any time during a match. */
@@ -407,7 +485,7 @@ export function submitSolve(room: ServerRoom, playerId: string, submission: Solv
   }
   const room2 = withMatch(room, update.match);
   // Their timer has stopped, so they're no longer "solving".
-  return { ok: true, room: setPlayerTimerStatus(room2, playerId, "idle") };
+  return { ok: true, room: setPlayerTimerStatus(room2, playerId, "idle", now) };
 }
 
 export function changePenalty(room: ServerRoom, playerId: string, change: PenaltyChange): LogicResult {
@@ -423,7 +501,11 @@ export function changePenalty(room: ServerRoom, playerId: string, change: Penalt
  * A player's timer started or stopped. Only "solving" or "idle" is shared, never
  * the running time. "solving" is only accepted while they still have to solve.
  */
-export function setTimerStatus(room: ServerRoom, playerId: string, status: TimerStatus): ServerRoom {
+/**
+ * A player's timer started or stopped. While it runs, everyone else sees a
+ * live clock for them (from `solvingSince`, the moment the server heard it started).
+ */
+export function setTimerStatus(room: ServerRoom, playerId: string, status: TimerStatus, now: number): ServerRoom {
   const player = findPlayer(room, playerId);
   if (!player) return room;
   const match = room.match;
@@ -431,7 +513,7 @@ export function setTimerStatus(room: ServerRoom, playerId: string, status: Timer
     match !== null &&
     match.phase === "solving" &&
     match.results[player.publicId]?.[match.solveIndex] === null;
-  return setPlayerTimerStatus(room, playerId, status === "solving" && !stillToSolve ? "idle" : status);
+  return setPlayerTimerStatus(room, playerId, status === "solving" && !stillToSolve ? "idle" : status, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +557,7 @@ export function nextDeadline(room: ServerRoom): number | null {
   if (room.emptySince !== null) times.push(room.emptySince + EMPTY_ROOM_TTL_MS);
   const matchDeadline = room.match ? matchLogic.nextMatchDeadline(room.match) : null;
   if (matchDeadline !== null) times.push(matchDeadline);
+  if (!room.match && room.autoStartAt !== null) times.push(room.autoStartAt);
   return times.length > 0 ? Math.min(...times) : null;
 }
 
@@ -505,6 +588,7 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       nickname: p.nickname,
       status: p.status,
       timerStatus: p.timerStatus,
+      solvingSince: p.timerStatus === "solving" ? p.solvingSince : null,
       spectator: match !== null && !match.roster.includes(p.publicId),
     })),
     match: match && {
@@ -524,13 +608,17 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       standings: matchLogic.currentStandings(match),
       points: match.points,
       // Finished sets without every solve, to keep snapshots small.
-      finishedSets: match.finishedSets.map(({ setIndex, winnerIds, standings }) => ({
+      finishedSets: match.finishedSets.map(({ setIndex, winnerIds, standings, paces }) => ({
         setIndex,
         winnerIds,
         standings,
+        paces,
       })),
+      paces: match.settings.scoring === "handicap" ? matchLogic.currentPaces(match) : null,
       winnerIds: match.winnerIds,
     },
+    autoStartAt: match ? null : room.autoStartAt,
+    bestOfLocked: room.hasRaced,
   };
 }
 
@@ -540,6 +628,10 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
 
 export function findPlayer(room: ServerRoom, playerId: string): ServerPlayer | undefined {
   return room.players.find((p) => p.playerId === playerId);
+}
+
+function hostName(room: ServerRoom): string | null {
+  return room.players.find((p) => p.publicId === room.hostId)?.nickname ?? null;
 }
 
 export function isHost(room: ServerRoom, playerId: string): boolean {
@@ -559,6 +651,7 @@ function newPlayer(info: PlayerInfo, now: number): ServerPlayer {
     nickname: info.nickname,
     status: "connected",
     timerStatus: "idle",
+    solvingSince: null,
     joinedAt: now,
     disconnectedAt: null,
   };
@@ -568,10 +661,11 @@ function updatePlayer(room: ServerRoom, playerId: string, changes: Partial<Serve
   return room.players.map((p) => (p.playerId === playerId ? { ...p, ...changes } : p));
 }
 
-function setPlayerTimerStatus(room: ServerRoom, playerId: string, timerStatus: TimerStatus): ServerRoom {
+function setPlayerTimerStatus(room: ServerRoom, playerId: string, timerStatus: TimerStatus, now: number): ServerRoom {
   const player = findPlayer(room, playerId);
   if (!player || player.timerStatus === timerStatus) return room;
-  return changeRoom(room, { players: updatePlayer(room, playerId, { timerStatus }) });
+  const solvingSince = timerStatus === "solving" ? now : null;
+  return changeRoom(room, { players: updatePlayer(room, playerId, { timerStatus, solvingSince }) });
 }
 
 /**
@@ -587,7 +681,9 @@ function withMatch(room: ServerRoom, match: Match | null): ServerRoom {
 /** The fields that change with a new match: the match itself, and timer statuses if it moved on. */
 function matchChanges(room: ServerRoom, match: Match | null): Pick<ServerRoom, "match" | "players"> {
   const movedOn = matchLogic.phaseKey(match) !== matchLogic.phaseKey(room.match);
-  const players = movedOn ? room.players.map((p) => ({ ...p, timerStatus: "idle" as const })) : room.players;
+  const players = movedOn
+    ? room.players.map((p) => ({ ...p, timerStatus: "idle" as const, solvingSince: null }))
+    : room.players;
   return { match, players };
 }
 
@@ -623,6 +719,8 @@ function removePlayers(room: ServerRoom, playerIds: string[], now: number): Serv
     players,
     hostId,
     emptySince: players.length === 0 ? now : null,
+    // Nobody left to race against: the lobby countdown stops.
+    autoStartAt: players.length < 2 ? null : room.autoStartAt,
   });
   // (No second version bump: this is still one change.)
   return match === room.match ? changed : { ...changed, ...matchChanges(changed, match) };

@@ -1,4 +1,5 @@
-// A tiny router: the only pages are "/" (home) and "/room/CODE".
+// A tiny router: the pages are "/" (home), "/room/CODE", "/room/CODE/overlay"
+// (for streamers) and "/daily" (the daily scramble).
 
 import { useSyncExternalStore } from "react";
 

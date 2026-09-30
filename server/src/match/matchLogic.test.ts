@@ -259,3 +259,25 @@ describe("winning the match", () => {
     expect(match).toMatchObject({ phase: "match_over", winnerIds: [] });
   });
 });
+
+describe("handicap scoring", () => {
+  it("set 1 sets everyone's pace (no points); then the biggest gain over your own pace wins", () => {
+    let match = startMatch(["fast", "slow"], { format: "ao5", scoring: "handicap" });
+    match = playSet(match, { fast: 10_000, slow: 25_000 });
+    expect(match.finishedSets[0].winnerIds).toEqual([]); // the pace set
+    expect(match.finishedSets[0].paces).toEqual({ fast: null, slow: null });
+    expect(match.points).toEqual({ fast: 0, slow: 0 });
+
+    match = nextSet(match, ["fast", "slow"]);
+    // fast is 5% under their pace, slow 12% under theirs: slow wins set 2.
+    match = playSet(match, { fast: 9_500, slow: 22_000 });
+    expect(match.finishedSets[1].paces).toEqual({ fast: 10_000, slow: 25_000 });
+    expect(match.finishedSets[1].winnerIds).toEqual(["slow"]);
+    expect(match.points).toEqual({ fast: 0, slow: 1 });
+  });
+
+  it("normal rooms keep fastest-wins scoring", () => {
+    const match = playSet(startMatch(["fast", "slow"]), { fast: 10_000, slow: 25_000 });
+    expect(match.finishedSets[0]).toMatchObject({ winnerIds: ["fast"], paces: null });
+  });
+});

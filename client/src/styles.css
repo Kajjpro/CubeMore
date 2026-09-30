@@ -26,10 +26,13 @@
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --topbar-h: 48px;
+  --topbar-h: 40px;
   --handle-h: 48px;
-  --side-w: clamp(340px, 45vw, 560px);
+  --side-w: 320px;
+  --radius: 6px;
   --fast: 120ms;
+  /* Focus mode fade. */
+  --fade: 150ms;
 
   color-scheme: light;
 }
@@ -39,7 +42,7 @@
     --bg: #121316;
     --surface: #1a1b1f;
     --surface-2: #23242a;
-    --border: #2e3037;
+    --border: #262830;
     --text: #ececf0;
     --text-2: #b4b4bd;
     --muted: #8f909b;
@@ -61,7 +64,7 @@
   --bg: #121316;
   --surface: #1a1b1f;
   --surface-2: #23242a;
-  --border: #2e3037;
+  --border: #262830;
   --text: #ececf0;
   --text-2: #b4b4bd;
   --muted: #8f909b;
@@ -81,6 +84,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --fast: 0ms;
+    --fade: 0ms;
   }
 }
 
@@ -329,7 +333,7 @@ input::placeholder {
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .section {
@@ -490,7 +494,7 @@ input::placeholder {
   color: var(--text-2);
 }
 
-/* ---- Home: form + warm-up scramble, filling the page ---- */
+/* ---- Home: form + the list of rooms, filling the page ---- */
 
 .home {
   min-height: 100dvh;
@@ -572,18 +576,26 @@ input::placeholder {
   min-width: 0;
 }
 
-.public-rooms {
+/* All open rooms. On wide screens it fills the column and scrolls inside. */
+.room-list-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+  min-height: 0;
 }
 
-.public-rooms-head {
+.room-list-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+}
+
+.room-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .room-list li {
@@ -605,6 +617,13 @@ input::placeholder {
   flex-direction: column;
 }
 
+.room-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .room-info .name {
   font-weight: 600;
   overflow: hidden;
@@ -612,57 +631,13 @@ input::placeholder {
   white-space: nowrap;
 }
 
-.warmup {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-}
-
-.warmup-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-/* One line of puzzles. Where it doesn't fit (phones, tablets) it scrolls
-   sideways inside the panel; where it fits it sits to the right of the title. */
-.warmup-events {
-  flex: 1 1 300px;
-  min-width: 0;
-  display: flex;
-  justify-content: safe flex-end;
-  gap: 4px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-.warmup-events::-webkit-scrollbar {
-  display: none;
-}
-
-.warmup-events button {
+.room-title .tag {
   flex: none;
 }
 
-.warmup-events button {
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-}
-
-.warmup-events button[aria-checked="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.warmup-body {
-  min-height: 132px;
+.room-code {
+  letter-spacing: 0.06em;
+  color: var(--text-2);
 }
 
 .home-foot {
@@ -677,20 +652,47 @@ input::placeholder {
 }
 
 @media (min-width: 760px) {
+  /* Left: the form, then "How a race works". Right: the daily card and the rooms. */
   .home-main {
+    grid-template-areas: "form side" "steps side";
+    grid-template-rows: auto 1fr;
     grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
     gap: clamp(24px, 4vw, 40px);
     align-content: center;
     align-items: start;
   }
 
-  .warmup {
-    padding: 16px;
+  .home-form {
+    grid-area: form;
   }
 
-  .warmup-body {
-    min-height: 200px;
+  .home-side {
+    grid-area: side;
+    align-self: stretch;
   }
+
+  .home-main > .steps {
+    grid-area: steps;
+    align-self: start;
+  }
+
+  .room-list-panel {
+    padding: 16px;
+    min-height: 420px;
+    max-height: calc(100dvh - 180px);
+  }
+}
+
+/* "Race now": the event menu and the button side by side. */
+.race-now {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.race-now-hint {
+  margin-top: -8px;
 }
 
 .or {
@@ -790,42 +792,81 @@ select {
   z-index: 30;
 }
 
+/* Header controls are dense (32 px): the header is 40 px tall. */
+.topbar button[data-dense] {
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.event-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.event-badge .cubing-icon {
+  font-size: 15px;
+}
+
 .topbar .code-button {
   font-family: var(--font-mono);
   font-weight: 600;
   letter-spacing: 0.08em;
-  padding: 0 8px;
   border-color: transparent;
   background: transparent;
   flex: none;
 }
 
-.topbar .summary {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-2);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topbar .summary span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topbar .room-name {
+.topbar .format {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 600;
-  color: var(--text);
+  white-space: nowrap;
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+
+.room-status {
+  flex: none;
+  font: 600 12px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Long forms ("3x3x3", "Best of 3") where there is room, short ones ("3x3", "Bo3") on phones. */
+.topbar .short {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .topbar .long {
+    display: none;
+  }
+
+  .topbar .short {
+    display: inline;
+  }
+
+  .event-badge .cubing-icon {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .topbar .format {
+    display: none;
+  }
 }
 
 .connection {
@@ -838,7 +879,7 @@ select {
   flex: none;
 }
 
-/* The menu (a dropdown, never a modal). */
+/* The menu (a dropdown, never a modal). The room name, code and link come first. */
 .menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -848,8 +889,14 @@ select {
   overflow: auto;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+.menu-room h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shortcuts {
@@ -910,7 +957,7 @@ select {
   flex-direction: column;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
   transform: translateY(calc(100% - var(--handle-h) - env(safe-area-inset-bottom)));
   transition: transform var(--fast) ease-out;
 }
@@ -926,11 +973,10 @@ select {
   height: var(--handle-h);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 0 16px;
   border: 0;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
   background: transparent;
   font-weight: 600;
 }
@@ -942,20 +988,19 @@ select {
   white-space: nowrap;
 }
 
+/* A fixed height, so switching between Standings and Chat doesn't make the sheet jump. */
 .sheet-body {
-  overflow: auto;
-  overscroll-behavior: contain;
+  height: min(70dvh, 560px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border);
 }
 
-/* ---- Phone landscape: stage 2/3, compact standings 1/3 ---- */
+/* ---- Phone landscape: stage 2/3, sidebar with Standings | Chat tabs 1/3 ---- */
 
 @media (orientation: landscape) and (max-height: 500px) {
-  :root {
-    --topbar-h: 40px;
-  }
-
   .room-body {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   }
@@ -966,13 +1011,14 @@ select {
 
   .side {
     min-height: 0;
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
     border-left: 1px solid var(--border);
     background: var(--surface);
   }
 }
 
-/* ---- Tablet / desktop: stage + room panel ---- */
+/* ---- Tablet / desktop: stage + 320 px sidebar (Live Standings above Room Chat) ---- */
 
 @media (min-width: 768px) and (min-height: 501px) {
   .room-body {
@@ -981,19 +1027,35 @@ select {
     padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
   }
 
-  .room.format-ao12 .room-body {
-    --side-w: clamp(340px, 50vw, 860px);
-  }
-
   .room.in-match .stage {
     padding: 0;
   }
 
   .side {
     min-height: 0;
-    overflow: auto;
-    align-self: start;
-    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .side-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  /* Standings take what they need, up to 55%; the chat gets the rest. */
+  .side-panel.standings-panel {
+    flex: 0 1 auto;
+    max-height: 55%;
+  }
+
+  .side-panel.chat-panel {
+    flex: 1 1 0;
   }
 
   .topbar {
@@ -1002,38 +1064,114 @@ select {
   }
 }
 
-@media (min-width: 1000px) and (min-height: 501px) {
-  .room-body {
-    --side-w: clamp(340px, 56vw, 580px);
-  }
+/* ---- Sidebar pieces: panel heads, tabs, unread badge ---- */
+
+.panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
 }
 
-@media (min-width: 1280px) and (min-height: 501px) {
-  .room.format-ao12 .room-body {
-    --side-w: 884px;
-  }
+.panel-head h3 {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
 }
 
-/* ao12: twelve columns, a little tighter. */
-.room.format-ao12 .standings {
-  font-size: 12px;
+/* The scrolling part of a panel (the header row of the table sticks to its top). */
+.panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.room.format-ao12 .standings td.time-cell {
-  min-width: 42px;
+.side-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.room.format-ao12 .standings th,
-.room.format-ao12 .standings td {
-  padding: 0 3px;
+.tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
 }
 
-.room.format-ao12 .standings .name-col {
-  max-width: 112px;
-  padding-left: 12px;
+.tabs button {
+  flex: 1 1 0;
+  min-height: 32px;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* ---- Focus mode: while the timer runs, only the digits stay. ---- */
+.tabs button[aria-selected="true"] {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tab-panel.chat-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+.badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 700 11px/18px var(--font-mono);
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* ---- Focus mode: from holding the timer until the solve is over, only the digits
+   (and the "Hold…" / "Release to start" hint) stay. Everything else fades out. ---- */
+
+.topbar > *,
+.banners,
+.scramble-wrap,
+.limit-bar,
+.side,
+.sheet,
+.timer-below {
+  transition: opacity var(--fade) ease, visibility 0s linear 0s;
+}
 
 .room[data-focus="true"] .topbar > *,
 .room[data-focus="true"] .banners,
@@ -1041,19 +1179,16 @@ select {
 .room[data-focus="true"] .limit-bar,
 .room[data-focus="true"] .side,
 .room[data-focus="true"] .sheet,
-.room[data-focus="true"] .timer-below,
-.room[data-focus="true"] .timer-hint {
+.room[data-focus="true"] .timer-below {
+  opacity: 0;
   visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--fade) ease, visibility 0s linear var(--fade);
 }
 
 .room[data-focus="true"] .topbar {
   border-color: transparent;
   background: transparent;
-}
-
-.room[data-focus="true"] *,
-.room[data-focus="true"] *::before {
-  transition: none !important;
 }
 
 .focus-offline {
@@ -1076,10 +1211,15 @@ select {
    Scramble
    --------------------------------------------------------------------------- */
 
+/* The scramble box: full width, subtle border, the preview inside its right corner. */
 .scramble-wrap {
   flex: none;
   container-type: inline-size;
-  --preview-w: 96px;
+  --preview-w: 88px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .scramble-block {
@@ -1099,7 +1239,7 @@ select {
 }
 
 /* Megaminx: the preview goes beside the 7 lines when there is room. */
-@container (min-width: 520px) {
+@container (min-width: 480px) {
   .scramble-block.stacked {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -1161,9 +1301,9 @@ select {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface-2);
   overflow: hidden;
 }
 
@@ -1174,18 +1314,22 @@ select {
 
 @media (min-width: 768px) and (min-height: 501px) {
   .scramble-wrap {
-    --preview-w: 200px;
+    --preview-w: 136px;
   }
 }
 
 @media (min-width: 1280px) and (min-height: 700px) {
   .scramble-wrap {
-    --preview-w: 240px;
+    --preview-w: 160px;
   }
 }
 
 /* Phones on their side: little height, so scrambles sit a bit tighter. */
 @media (orientation: landscape) and (max-height: 500px) {
+  .scramble-wrap {
+    padding: 6px 8px;
+  }
+
   .scramble-text {
     line-height: 1.35;
   }
@@ -1226,7 +1370,7 @@ select {
   justify-content: center;
   gap: 8px;
   container-type: size;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
@@ -1345,14 +1489,6 @@ select {
   border-top: 1px solid var(--border);
 }
 
-@media (min-width: 768px) and (min-height: 501px) {
-  .side {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-}
-
 .waiting-line {
   font-size: 13px;
   color: var(--text-2);
@@ -1466,20 +1602,6 @@ select {
   font-style: italic;
 }
 
-.cell-button {
-  min-height: 44px;
-  min-width: 44px;
-  width: 100%;
-  padding: 0 2px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  font: inherit;
-  text-align: right;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-
 .penalty-editor {
   display: flex;
   align-items: center;
@@ -1495,6 +1617,488 @@ select {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* ---- Dense live standings: 30 px rows, header row sticks while the panel scrolls ---- */
+
+.table-scroll.dense-scroll {
+  /* No scroll container here, so the sticky header sticks to the panel's scroll area. */
+  overflow: visible;
+}
+
+.standings.dense th,
+.standings.dense td {
+  height: 30px;
+  padding: 0 6px;
+  font-size: 12.5px;
+}
+
+.standings.dense thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 28px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.standings.dense .rank {
+  width: 28px;
+  padding-left: 12px;
+  text-align: left;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.standings.dense .name-col {
+  position: static;
+  min-width: 0;
+  max-width: 128px;
+  padding-left: 4px;
+  border-right: 0;
+}
+
+.standings.dense tbody tr:not(.details) {
+  cursor: pointer;
+}
+
+.standings.dense tbody tr:not(.details):hover > * {
+  background: var(--surface-2);
+}
+
+/* Your row: accent tint plus an accent bar on the left. */
+.standings.dense tr.me > *,
+.standings.dense tr.me:hover > * {
+  background: var(--accent-soft);
+}
+
+.standings.dense tr.me td.rank {
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.row-toggle {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standings.dense tr.me .row-toggle {
+  color: var(--accent);
+}
+
+/* An opponent's running time: accent, with a pulsing dot, so it never looks final. */
+.live-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.standings .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 11px var(--font-ui);
+}
+
+.standings.dense tr.details td {
+  height: auto;
+  padding: 8px 12px;
+  text-align: left;
+  background: var(--surface-2);
+}
+
+.set-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.solve-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.solve-chips li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+}
+
+.solve-no {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.chip-button {
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.penalty-editor button[data-dense] {
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Room chat
+   --------------------------------------------------------------------------- */
+
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chat-feed {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.chat-feed time {
+  font: 10.5px var(--font-mono);
+  color: var(--muted);
+}
+
+.chat-line {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-line time {
+  margin-right: 6px;
+}
+
+.chat-line b {
+  margin-right: 6px;
+  font-weight: 650;
+}
+
+.chat-line b.me {
+  color: var(--accent);
+}
+
+/* System notices: "Anu joined the room", "Nomin submitted 9.12". */
+.chat-system {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-system span {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-system::before {
+  content: "›";
+  color: var(--accent);
+}
+
+.chat-empty {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-input {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input input {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+/* Phones zoom into inputs with text under 16 px. */
+@media (hover: none) {
+  .chat-input input {
+    font-size: 16px;
+  }
+}
+
+.chat-input button {
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.chat-error {
+  flex: none;
+  padding: 0 10px 6px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.lobby-chat {
+  height: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---- Finish line: a short replay of each solve ---- */
+
+.finish-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.finish-row {
+  width: 100%;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 7.5em) minmax(40px, 1fr) auto 3.4em;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 500;
+}
+
+.finish-row:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.finish-row[aria-pressed="true"] {
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.finish-rows li.me .finish-row {
+  background: var(--accent-soft);
+}
+
+.finish-row .rank {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.finish-row .who {
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The track ends in the finish line (the right border). */
+.finish-row .track {
+  height: 8px;
+  border-right: 2px solid var(--text-2);
+  border-radius: 4px 0 0 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+/* Every bar runs for the same 0.9 s, from 0 to where it was when the fastest
+   crossed the line, so each one moves at its player's speed. */
+.finish-row .bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--reach));
+  animation: race 900ms linear both;
+}
+
+.finish-row .bar.first {
+  background: var(--green);
+}
+
+.finish-row .bar.dnf {
+  background: var(--red);
+}
+
+.finish-row .time,
+.finish-row .gap {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  animation: appear 200ms ease-out 900ms both;
+}
+
+.finish-row .time {
+  font-weight: 600;
+}
+
+.finish-row .gap {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@keyframes race {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- Smart cube: the icon on a player's row, and their live cube ---- */
+
+.smart-mark .cubing-icon {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.live-cube-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.live-cube {
+  width: 132px;
+  height: 132px;
+  flex: none;
+}
+
+.live-cube twisty-player {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Reactions ---- */
+
+.reaction-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.reaction-tray .tiny {
+  margin-right: 4px;
+}
+
+.reaction-tray button {
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  background: transparent;
+}
+
+.reaction-tray button:active {
+  transform: scale(0.92);
+}
+
+/* Emoji floating up from a row for a moment. */
+.standings.dense .name-col {
+  position: relative;
+}
+
+.reaction-pops {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  pointer-events: none;
+}
+
+.reaction-pops .pop {
+  position: absolute;
+  font-size: 16px;
+  animation: pop-up 1.6s ease-out forwards;
+}
+
+@keyframes pop-up {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finish-row .bar,
+  .finish-row .time,
+  .finish-row .gap {
+    animation: none;
+  }
+
+  .reaction-pops .pop {
+    animation: fade-out 1.6s linear forwards;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.chat-reaction .chat-text {
+  color: var(--text-2);
 }
 
 /* ---- Lists (players, host tools, results) ---- */
@@ -1659,9 +2263,24 @@ details[open] > summary::after {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "share" "players" "settings";
+  grid-template-areas: "share" "players" "chat" "settings";
   align-content: start;
   align-items: start;
+}
+
+/* Phones: the two columns dissolve, and the grid areas set the order. */
+.lobby-col {
+  display: contents;
+}
+
+@media (min-width: 768px) and (min-height: 501px) {
+  /* Wide: left = share + settings, right = players + chat, each stacked without gaps. */
+  .lobby-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
 }
 
 .share {
@@ -1745,12 +2364,295 @@ details[open] > summary::after {
   min-width: 160px;
 }
 
+.start-bar .countdown {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 @media (min-width: 768px) and (min-height: 501px) {
   .lobby {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    grid-template-areas: "share players" "settings players";
+    grid-template-areas: none;
     padding-top: 16px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Daily scramble (/daily) and its card on the home page
+   --------------------------------------------------------------------------- */
+
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.daily {
+  min-height: 100dvh;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: -14px;
+}
+
+.daily-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.daily-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.daily-title .cubing-icon {
+  font-size: 34px;
+  color: var(--accent);
+}
+
+.daily-rules {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-2);
+}
+
+/* A fixed height: the timer area needs one to size its digits (container units). */
+.daily-attempt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: max(440px, min(620px, 78dvh));
+}
+
+.daily-attempt .timer-zone {
+  flex: 1;
+}
+
+.daily-left {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-confirm {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.daily-confirm .timer-digits {
+  font-size: clamp(3rem, 16vw, 6rem);
+}
+
+.daily-confirm .penalty {
+  width: 100%;
+  max-width: 420px;
+}
+
+.daily-done {
+  align-items: center;
+  text-align: center;
+}
+
+.daily-result {
+  font-size: clamp(3rem, 14vw, 5rem);
+  font-weight: 650;
+  line-height: 1.05;
+}
+
+.daily-done .row {
+  width: 100%;
+}
+
+.daily-board {
+  overflow: hidden;
+}
+
+.daily-empty {
+  padding: 12px;
+}
+
+.daily-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-rows li {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.daily-rows li:last-child {
+  border-bottom: 0;
+}
+
+.daily-rows li.me {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.daily-rows .rank {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.daily-rows .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.daily-rows .time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Focus mode on the daily page too: only the digits while you hold and solve. */
+.daily-head,
+.daily-title,
+.daily .scramble-wrap,
+.daily-left,
+.daily-board {
+  transition: opacity var(--fade) ease, visibility 0s linear 0s;
+}
+
+.daily[data-focus="true"] .daily-head,
+.daily[data-focus="true"] .daily-title,
+.daily[data-focus="true"] .scramble-wrap,
+.daily[data-focus="true"] .daily-left,
+.daily[data-focus="true"] .daily-board {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--fade) ease, visibility 0s linear var(--fade);
+}
+
+/* ---------------------------------------------------------------------------
+   Streamer overlay (/room/CODE/overlay): a panel on a transparent page
+   --------------------------------------------------------------------------- */
+
+html.overlay-mode,
+html.overlay-mode body {
+  background: transparent;
+}
+
+.overlay-panel {
+  width: min(420px, 100vw);
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+}
+
+.overlay-message {
+  color: var(--text-2);
+}
+
+.overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font: 600 13px var(--font-mono);
+}
+
+.overlay-head .cubing-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.overlay-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-where {
+  color: var(--text-2);
+}
+
+.overlay-note {
+  padding: 8px 0 2px;
+  color: var(--text-2);
+}
+
+.overlay-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overlay-rows li {
+  display: grid;
+  grid-template-columns: 1.6em minmax(0, 1fr) 5em 4.5em 2em;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.overlay-rows li:last-child {
+  border-bottom: 0;
+}
+
+.overlay-rows .rank {
+  color: var(--muted);
+}
+
+.overlay-rows .name {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-rows .now,
+.overlay-rows .avg,
+.overlay-rows .pts {
+  text-align: right;
+}
+
+.overlay-rows .pts {
+  font-weight: 700;
+}
+
+.overlay-rows li.winner .name {
+  color: var(--green);
 }
 
 /* ---------------------------------------------------------------------------

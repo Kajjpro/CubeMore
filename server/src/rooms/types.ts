@@ -14,6 +14,8 @@ export interface ServerPlayer {
   nickname: string;
   status: PlayerStatus;
   timerStatus: TimerStatus;
+  /** When their timer started (server time), while it runs. Opponents see a live clock. */
+  solvingSince: number | null;
   joinedAt: number;
   /** When their connection dropped, or null if they're connected. */
   disconnectedAt: number | null;
@@ -35,4 +37,8 @@ export interface ServerRoom {
   pin: string | null;
   /** When the last player left, or null if someone is in the room. */
   emptySince: number | null;
+  /** Lobby: when the race starts by itself (set when a second player joins), or null. */
+  autoStartAt: number | null;
+  /** True once the first race has started. From then on Best of is fixed. */
+  hasRaced: boolean;
 }

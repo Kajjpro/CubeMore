@@ -2,24 +2,30 @@
  * RoomView: the whole room screen, built only from props.
  * The real room (pages/RoomPage.tsx) and the /dev/states page both render it.
  *
- * Layouts (see DESIGN.md): phone = stage + bottom sheet, landscape = stage +
- * compact standings, wide = stage + room panel. While the timer runs, the room
- * is in "focus mode": only the digits stay visible, and everything except the
- * timer is frozen (it doesn't re-render until the solve is over).
+ * Layouts (see DESIGN.md): phone = stage + bottom sheet with tabs,
+ * landscape = stage + sidebar with tabs, wide = stage + 320 px sidebar with
+ * Live Standings above Room Chat.
+ *
+ * Focus mode: from the moment you hold the timer until the solve is over, the
+ * header, scramble, standings and chat fade out and only the digits stay.
+ * While the timer runs everything except the timer is also frozen (it doesn't
+ * re-render until the solve is over).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ChatMessage, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
 import { useNewScrambleAlert } from "../alerts";
-import { settingsSummary } from "../labels";
 import { useLayout } from "../layout";
 import { setPref, usePrefs, type InputMode, type RunningDisplay } from "../prefs";
 import { useSessionStats } from "../session";
 import type { TimerPhase } from "../timer/useSpeedTimer";
+import type { CubeMoves } from "../useRoom";
 import { useWakeLock } from "../wakeLock";
+import { ChatPanel } from "./ChatPanel";
 import { DEBUG, DebugPanel } from "./DebugPanel";
 import { Lobby } from "./Lobby";
-import { HostPanel, MatchOver, SessionPanel, SetResult, SolveReview, waitingNames, waitingText } from "./RoomPanels";
+import { FinishLine, HostPanel, MatchOver, SessionPanel, SetResult, waitingNames, waitingText } from "./RoomPanels";
+import { useReactionPops, type Reaction, type ReactionPops } from "./Reactions";
 import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
 import { Standings } from "./Standings";
 import { Timer, type TimerDemo } from "./Timer";
@@ -29,7 +35,8 @@ import { ProgressBar } from "./ui";
 export interface RoomActions {
   leave: () => void;
   start: () => void;
-  updateSettings: (changes: Partial<RoomSettings>) => void;
+  /** In the lobby. `pin` is sent when the room becomes private or its PIN changes. */
+  updateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
   kick: (player: PlayerSnapshot) => void;
   skip: (player: PlayerSnapshot) => void;
   endMatch: () => void;
@@ -38,6 +45,10 @@ export interface RoomActions {
   backToLobby: () => void;
   changePenalty: (solveIndex: number, penalty: Penalty) => void;
   dismissError: () => void;
+  /** Returns an error to show, or null when sent. */
+  sendChat: (text: string) => Promise<string | null>;
+  /** React to another player's latest time. */
+  react: (targetId: string, emoji: Reaction) => void;
 }
 
 /** Only for /dev/states. */
@@ -45,6 +56,8 @@ export interface RoomDemo {
   timer?: TimerDemo;
   sheetOpen?: boolean;
   menuOpen?: boolean;
+  tab?: SideTab;
+  unread?: number;
   inputMode?: InputMode;
   runningDisplay?: RunningDisplay;
 }
@@ -56,9 +69,14 @@ export interface RoomViewProps {
   notice: string | null;
   error: string | null;
   starting: boolean;
+  chat: ChatMessage[];
+  /** Other players' smart cube moves in the current solve. */
+  cubeMoves?: CubeMoves;
   actions: RoomActions;
   demo?: RoomDemo;
 }
+
+type SideTab = "standings" | "chat";
 
 /** Keeps showing the old value while `frozen` is true. */
 function useFrozen<T>(value: T, frozen: boolean): T {
@@ -80,7 +98,10 @@ export function RoomView(props: RoomViewProps) {
   const prefs = usePrefs();
 
   const [timerPhase, setTimerPhase] = useState<TimerPhase>("idle");
-  const running = (demo?.timer?.phase ?? timerPhase) === "running";
+  const phase = demo?.timer?.phase ?? timerPhase;
+  const running = phase === "running";
+  // Holding, ready or running: only the digits stay visible.
+  const focus = phase === "holding" || phase === "ready" || running;
   // During a solve, everything but the timer keeps the last state (no re-renders).
   const room = useFrozen(props.room, running);
   const names = useNames(room);
@@ -88,6 +109,7 @@ export function RoomView(props: RoomViewProps) {
 
   const [sheetOpen, setSheetOpen] = useState(demo?.sheetOpen ?? false);
   const [menuOpen, setMenuOpen] = useState(demo?.menuOpen ?? false);
+  const [tab, setTab] = useState<SideTab>(demo?.tab ?? "standings");
   useEffect(() => {
     // Getting ready or solving: never cover the timer.
     if (timerPhase === "holding" || timerPhase === "ready" || timerPhase === "running") {
@@ -115,13 +137,34 @@ export function RoomView(props: RoomViewProps) {
   const match = room.match;
   const isHost = room.hostId === youId;
 
+  // The chat is "on screen" in the lobby, in the wide sidebar, or when its tab is open.
+  const chatVisible = !match || layout === "wide" || (tab === "chat" && (layout === "landscape" || sheetOpen));
+  const liveUnread = useUnread(props.chat, youId, chatVisible);
+  const unread = demo?.unread ?? liveUnread;
+  const online = room.players.filter((p) => p.status === "connected").length;
+  const pops = useReactionPops(props.chat);
+  const sidePanel = match && (
+    <SidePanel {...{ room, match, youId, names, isHost, actions, stats, pops }} cubeMoves={props.cubeMoves ?? {}} pinMe={layout !== "wide"} />
+  );
+  const chatPanel = (
+    <ChatPanel
+      messages={props.chat}
+      youId={youId}
+      online={online}
+      connected={props.connected}
+      active={chatVisible}
+      onSend={actions.sendChat}
+    />
+  );
+
   return (
-    <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={running}>
+    <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={focus}>
       <TopBar
         code={room.code}
         pin={room.pin}
         name={room.settings.name}
-        summary={settingsSummary(room.settings)}
+        settings={room.settings}
+        status={roomStatus(room)}
         connected={props.connected}
         menuOpen={menuOpen}
         onToggleMenu={toggleMenu}
@@ -159,6 +202,7 @@ export function RoomView(props: RoomViewProps) {
           onStart={actions.start}
           onKick={actions.kick}
           onUpdateSettings={actions.updateSettings}
+          chat={chatPanel}
         />
       ) : (
         <div className="room-body">
@@ -194,7 +238,7 @@ export function RoomView(props: RoomViewProps) {
                 ))}
               {match.phase === "solve_review" && (
                 <div className="stage-scroll">
-                  <SolveReview match={match} names={names} youId={youId} />
+                  <FinishLine match={match} names={names} youId={youId} pops={pops} onReact={actions.react} />
                 </div>
               )}
               {match.phase === "set_result" && (
@@ -210,7 +254,7 @@ export function RoomView(props: RoomViewProps) {
                     youId={youId}
                     isHost={isHost}
                     busy={props.starting}
-                    cubeEvent={room.settings.cubeEvent}
+                    settings={room.settings}
                     onRematch={actions.rematch}
                     onBackToLobby={actions.backToLobby}
                   />
@@ -228,15 +272,30 @@ export function RoomView(props: RoomViewProps) {
                 onClick={() => setSheetOpen((open) => !open)}
               >
                 <span>Room ({room.players.length})</span>
+                {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
+                <span className="grow" />
                 <span className="muted small">{sheetOpen ? "Close" : sheetSummary(room, youId)}</span>
               </button>
               <div className="sheet-body" inert={!sheetOpen}>
-                <SidePanel {...{ room, match, youId, names, isHost, actions, stats, layout }} />
+                <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
               </div>
             </div>
+          ) : layout === "landscape" ? (
+            <aside className="side" aria-label="Room">
+              <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
+            </aside>
           ) : (
             <aside className="side" aria-label="Room">
-              <SidePanel {...{ room, match, youId, names, isHost, actions, stats, layout }} />
+              <section className="side-panel standings-panel" aria-label="Live standings">
+                <div className="panel-head">
+                  <h3>Live Standings</h3>
+                  <span className="tiny muted mono">{setLabel(match)}</span>
+                </div>
+                <div className="panel-scroll">{sidePanel}</div>
+              </section>
+              <section className="side-panel chat-panel" aria-label="Room chat">
+                {chatPanel}
+              </section>
             </aside>
           )}
         </div>
@@ -255,6 +314,22 @@ export function RoomView(props: RoomViewProps) {
   );
 }
 
+/** The header's live status: "3/5 Solved", "6 players", "Set 2 done"... */
+function roomStatus(room: RoomSnapshot): string {
+  const match = room.match;
+  if (!match) return `${room.players.length} player${room.players.length === 1 ? "" : "s"}`;
+  if (match.phase === "set_result") return `Set ${match.setIndex + 1} done`;
+  if (match.phase === "match_over") return "Match over";
+  const solved = match.roster.filter((id) => match.results[id]?.[match.solveIndex]).length;
+  return `${solved}/${match.roster.length} Solved`;
+}
+
+/** "Set 2 · Solve 3/5" above the standings. */
+function setLabel(match: NonNullable<RoomSnapshot["match"]>): string {
+  const solve = match.solvesPerSet > 1 ? ` · Solve ${match.solveIndex + 1}/${match.solvesPerSet}` : "";
+  return `Set ${match.setIndex + 1}${solve}`;
+}
+
 /** What the collapsed sheet handle says next to "Room (N)". */
 function sheetSummary(room: RoomSnapshot, youId: string | null): string {
   const match = room.match;
@@ -265,6 +340,56 @@ function sheetSummary(room: RoomSnapshot, youId: string | null): string {
   return mine === undefined ? "Standings" : `You: ${mine} pt${mine === 1 ? "" : "s"}`;
 }
 
+/**
+ * How many chat messages from other players arrived while the chat was not on
+ * screen. Messages from before you joined (the history) count as read.
+ */
+function useUnread(messages: ChatMessage[], youId: string | null, visible: boolean): number {
+  // Server time of the newest message you have seen (null until the history arrives).
+  const [seenAt, setSeenAt] = useState<number | null>(null);
+  const newest = messages.at(-1)?.at ?? null;
+  useEffect(() => {
+    if (newest !== null && (visible || seenAt === null)) setSeenAt(newest);
+  }, [newest, visible, seenAt]);
+  if (visible || seenAt === null) return 0;
+  return messages.filter((m) => m.kind === "user" && m.senderId !== youId && m.at > seenAt).length;
+}
+
+/** Standings | Chat tabs, for the landscape sidebar and the phone sheet. Both stay mounted (the chat keeps its draft). */
+function SideTabs(props: { tab: SideTab; onTab: (tab: SideTab) => void; unread: number; standings: ReactNode; chat: ReactNode }) {
+  const tabs: { id: SideTab; label: string }[] = [
+    { id: "standings", label: "Standings" },
+    { id: "chat", label: "Chat" },
+  ];
+  return (
+    <div className="side-tabs">
+      <div className="tabs" role="tablist" aria-label="Room">
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`tab-${id}`}
+            aria-selected={props.tab === id}
+            aria-controls={`tabpanel-${id}`}
+            onClick={() => props.onTab(id)}
+            data-dense
+          >
+            {label}
+            {id === "chat" && props.unread > 0 && <span className="badge">{props.unread}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="tab-panel standings-panel" role="tabpanel" id="tabpanel-standings" aria-labelledby="tab-standings" hidden={props.tab !== "standings"}>
+        {props.standings}
+      </div>
+      <div className="tab-panel chat-panel" role="tabpanel" id="tabpanel-chat" aria-labelledby="tab-chat" hidden={props.tab !== "chat"}>
+        {props.chat}
+      </div>
+    </div>
+  );
+}
+
 function SidePanel(props: {
   room: RoomSnapshot;
   match: NonNullable<RoomSnapshot["match"]>;
@@ -273,23 +398,27 @@ function SidePanel(props: {
   isHost: boolean;
   actions: RoomActions;
   stats: ReturnType<typeof useSessionStats>;
-  layout: ReturnType<typeof useLayout>;
+  /** Phones and landscape: your own row first. */
+  pinMe: boolean;
+  pops: ReactionPops;
+  cubeMoves: CubeMoves;
 }) {
   const { room, match, youId, actions } = props;
   const waiting = waitingText(waitingNames(room, match, youId));
   return (
     <>
       <div className="side-section">
-        {props.layout === "wide" && <h3>Standings</h3>}
         {waiting && <p className="waiting-line">{waiting}</p>}
         <Standings
           room={room}
           match={match}
           youId={youId}
           names={props.names}
-          pinMe={props.layout !== "wide"}
-          compact={props.layout === "landscape"}
+          pinMe={props.pinMe}
+          pops={props.pops}
+          cubeMoves={props.cubeMoves}
           onChangePenalty={actions.changePenalty}
+          onReact={actions.react}
         />
       </div>
       {props.isHost && (

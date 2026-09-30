@@ -2,6 +2,8 @@
 
 import {
   DEFAULT_SETTINGS,
+  type ChatMessage,
+  type DailyStatus,
   type MatchPhase,
   type MatchSnapshot,
   type Penalty,
@@ -95,6 +97,12 @@ export interface MockRoomOptions {
   solveDeadlineIn?: number;
   /** Makes it a private room with this PIN. */
   pin?: string;
+  /** Lobby: the race starts in this many ms (someone joined). */
+  autoStartIn?: number;
+  /** Best of is fixed (a race has already been played). */
+  bestOfLocked?: boolean;
+  /** Handicap rooms: each player's pace in ms (null = no pace yet). */
+  paces?: (number | null)[];
 }
 
 export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: string } {
@@ -111,6 +119,8 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     nickname,
     status: o.reconnecting?.includes(i) ? "reconnecting" : "connected",
     timerStatus: o.solving?.includes(i) ? "solving" : "idle",
+    // Solving players started a few seconds ago, so their live clocks show something.
+    solvingSince: o.solving?.includes(i) ? Date.now() - 4_300 - i * 1_700 : null,
     spectator: o.phase !== "lobby" && !!o.spectators?.includes(i),
   }));
   const youId = ids[o.meIndex ?? 0];
@@ -122,8 +132,12 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     pin: o.pin ?? null,
     hostId: ids[o.hostIndex ?? 0],
     players,
+    bestOfLocked: o.bestOfLocked ?? o.phase !== "lobby",
   };
-  if (!o.phase || o.phase === "lobby") return { room: { ...base, match: null }, youId };
+  if (!o.phase || o.phase === "lobby") {
+    const autoStartAt = o.autoStartIn === undefined ? null : Date.now() + o.autoStartIn;
+    return { room: { ...base, match: null, autoStartAt }, youId };
+  }
 
   const perSet = settings.format === "single" ? 1 : settings.format === "ao5" ? 5 : 12;
   const roster = ids.filter((_, i) => !o.spectators?.includes(i));
@@ -140,13 +154,19 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
   roster.forEach((id) => (points[id] = o.points?.[ids.indexOf(id)] ?? 0));
 
   const setIndex = o.setIndex ?? 1;
+  const handicap = settings.scoring === "handicap";
+  const paces: Record<string, number | null> | null = handicap ? {} : null;
+  if (paces) roster.forEach((id) => (paces[id] = o.paces?.[ids.indexOf(id)] ?? null));
   const finishedSets: MatchSnapshot["finishedSets"] = [];
   if (o.phase === "set_result" || o.phase === "match_over") {
     const setStandings: Record<string, SetStanding> = {};
     roster.forEach((id) => (setStandings[id] = standings[id] ?? { result: "DNF", best: "DNF" }));
-    const valid = Object.entries(setStandings).filter(([, s]) => s.result !== "DNF");
-    const bestValue = Math.min(...valid.map(([, s]) => s.result as number));
-    finishedSets.push({ setIndex, winnerIds: valid.filter(([, s]) => s.result === bestValue).map(([id]) => id), standings: setStandings });
+    const valid = Object.entries(setStandings).filter(([id, s]) => s.result !== "DNF" && (!paces || paces[id] != null));
+    // Fastest: the lowest result. Handicap: the lowest result / pace.
+    const score = ([id, s]: (typeof valid)[0]) => (s.result as number) / (paces ? paces[id]! : 1);
+    const bestValue = Math.min(...valid.map(score));
+    const winnerIds = valid.filter((entry) => score(entry) === bestValue).map(([id]) => id);
+    finishedSets.push({ setIndex, winnerIds, standings: setStandings, paces });
   }
   const winner = roster.reduce((a, b) => ((points[b] ?? 0) > (points[a] ?? 0) ? b : a), roster[0]);
 
@@ -168,9 +188,10 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     standings,
     points,
     finishedSets,
+    paces,
     winnerIds: o.phase === "match_over" ? [winner] : [],
   };
-  return { room: { ...base, match }, youId };
+  return { room: { ...base, match, autoStartAt: null }, youId };
 }
 
 /** Six players, ao5, set 2, solve 3: Nomin and Saraa done, Bat and Anu solving. */
@@ -208,4 +229,61 @@ export function ao12Times(count: number): TimeSpec[][] {
       return t;
     }),
   );
+}
+
+/** A short room chat: notices and messages. Player ids match mockRoom (p0 is you). */
+export function mockChat(roomNames: string[] = NAMES): ChatMessage[] {
+  // Smaller rooms: people who have left since still have a name.
+  const names = NAMES.map((name, i) => roomNames[i] ?? name);
+  const start = new Date(2026, 8, 30, 14, 2).getTime();
+  const lines: [kind: ChatMessage["kind"], player: number | null, text: string, target?: number][] = [
+    ["system", 0, `${names[0]} created the room`],
+    ["system", 1, `${names[1]} joined the room`],
+    ["user", 1, "hi everyone"],
+    ["system", 4, `${names[4]} joined the room`],
+    ["user", 0, "ready when you are"],
+    ["system", null, "Match started: 3x3x3 · ao5 · Best of 3"],
+    ["system", null, "Set 1 started"],
+    ["system", 1, `${names[1]} submitted 9.12`],
+    ["reaction", 0, `🔥 ${names[1]}'s 9.12`, 1],
+    ["user", 4, "that scramble had a free cross"],
+    ["system", 4, `${names[4]} submitted 11.87+`],
+    ["user", 1, "gl on the last one"],
+  ];
+  return lines.map(([kind, player, text, target], i) => ({
+    id: `m${i}`,
+    at: start + i * 20_000,
+    kind,
+    name: kind !== "system" && player !== null ? names[player] : null,
+    senderId: kind !== "system" && player !== null ? `p${player}` : null,
+    targetId: target === undefined ? null : `p${target}`,
+    text,
+  }));
+}
+
+/** The daily scramble page in each state. */
+export function mockDaily(status: DailyStatus["status"], options: { rank?: number } = {}): DailyStatus {
+  const now = Date.now();
+  const times = [7_410, 8_020, 8_950, 9_120, 9_870, 10_330, 11_040, 11_870, 12_450, 13_900];
+  const leaderboard = times.map((timeMs, i) => ({
+    rank: i + 1,
+    name: NAMES[i % NAMES.length],
+    playerId: `p${i + 1}`,
+    result: { timeMs, penalty: "OK" as const, source: "submitted" as const },
+  }));
+  const rank = options.rank ?? 4;
+  const mine = rank <= times.length ? leaderboard[rank - 1].result : { timeMs: 15_230, penalty: "OK" as const, source: "submitted" as const };
+  return {
+    day: "2026-09-30",
+    serverTime: now,
+    nextAt: now + 5 * 3_600_000 + 12 * 60_000,
+    status,
+    scramble: status === "new" ? null : { cubeEvent: "333", text: SCRAMBLES["333"] },
+    deadline: status === "started" ? now + 8 * 60_000 + 42_000 : null,
+    result: status === "done" ? mine : null,
+    rank: status === "done" ? rank : null,
+    total: 348,
+    leaderboard,
+    youId: status === "done" && rank <= times.length ? `p${rank}` : "me",
+  };
 }

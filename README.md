@@ -79,15 +79,52 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
 
 ## Rooms
 
+- **Create room** is one tap: the room is made with the defaults (public, 3x3, ao5, Best of 3)
+  and you're in. The host changes anything in the lobby: name, who can join, event, format,
+  Best of, time limit, max players.
+- **No Start button needed**: 3 seconds after a second player joins the lobby, the race starts
+  for everyone. Alone, the host can "Practise alone"; back in the lobby after a match, the host
+  presses Start.
 - Every room has a **name** (default: "<host>'s room").
-- **Public** rooms are listed on the home page; anyone can join with one tap.
-- **Private** rooms aren't listed. Joining needs the room code **and** a 4-digit PIN chosen
-  by the host. The host's "Copy invite link" includes the PIN, so friends just tap the link.
-  Someone coming back to their own seat (refresh, dropped connection) doesn't need the PIN again.
-- **Best of** is chosen when the room is created and can't be changed. The host can change the
-  event, format and time limit in the lobby, pick another event for a rematch, or restart in the
-  middle of a match with another event (points go back to 0).
+- The home page lists **every room**, public and private, with its code.
+  - **Public**: anyone can join with one tap.
+  - **Private** (a PIN tag in the list): joining needs the 4-digit PIN. The host's "Copy invite
+    link" includes the PIN, so friends just tap the link. Someone coming back to their own seat
+    (refresh, dropped connection) doesn't need the PIN again. After 10 wrong PINs a room only
+    accepts one more try every 6 seconds, so nobody can try all 10,000.
+- **Best of** can be changed until the first race starts; after that it's fixed. The host can
+  pick another event for a rematch, or restart in the middle of a match with another event
+  (points go back to 0).
 - You can join a room whose match has already started: you watch that set and race from the next one.
+- Every room has a **chat**. The server also posts short notices there ("Anu joined the room",
+  "Nomin submitted 9.12", "Nomin wins set 1"). The last 100 lines are kept for people who join later.
+
+## What makes it different
+
+- **Race now**: one tap puts you in an open public room for your event (or opens one for
+  the next racer). The race starts 3 seconds after someone joins.
+- **Live clocks**: while others solve, their running time ticks in the standings, so you
+  know whether you're ahead before anyone stops.
+- **Finish line**: after each solve, a short replay: every bar runs at its player's speed
+  and stops when the fastest crosses the line; then the gaps ("+0.42").
+- **Reactions**: 🔥 👏 😮 😂 on someone's time (on the finish line, or tap their row). They
+  float up from their row and show in the chat.
+- **Handicap scoring** (room setting): everyone races their own pace (their average from
+  earlier sets; set 1 sets it). Whoever beats their pace by the most wins the set, so
+  a 25-second solver can beat a 9-second solver.
+- **Streamer overlay**: Menu → "Copy overlay link" → add it in OBS as a Browser Source.
+  A transparent panel with live standings and running clocks. It watches the room without
+  taking a seat (private rooms: the link includes the PIN).
+- **Share card**: after a match, "Share result card" makes a 1200×630 image (share sheet
+  on phones, a download elsewhere).
+- **Daily scramble** (`/daily`): the same 3x3 scramble for everyone each day (UTC), one
+  attempt: the scramble shows when you start, then you have 10 minutes. A global
+  leaderboard; your rank. Needs `DATABASE_URL` to survive restarts (see DEPLOY.md).
+- **Smart cube (beta)**: Menu → "Connect smart cube" (Chrome / Edge with Bluetooth: GAN,
+  GoCube, Giiker…). On 3x3: turn it to match the scramble; your first turn starts the
+  timer and solving it stops it. Others can tap your row and watch your cube turn live.
+  For testing without a cube, add `?simcube=1` to the address: the Menu then offers a
+  keyboard cube (i/k = R/R', j/f = U/U', h/g = F/F', d/e = L/L', s/l = D/D', w/o = B/B').
 
 ## How a match works
 
@@ -125,6 +162,9 @@ server/src/
   rooms/roomLogic.ts    room rules + connects players to the match (pure)
   rooms/liveRoom.ts     one running room: action queue, timers, broadcasts, scrambles
   rooms/roomStore.ts    the in-memory list of rooms
+  rooms/chatNotices.ts  the chat's system lines ("Anu joined the room"...)
+  daily/daily.ts        the daily scramble: one attempt per player per day, ranks
+  daily/store.ts        where daily results live: memory, or Postgres (DATABASE_URL)
   scrambles.ts          random-state WCA scrambles with cubing.js
   rateLimit.ts          token bucket per connection
   **/*.test.ts          unit tests
@@ -135,6 +175,9 @@ client/src/
   useRoom.ts            keeps a room in sync (joins, reconnects, applies snapshots)
   outbox.ts             solves waiting to be acknowledged (survives refreshes)
   timer/useSpeedTimer.ts  the space bar / touch timer
+  timer/useSmartSolve.ts  a solve timed by a smart cube
+  smartCube.ts          the Bluetooth cube connection (cubing.js) + solve tracking
+  shareCard.ts          draws the result card image
   time.ts               formatting and typing times
   clock.ts              the server's clock (for countdowns)
   pages/, components/   the screens

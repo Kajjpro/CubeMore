@@ -21,4 +21,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Optional: a Postgres database for the daily scramble's leaderboard
+      # (see DEPLOY.md). Without it the leaderboard resets when the server sleeps.
+      - key: DATABASE_URL
+        sync: false
       # Render tells the app which port to use through PORT (the server reads it).

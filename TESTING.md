@@ -6,7 +6,7 @@ latency, snapshot version and outbox size in the bottom-left corner.
 
 ## 1. Rooms
 
-- [ ] Host: Home -> nickname -> **Create room** -> options appear -> pick ao5, bo3, 3x3x3 -> Create.
+- [ ] Host: Home -> nickname -> **Create room**: you're in the room at once ("Waiting for someone to join").
 - [ ] Host: **Copy link**, send it to friends. Opening the link asks for a nickname, then joins.
 - [ ] Someone joins with the 6-character code instead (lowercase works too).
 - [ ] Everyone's player list updates instantly; the host has the **Host** badge.
@@ -16,11 +16,15 @@ latency, snapshot version and outbox size in the bottom-left corner.
 
 ### Public and private rooms
 
-- [ ] Create a **public** room: it appears in "Public rooms" on another phone's home page; Join works in one tap.
-- [ ] Create a **private** room: it is NOT in the list. Opening its code without the PIN asks for the PIN;
-      a wrong PIN is refused; the right one lets you in. The host's "Copy invite link" opens it directly.
+- [ ] A new room appears in "Rooms" on another phone's home page with its code; Join works in one tap.
+- [ ] Host switches **Who can join** to **With PIN**: a PIN appears (editable). The room stays in the list with a
+      **PIN** tag; Join asks for the PIN; a wrong PIN is refused; the right one lets you in.
+      The host's "Copy invite link" opens it directly.
+- [ ] Try 11+ wrong PINs quickly: "Too many wrong PINs for this room".
 - [ ] Refresh inside a private room: you're back without typing the PIN.
-- [ ] The host can change the event in the lobby, but Best of shows as fixed.
+- [ ] A second player joins the lobby: both see "Race starts in 3", and the race starts by itself.
+- [ ] Alone, the host can **Practise alone**; during the countdown **Start now** starts at once.
+- [ ] Best of can be changed in the lobby before the first race; after a race it shows as fixed.
 - [ ] During a match, host: Host panel > "Change event and restart": everyone gets the new event, points back to 0.
 - [ ] After a match, host: pick "Next event" and Rematch.
 - [ ] Join a public room that is racing (it says "racing"): you watch, then race from the next set.
@@ -40,6 +44,12 @@ latency, snapshot version and outbox size in the bottom-left corner.
 - [ ] Check an average by hand: drop best and worst, average the other 3, truncate each time to hundredths.
 - [ ] Someone reaches 2 points (bo3) with more points than everyone: **match over**, winner shown.
 - [ ] Host: **Rematch** (points back to 0) and **Back to lobby** both work.
+- [ ] Chat: a message from a phone shows on the computer at once, and the other way round.
+- [ ] Chat notices appear: joins, match start, each submitted time, set and match winners.
+- [ ] Phone: a message arrives while the sheet is closed -> an unread badge on `Room (N)`; opening the Chat tab clears it.
+- [ ] Computer: type in the chat, press **Escape**, then hold space: the timer works (space in the chat box only types).
+- [ ] Holding the timer fades out the header, scramble, standings and chat; they come back after the solve.
+- [ ] Tap a player's row in the standings: their whole set shows; tap it again to close.
 
 ## 3. Things going wrong (the important part)
 
@@ -59,7 +69,19 @@ latency, snapshot version and outbox size in the bottom-left corner.
 - [ ] Unlimited mode: host presses **End match**; the point leader wins.
 - [ ] A new deploy while people are in a room: everyone sees "The server is restarting…".
 
-## 4. Look and feel
+## 4. The extras
+
+- [ ] **Race now** on two phones with the same event: the second lands in the first one's room; the race starts 3 s later.
+- [ ] While someone solves, their row shows a ticking blue clock; it turns into their time when they stop.
+- [ ] After each solve: the finish-line bars race, then the gaps show. Tap a player and send 🔥: it floats on their row and shows in chat.
+- [ ] Lobby → Scoring → **Handicap**: set 1 is the pace set (no points); from set 2 the biggest gain over your own pace wins.
+- [ ] Menu → **Copy overlay link**, open it in another browser (or OBS): the standings and clocks update live.
+- [ ] Match over → **Share result card**: phone opens the share sheet; computer downloads a PNG.
+- [ ] Home → **Daily scramble** → Start: the scramble shows, "10:00 left" counts down; solve; your rank shows. Reload: still done.
+- [ ] Smart cube (Chrome with Bluetooth): Menu → Connect; scramble the cube to match ("Scrambled…"), first turn starts, solving stops. Another player taps your row and sees your cube turn.
+- [ ] No smart cube? Open the room with `?simcube=1` and use Menu → Keyboard cube (test).
+
+## 5. Look and feel
 
 - [ ] Look away from the tab during the review: the tab title shows "🔔 New scramble!".
 - [ ] Phone: nothing is cut off, no sideways scrolling; the ao12 table scrolls inside its card.
