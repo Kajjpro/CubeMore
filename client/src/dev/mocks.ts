@@ -242,7 +242,7 @@ export function mockChat(roomNames: string[] = NAMES): ChatMessage[] {
     ["user", 1, "hi everyone"],
     ["system", 4, `${names[4]} joined the room`],
     ["user", 0, "ready when you are"],
-    ["system", null, "Match started: 3x3x3 · ao5 · Best of 3"],
+    ["system", null, "Match started: 3x3x3, ao5, Best of 3"],
     ["system", null, "Set 1 started"],
     ["system", 1, `${names[1]} submitted 9.12`],
     ["reaction", 0, `🔥 ${names[1]}'s 9.12`, 1],

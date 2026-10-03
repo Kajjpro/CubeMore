@@ -196,7 +196,7 @@ function CurrentCell(props: {
       <LiveClock since={player.solvingSince} />
     ) : (
       <span className="status">
-        <span className="dot live" aria-hidden /> solving
+        solving
       </span>
     );
   }
@@ -227,7 +227,6 @@ export function LiveClock({ since }: { since: number }) {
   }, [since]);
   return (
     <span className="live-clock" title="Solving now">
-      <span className="dot live" aria-hidden />
       <span ref={ref} />
       <span className="sr-only"> solving</span>
     </span>

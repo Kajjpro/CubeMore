@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ClientEvents, type PublicRoomInfo } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS } from "../labels";
 import { request, socket, useIsConnected } from "../socket";
-import { EventIcon, Icon } from "./ui";
+import { EventIcon } from "./ui";
 
 const REFRESH_MS = 5000;
 
@@ -45,17 +45,11 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
   return (
     <section className="panel room-list-panel" aria-labelledby="rooms-title">
       <div className="card-head">
-        <h2 id="rooms-title">
-          <Icon name="globe" />
-          Open rooms
-        </h2>
+        <h2 id="rooms-title">Open rooms</h2>
         {rooms && rooms.length > 0 && (
           <span className="card-head-meta">
             {racing > 0 && (
-              <span className="live-count">
-                <span className="dot live" aria-hidden />
-                {racing} racing
-              </span>
+              <span className="live-count">{racing} racing</span>
             )}
             <span className="muted">{rooms.length} open</span>
           </span>
@@ -64,14 +58,10 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
 
       {rooms === null ? (
         <div className="empty-state">
-          <span className="loader" aria-hidden />
           <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
         </div>
       ) : rooms.length === 0 ? (
         <div className="empty-state">
-          <span className="empty-icon" aria-hidden>
-            <Icon name="flag" size={22} />
-          </span>
           <p className="small">No rooms right now.</p>
           <p className="tiny muted">Create one: the race starts as soon as someone joins.</p>
         </div>
@@ -92,28 +82,21 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
                       {room.name}
                     </span>
                     {isPrivate && (
-                      <span className="tag tag-lock">
-                        <Icon name="lock" size={11} />
-                        PIN
-                      </span>
+                      <span className="tag tag-lock">PIN</span>
                     )}
                   </span>
                   <span className="room-meta">
                     <span className="mono room-code">{room.code}</span>
                     <span>
-                      {EVENT_SHORT[room.cubeEvent]} · {FORMAT_LABELS[room.format]} · {bestOf}
+                      {EVENT_SHORT[room.cubeEvent]}, {FORMAT_LABELS[room.format]}, {bestOf}
                     </span>
                   </span>
                   <span className="room-stats">
                     <span className={full ? "t-red" : ""}>
-                      <Icon name="users" size={13} />
-                      {room.players}/{room.maxPlayers}
+                      {room.players}/{room.maxPlayers} players
                     </span>
                     {room.racing ? (
-                      <span className="state-racing">
-                        <span className="dot live" aria-hidden />
-                        Racing
-                      </span>
+                      <span className="state-racing">Racing</span>
                     ) : (
                       <span className="state-open">In lobby</span>
                     )}

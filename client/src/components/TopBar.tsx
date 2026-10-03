@@ -111,21 +111,18 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
       </button>
       <span className="format">
         <span className="long">
-          {FORMAT_LABELS[settings.format]} · {WIN_CONDITION_LABELS[settings.winCondition]}
-          {settings.scoring === "handicap" && " · Handicap"}
+          {FORMAT_LABELS[settings.format]}, {WIN_CONDITION_LABELS[settings.winCondition]}
+          {settings.scoring === "handicap" && ", Handicap"}
         </span>
         <span className="short">
-          {FORMAT_LABELS[settings.format]} · {bestOf}
+          {FORMAT_LABELS[settings.format]}, {bestOf}
         </span>
       </span>
       <span className="grow" />
       <span className="room-status" role="status">
         {props.status}
       </span>
-      <span className="connection" title={props.connected ? "Connected" : "Reconnecting"}>
-        <span className={`dot ${props.connected ? "ok" : "warn"}`} aria-hidden />
-        <span className="sr-only">{props.connected ? "Connected" : "Reconnecting"}</span>
-      </span>
+      {!props.connected && <span className="connection">offline</span>}
       <button
         type="button"
         className="quiet menu-button"
@@ -185,8 +182,7 @@ function Menu(props: {
           Room <span className="mono">{props.code}</span>
           {props.pin && (
             <>
-              {" "}
-              · PIN <span className="mono">{props.pin}</span>
+              , PIN <span className="mono">{props.pin}</span>
             </>
           )}
         </p>
@@ -198,10 +194,7 @@ function Menu(props: {
       <SmartCubeSection />
       <OverlaySection code={props.code} pin={props.pin} />
       <div className="section">
-        <h3>
-          <Icon name="sliders" size={15} />
-          Preferences
-        </h3>
+        <h3>Preferences</h3>
         <Segmented label="Theme" value={prefs.theme} onChange={set("theme")} options={[
           { value: "system", label: "System" },
           { value: "light", label: "Light" },
@@ -227,10 +220,7 @@ function Menu(props: {
         ]} />
       </div>
       <div className="section hint-keys">
-        <h3>
-          <Icon name="keyboard" size={15} />
-          Keyboard
-        </h3>
+        <h3>Keyboard</h3>
         <div className="shortcuts">
           <kbd>Space</kbd>
           <span>hold, then let go to start</span>
@@ -261,10 +251,7 @@ function OverlaySection({ code, pin }: { code: string; pin: string | null }) {
   const [copied, copy] = useCopy(code, pin, "overlay");
   return (
     <div className="section">
-      <h3>
-        <Icon name="monitor" size={15} />
-        Streamer overlay
-      </h3>
+      <h3>Streamer overlay</h3>
       <p className="tiny muted">
         Live standings with running clocks on a transparent page. In OBS: add a Browser Source with this link, about
         420 × 520.
@@ -283,24 +270,18 @@ function SmartCubeSection() {
   if (!bluetoothSupported && !keyboardCubeAllowed) {
     return (
       <div className="section">
-        <h3>
-          <Icon name="bluetooth" size={15} />
-          Smart cube <span className="tag">beta</span>
-        </h3>
+        <h3>Smart cube <span className="tag">beta</span></h3>
         <p className="tiny muted">Needs Chrome or Edge with Bluetooth (not on iPhone).</p>
       </div>
     );
   }
   return (
     <div className="section">
-      <h3>
-        <Icon name="bluetooth" size={15} />
-        Smart cube <span className="tag">beta</span>
-      </h3>
+      <h3>Smart cube <span className="tag">beta</span></h3>
       {cube.status === "on" ? (
         <>
           <p className="tiny muted">
-            <span className="dot ok" aria-hidden /> {cube.name} connected. On 3x3: turn it to match the scramble, then your first
+            {cube.name} connected. On 3x3: turn it to match the scramble, then your first
             turn starts the timer and solving stops it. Others can watch your cube live.
           </p>
           <div className="row">

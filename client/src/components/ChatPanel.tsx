@@ -63,12 +63,8 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
   return (
     <div className="chat">
       <div className="panel-head">
-        <h3>
-          <Icon name="message" size={14} />
-          Room Chat
-        </h3>
+        <h3>Room Chat</h3>
         <span className="online">
-          <span className="dot ok" aria-hidden />
           {online} online
         </span>
       </div>

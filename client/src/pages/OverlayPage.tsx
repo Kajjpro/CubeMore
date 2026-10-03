@@ -77,15 +77,15 @@ export function OverlayView({ room }: { room: RoomSnapshot }) {
       <header className="overlay-head">
         <EventIcon id={settings.cubeEvent} />
         <span className="overlay-title">
-          {EVENT_SHORT[settings.cubeEvent]} · {FORMAT_LABELS[settings.format]} · {bestOf}
-          {settings.scoring === "handicap" ? " · Handicap" : ""}
+          {EVENT_SHORT[settings.cubeEvent]}, {FORMAT_LABELS[settings.format]}, {bestOf}
+          {settings.scoring === "handicap" ? ", Handicap" : ""}
         </span>
         <span className="overlay-where">
           {!match
             ? "Lobby"
             : match.phase === "match_over"
               ? "Final"
-              : `Set ${match.setIndex + 1}${match.solvesPerSet > 1 ? ` · ${match.solveIndex + 1}/${match.solvesPerSet}` : ""}`}
+              : `Set ${match.setIndex + 1}${match.solvesPerSet > 1 ? `, ${match.solveIndex + 1}/${match.solvesPerSet}` : ""}`}
         </span>
       </header>
       {!match ? <OverlayLobby room={room} /> : <OverlayStandings room={room} />}

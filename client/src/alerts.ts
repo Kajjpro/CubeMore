@@ -47,7 +47,7 @@ export function useNewScrambleAlert(scrambleKey: string | null, youMustSolve: bo
     if (!scrambleKey || !youMustSolve) return;
     playNewScrambleSound();
     if (document.hidden) {
-      document.title = `New scramble · ${BASE_TITLE}`;
+      document.title = `New scramble | ${BASE_TITLE}`;
     }
   }, [scrambleKey, youMustSolve]);
 

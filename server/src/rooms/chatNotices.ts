@@ -36,7 +36,7 @@ export function chatNotices(before: ServerRoom, after: ServerRoom): string[] {
 
   if (now && (!was || now.matchId !== was.matchId)) {
     const s = now.settings;
-    notices.push(`Match started: ${getCubeEvent(s.cubeEvent).name} · ${s.format} · ${BEST_OF[s.winCondition]}`);
+    notices.push(`Match started: ${getCubeEvent(s.cubeEvent).name}, ${s.format}, ${BEST_OF[s.winCondition]}`);
     return notices;
   }
   if (!now) {

@@ -11,7 +11,7 @@ import { ConfirmButton } from "./ConfirmButton";
 import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
 import { shareResultCard } from "../shareCard";
 import { EventSelect } from "./SettingsForm";
-import { Avatar, Confetti, Icon, playerColor, ProgressBar } from "./ui";
+import { Avatar, playerColor, ProgressBar } from "./ui";
 
 type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
 
@@ -47,19 +47,13 @@ export const PlayerList = memo(function PlayerList(props: {
         <li key={player.id} className={`${props.seats ? "seat" : ""} ${player.id === props.youId ? "me" : ""}`}>
           <span className="seat-avatar">
             <Avatar id={player.id} name={player.nickname} size={props.seats ? "md" : "xs"} />
-            <span className={`dot ${player.status === "connected" ? "ok" : "warn"}`} aria-hidden />
           </span>
           <span className="seat-info">
             <span className="name" title={player.nickname}>
               {player.nickname}
             </span>
             <span className="seat-tags">
-              {player.id === props.hostId && (
-                <span className="tag tag-host">
-                  <Icon name="crown" size={11} />
-                  host
-                </span>
-              )}
+              {player.id === props.hostId && <span className="tag tag-host">host</span>}
               {player.id === props.youId && <span className="tag tag-you">you</span>}
               {player.status === "reconnecting" && <span className="tiny t-amber">reconnecting</span>}
             </span>
@@ -78,9 +72,7 @@ export const PlayerList = memo(function PlayerList(props: {
       {props.seats && props.players.length < 2 && (
         <li className="seat empty">
           <span className="seat-avatar">
-            <span className="avatar avatar-md avatar-empty" aria-hidden>
-              <Icon name="plus" size={16} />
-            </span>
+            <span className="avatar avatar-md avatar-empty" aria-hidden />
           </span>
           <span className="seat-info">
             <span className="name">Waiting for a racer…</span>
@@ -113,10 +105,7 @@ export const HostPanel = memo(function HostPanel(props: {
 
   return (
     <div className="side-section host-panel">
-      <h3 className="section-label">
-        <Icon name="crown" size={14} />
-        Host tools
-      </h3>
+      <h3 className="section-label">Host tools</h3>
       {waiting.length > 0 && (
         <ul className="list">
           {waiting.map((player) => (
@@ -169,10 +158,7 @@ export const SessionPanel = memo(function SessionPanel({ stats }: { stats: Sessi
   const show = (value: number | null | undefined) => (value === undefined ? "–" : formatMark(value ?? "DNF"));
   return (
     <details className="side-section">
-      <summary>
-        <Icon name="timer" size={15} />
-        Your session
-      </summary>
+      <summary>Your session</summary>
       <dl className="stats">
         <div>
           <dt>solves</dt>
@@ -228,8 +214,7 @@ export function FinishLine(props: {
   return (
     <div className="result-screen finish-line">
       <div className="result-head">
-        <p className="eyebrow">
-          <Icon name="flag" size={14} />
+        <p className="small muted">
           Solve {match.solveIndex + 1} of {match.solvesPerSet}
         </p>
         <h2>{finishHeadline(rows, names, youId)}</h2>
@@ -313,7 +298,6 @@ function Podium({ entries, youId, size = "lg" }: { entries: PodiumEntry[]; youId
       {top.map((entry, i) => (
         <li key={entry.id} className={`podium-spot place-${i + 1} ${entry.id === youId ? "me" : ""}`}>
           <span className="podium-avatar">
-            {i === 0 && <Icon name="crown" size={size === "lg" ? 22 : 18} className="podium-crown" />}
             <Avatar id={entry.id} name={entry.name} size={size === "lg" ? "xl" : "lg"} />
           </span>
           <span className="podium-name" title={entry.name}>
@@ -349,12 +333,8 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
 
   return (
     <div className="result-screen">
-      {youWon && <Confetti pieces={28} />}
       <div className="result-head">
-        <p className="eyebrow">
-          <Icon name="trophy" size={14} />
-          Set {set.setIndex + 1} result
-        </p>
+        <p className="small muted">Set {set.setIndex + 1} result</p>
         <h2>{youWon ? `You win set ${set.setIndex + 1}!` : heading}</h2>
       </div>
       <Podium
@@ -454,12 +434,8 @@ function HandicapSetResult(props: {
   const youWon = !!youId && set.winnerIds.includes(youId);
   return (
     <div className="result-screen">
-      {youWon && <Confetti pieces={28} />}
       <div className="result-head">
-        <p className="eyebrow">
-          <Icon name="trophy" size={14} />
-          Set {set.setIndex + 1} · Handicap
-        </p>
+        <p className="small muted">Set {set.setIndex + 1}, handicap</p>
         <h2>{youWon ? `You win set ${set.setIndex + 1}!` : heading}</h2>
         <p className="small muted">{note}</p>
       </div>
@@ -535,12 +511,8 @@ export function MatchOver(props: {
 
   return (
     <div className="result-screen match-over">
-      {winners.length > 0 && <Confetti />}
       <div className="result-head centered">
-        <span className="hero-icon trophy" aria-hidden>
-          <Icon name="trophy" size={30} />
-        </span>
-        <p className="eyebrow">Match over{score ? ` · ${score}` : ""}</p>
+        <p className="small muted">Match over{score ? `, ${score}` : ""}</p>
         <h2>
           {youWon && winners.length === 1
             ? "You win the match!"
@@ -549,7 +521,7 @@ export function MatchOver(props: {
               : "Match over. No winner"}
         </h2>
         <p className="small muted">
-          {EVENT_SHORT[props.settings.cubeEvent]} · {FORMAT_LABELS[props.settings.format]} · {match.finishedSets.length} set
+          {EVENT_SHORT[props.settings.cubeEvent]}, {FORMAT_LABELS[props.settings.format]}, {match.finishedSets.length} set
           {match.finishedSets.length === 1 ? "" : "s"} played
         </p>
       </div>
@@ -563,8 +535,7 @@ export function MatchOver(props: {
         }))}
       />
       <div className="match-actions panel">
-        <button type="button" className="with-icon" onClick={share}>
-          <Icon name="share" />
+        <button type="button" onClick={share}>
           {shared ?? "Share result card"}
         </button>
         {props.isHost ? (
@@ -576,22 +547,16 @@ export function MatchOver(props: {
               </button>
               <button
                 type="button"
-                className="primary grow with-icon"
+                className="primary grow"
                 onClick={() => props.onRematch({ cubeEvent: nextEvent })}
                 disabled={props.busy}
               >
-                <Icon name="rotate" />
                 {props.busy ? "Starting…" : nextEvent === props.settings.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
               </button>
             </div>
           </>
         ) : (
           <p className="small muted waiting-host">
-            <span className="waiting-dots" aria-hidden>
-              <span />
-              <span />
-              <span />
-            </span>
             Waiting for the host to pick what's next
           </p>
         )}
