@@ -2,7 +2,7 @@
 // avatars, the logo, the 3D cube on the home page, segmented controls and the
 // countdown bar.
 
-import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { CubeEventId } from "@cube-racing/shared";
 import { serverNow } from "../clock";
 import { setPref, usePrefs, type ThemePref } from "../prefs";
@@ -254,86 +254,6 @@ export function Brand({ onClick }: { onClick?: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// The 3D cube on the home page: it turns by itself; drag it to spin it, tap it
-// to scramble it (tap again to solve it).
-
-/** Faces in the Western colour scheme: white top, green front, red right. */
-const CUBE_FACES = [
-  { face: "front", color: 5 },
-  { face: "back", color: 4 },
-  { face: "right", color: 2 },
-  { face: "left", color: 3 },
-  { face: "top", color: 0 },
-  { face: "bottom", color: 1 },
-] as const;
-
-function scrambledStickers(): number[][] {
-  return CUBE_FACES.map(({ color }) =>
-    Array.from({ length: 9 }, (_, i) => (i === 4 ? color : Math.floor(Math.random() * STICKER_COUNT))),
-  );
-}
-
-export function Cube3D({ className }: { className?: string }) {
-  const [stickers, setStickers] = useState<number[][] | null>(null);
-  const [angle, setAngle] = useState({ x: -24, y: 0 });
-  const drag = useRef<{ x: number; y: number; moved: boolean; start: { x: number; y: number } } | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  function onPointerDown(event: PointerEvent<HTMLButtonElement>): void {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { x: event.clientX, y: event.clientY, moved: false, start: angle };
-  }
-  function onPointerMove(event: PointerEvent<HTMLButtonElement>): void {
-    const d = drag.current;
-    if (!d) return;
-    const dx = event.clientX - d.x;
-    const dy = event.clientY - d.y;
-    if (!d.moved && Math.hypot(dx, dy) < 6) return;
-    d.moved = true;
-    setDragging(true);
-    setAngle({ x: Math.max(-80, Math.min(80, d.start.x - dy * 0.6)), y: d.start.y + dx * 0.6 });
-  }
-  function onPointerUp(): void {
-    const d = drag.current;
-    drag.current = null;
-    setDragging(false);
-    if (d && !d.moved) setStickers((s) => (s ? null : scrambledStickers()));
-  }
-
-  return (
-    <button
-      type="button"
-      className={`cube3d ${className ?? ""}`}
-      data-dragging={dragging}
-      aria-label={stickers ? "Solve the cube" : "Scramble the cube"}
-      aria-pressed={!!stickers}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => {
-        drag.current = null;
-        setDragging(false);
-      }}
-      // Keyboard (Enter / Space): a click without a pointer. Pointer taps are handled on pointer up.
-      onClick={(event) => event.detail === 0 && setStickers((s) => (s ? null : scrambledStickers()))}
-    >
-      <span className="cube3d-tilt" style={{ "--rx": `${angle.x}deg`, "--ry": `${angle.y}deg` } as CSSProperties}>
-        <span className="cube3d-spin">
-          {CUBE_FACES.map(({ face, color }, f) => (
-            <span key={face} className={`cube3d-face face-${face}`}>
-              {Array.from({ length: 9 }, (_, i) => (
-                <span key={i} className={`cube3d-sticker s-${stickers ? stickers[f][i] : color}`} />
-              ))}
-            </span>
-          ))}
-        </span>
-      </span>
-      <span className="cube3d-shadow" aria-hidden />
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
 
 interface SegmentedProps<T extends string | number> {
   label: string;
@@ -385,52 +305,6 @@ export function ProgressBar({ endsAt, totalMs, label }: { endsAt: number; totalM
         className="progress-fill"
         style={{ animationDuration: `${start.left}ms`, ["--from" as string]: start.from }}
       />
-    </div>
-  );
-}
-
-/**
- * Confetti in the six cube colours, falling once. Decorative; nothing with
- * reduced motion.
- */
-export function Confetti({ pieces = 36 }: { pieces?: number }) {
-  const [bits] = useState(() =>
-    Array.from({ length: pieces }, (_, i) => ({
-      left: Math.random() * 100,
-      delay: Math.random() * 400,
-      duration: 1600 + Math.random() * 1400,
-      drift: (Math.random() - 0.5) * 160,
-      spin: (Math.random() - 0.5) * 900,
-      color: i % STICKER_COUNT,
-      size: 6 + Math.random() * 6,
-    })),
-  );
-  // Gone after the last piece lands, so it never sits on top of anything.
-  const [done, setDone] = useState(false);
-  useEffect(() => {
-    const timeout = setTimeout(() => setDone(true), 3600);
-    return () => clearTimeout(timeout);
-  }, []);
-  if (done) return null;
-  return (
-    <div className="confetti" aria-hidden>
-      {bits.map((bit, i) => (
-        <span
-          key={i}
-          className={`confetti-bit s-${bit.color}`}
-          style={
-            {
-              left: `${bit.left}%`,
-              width: bit.size,
-              height: bit.size * 0.6,
-              animationDelay: `${bit.delay}ms`,
-              animationDuration: `${bit.duration}ms`,
-              "--drift": `${bit.drift}px`,
-              "--spin": `${bit.spin}deg`,
-            } as CSSProperties
-          }
-        />
-      ))}
     </div>
   );
 }

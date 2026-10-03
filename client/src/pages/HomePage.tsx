@@ -9,7 +9,7 @@ import {
 } from "@cube-racing/shared";
 import { RoomList, useRooms } from "../components/RoomList";
 import { EventPicker } from "../components/SettingsForm";
-import { Avatar, Brand, Cube3D, Icon, ThemeButton } from "../components/ui";
+import { Avatar, Brand, ThemeButton } from "../components/ui";
 import { EVENT_SHORT } from "../labels";
 import { setPref, usePrefs } from "../prefs";
 import { navigate } from "../router";
@@ -108,34 +108,13 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
         <Brand />
         <span className="grow" />
         {rooms && rooms.length > 0 && (
-          <span className="live-pill">
-            <span className={`dot ${racingNow ? "live" : "ok"}`} aria-hidden />
-            {racingNow ? `${racingNow} racing now` : `${rooms.length} open`}
-          </span>
+          <span className="live-pill">{racingNow ? `${racingNow} racing now` : `${rooms.length} open`}</span>
         )}
         <ThemeButton />
       </header>
 
       <main className="home-main">
-        <section className="hero" aria-labelledby="hero-title">
-          <div className="hero-copy">
-            <p className="eyebrow">
-              <Icon name="bolt" size={14} />
-              Live speedcubing races
-            </p>
-            <h1 id="hero-title">
-              Same scramble.
-              <br />
-              <span className="hero-accent">Who&rsquo;s fastest?</span>
-            </h1>
-            <p className="lead">
-              Race friends or anyone online on all 17 WCA events, with a stackmat-style timer and official ao5 and ao12
-              averages.
-            </p>
-          </div>
-          <Cube3D className="hero-cube" />
-        </section>
-
+        <h1 className="sr-only">Cube Racing</h1>
         <section className="panel race-card" aria-label="Start racing">
           <div className="you-row">
             <Avatar id={publicId} name={nickname || "?"} size="lg" />
@@ -157,15 +136,12 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           {error && <p className="banner banner-error">{error}</p>}
 
           <button type="button" className="primary xl race-button" onClick={raceNow} disabled={busy !== null}>
-            <Icon name="bolt" size={20} />
-            <span className="grow">{busy === "race" ? "Finding a race…" : `Race ${EVENT_SHORT[raceEvent]} now`}</span>
-            <Icon name="arrowRight" size={20} />
+            {busy === "race" ? "Finding a race…" : `Race ${EVENT_SHORT[raceEvent]} now`}
           </button>
           <p className="tiny muted race-hint">Joins an open room for this event, or opens one for the next racer.</p>
 
           <div className="race-alt">
             <button type="button" className="create-button" onClick={createRoom} disabled={busy !== null}>
-              <Icon name="users" />
               {busy === "create" ? "Creating…" : "Create a room for friends"}
             </button>
             <form className="join-form" onSubmit={join}>
@@ -193,39 +169,11 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           <RoomList rooms={rooms} connected={connected} onJoin={openRoom} />
         </div>
 
-        <section className="steps" aria-labelledby="steps-title">
-          <h2 id="steps-title" className="section-title">
-            How a race works
-          </h2>
-          <ol>
-            <li>
-              <span className="step-icon">
-                <Icon name="users" size={20} />
-              </span>
-              <b>Find rivals</b>
-              <span>Race now to meet whoever is online, or create a room and share its code with friends.</span>
-            </li>
-            <li>
-              <span className="step-icon">
-                <Icon name="timer" size={20} />
-              </span>
-              <b>Same scramble, same moment</b>
-              <span>The race starts 3 seconds after someone joins. Everyone gets the same random-state scramble.</span>
-            </li>
-            <li>
-              <span className="step-icon">
-                <Icon name="trophy" size={20} />
-              </span>
-              <b>WCA rules</b>
-              <span>Solve, then pick OK, +2 or DNF. Averages, sets and points follow WCA rules.</span>
-            </li>
-          </ol>
-        </section>
       </main>
 
       <footer className="home-foot">
         <span>
-          <kbd>Space</kbd> hold, let go to start · any key stops · on phones, hold the timer
+          Hold <kbd>Space</kbd> (or the timer on a phone), let go to start. Any key or tap stops it.
         </span>
         <span>Scrambles and pictures by cubing.js</span>
       </footer>
@@ -270,23 +218,19 @@ function DailyCard({ demo }: { demo?: DailyStatus }) {
   const done = daily?.status === "done" && daily.result;
   return (
     <section className="panel daily-card" aria-labelledby="daily-title">
-      <span className="daily-badge" aria-hidden>
-        <Icon name="calendar" size={22} />
-      </span>
       <div className="grow">
-        <p className="eyebrow">Today · 3x3</p>
         <h2 id="daily-title">Daily scramble</h2>
         <p className="small muted">
           {!daily ? (
-            "Same scramble for everyone, one attempt a day."
+            "The same 3x3 scramble for everyone, one attempt a day."
           ) : done ? (
             <>
-              You: <b className="mono daily-you">{formatResult(daily.result!)}</b> · #{daily.rank} of {daily.total}
+              You: <b className="mono daily-you">{formatResult(daily.result!)}</b>, #{daily.rank} of {daily.total}
             </>
           ) : daily.status === "started" ? (
             "Your attempt is running. Finish it!"
           ) : (
-            `One attempt · ${daily.total} finished today`
+            `One attempt. ${daily.total} finished today.`
           )}
         </p>
       </div>

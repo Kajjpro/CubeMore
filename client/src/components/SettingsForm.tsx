@@ -12,7 +12,7 @@ import {
   type RoomSettings,
 } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS, timeLimitLabel, WIN_CONDITION_LABELS } from "../labels";
-import { EventIcon, Icon, Segmented, type IconName } from "./ui";
+import { EventIcon, Segmented } from "./ui";
 
 /** The event as a compact menu (with its WCA icon), for tight spots like the rematch controls. */
 export function EventSelect(props: { value: CubeEventId; onChange: (id: CubeEventId) => void; label?: string }) {
@@ -107,13 +107,10 @@ export function EventPicker(props: {
 }
 
 /** A titled group of settings. */
-function Group({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) {
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="settings-group">
-      <h3 className="group-title">
-        <Icon name={icon} size={16} />
-        {title}
-      </h3>
+      <h3 className="group-title">{title}</h3>
       {children}
     </div>
   );
@@ -191,18 +188,18 @@ export function LobbySettings(props: {
   const isPrivate = settings.visibility === "private";
   return (
     <div className="settings-form">
-      <Group icon="cube" title="Puzzle">
+      <Group title="Puzzle">
         <EventPicker label="Event" layout="grid" value={settings.cubeEvent} onChange={(cubeEvent) => onChange({ cubeEvent })} />
       </Group>
 
-      <Group icon="trophy" title="Format">
+      <Group title="Format">
         <FormatField value={settings.format} onChange={(format) => onChange({ format })} />
         {props.bestOfLocked ? (
           <p className="locked-setting">
             <span className="field-label">Best of</span>
             <span>
               {WIN_CONDITION_LABELS[settings.winCondition]}
-              <span className="muted"> · fixed after the first race</span>
+              <span className="muted"> (fixed after the first race)</span>
             </span>
           </p>
         ) : (
@@ -224,7 +221,7 @@ export function LobbySettings(props: {
         </p>
       </Group>
 
-      <Group icon="sliders" title="Room">
+      <Group title="Room">
         <CommitInput
           label="Room name"
           value={settings.name}

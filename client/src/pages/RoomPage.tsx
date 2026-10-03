@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ClientEvents, NICKNAME_MAX_LENGTH, PIN_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
 import { RoomView, type RoomActions } from "../components/RoomView";
-import { Brand, Icon } from "../components/ui";
+import { Brand } from "../components/ui";
 import { navigate } from "../router";
 import { request, useIsConnected } from "../socket";
 import { loadIdentity, loadRoomPin, saveNickname, saveRoomPin } from "../storage";
@@ -124,9 +124,6 @@ export function JoinError({ code, error }: { code: string; error: string }) {
     <main className="page page-center">
       <div className="panel auth-card">
         <Brand onClick={() => navigate("/")} />
-        <span className="hero-icon danger" aria-hidden>
-          <Icon name="x" size={26} />
-        </span>
         <h1>Room {code}</h1>
         <p className="banner banner-error">{error}</p>
         <button type="button" className="primary" onClick={() => navigate("/")}>
@@ -150,9 +147,6 @@ export function PinForm(props: { code: string; error: string | null; onSubmit: (
     <main className="page page-center">
       <div className="panel auth-card">
         <Brand onClick={() => navigate("/")} />
-        <span className="hero-icon" aria-hidden>
-          <Icon name="lock" size={26} />
-        </span>
         <h1>Private room</h1>
         <p className="intro">
           Room <span className="mono">{props.code}</span> is private. Enter its {PIN_LENGTH}-digit PIN.
@@ -198,9 +192,6 @@ function NicknameForm({ code, onDone }: { code: string; onDone: (nickname: strin
     <main className="page page-center">
       <div className="panel auth-card">
         <Brand onClick={() => navigate("/")} />
-        <span className="hero-icon" aria-hidden>
-          <Icon name="users" size={26} />
-        </span>
         <h1>Join room {code}</h1>
         <p className="intro">Pick a nickname. It's how the other racers see you.</p>
         <form className="field auth-form" onSubmit={submit}>
