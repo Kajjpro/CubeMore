@@ -6,7 +6,8 @@ import { request } from "../socket";
 import { formatResult, formatRunning, formatSolve, parseTypedTime } from "../time";
 import { useSmartCube, type SmartState } from "../smartCube";
 import { useSmartSolve } from "../timer/useSmartSolve";
-import { useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
+import { HOLD_MS, useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
+import { Icon } from "./ui";
 
 /** Events a smart cube can time: the 3x3 ones. */
 const SMART_EVENTS = new Set(["333", "333oh"]);
@@ -95,6 +96,7 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
           tabIndex={-1}
           aria-label="Timer. Hold, then let go to start. Tap or press any key to stop."
         >
+          <span className="timer-aura" aria-hidden />
           {phase === "running" ? (
             demo ? (
               <div className={`timer-digits mono ${runningDisplay === "hidden" ? "as-text" : ""}`}>
@@ -108,16 +110,38 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
               {text}
             </div>
           )}
+          <HoldMeter />
           <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart?.state)}</p>
         </div>
       )}
 
       <div className="timer-below">
-        {pending && !pending.confirmed && <ConfirmSolve solveKeyText={key} penalty={pending.penalty} auto={!demo} />}
-        {pending?.confirmed && <p className="status-line">Sending…</p>}
-        {!pending && myResult && waiting && <p className="status-line">{waiting}</p>}
+        {pending && !pending.confirmed && (
+          <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
+        )}
+        {pending?.confirmed && (
+          <p className="status-line">
+            <span className="loader small" aria-hidden />
+            Sending…
+          </p>
+        )}
+        {!pending && myResult && (
+          <p className="status-line done-line">
+            <Icon name="check" size={16} />
+            {waiting ?? "Time in"}
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+/** The bar under the digits that fills while you hold (red), then turns green: ready. */
+export function HoldMeter() {
+  return (
+    <span className="hold-meter" aria-hidden>
+      <span style={{ animationDuration: `${HOLD_MS}ms` }} />
+    </span>
   );
 }
 
@@ -128,10 +152,17 @@ function hintFor(phase: TimerPhase, canStart: boolean, done: boolean, smart?: Sm
   if (phase === "ready") return "Release to start";
   if (phase === "running" || phase === "stopped") return "";
   if (done || !canStart) return "";
+  return <IdleHint />;
+}
+
+/** "Space Hold to get ready" with a keyboard, "Hold the timer to get ready" on touch screens. */
+export function IdleHint() {
   return (
     <>
-      <span className="hint-keys">Hold spacebar to ready</span>
-      <span className="hint-touch">Hold the timer to ready</span>
+      <span className="hint-keys">
+        <kbd>Space</kbd> Hold to get ready
+      </span>
+      <span className="hint-touch">Hold the timer to get ready</span>
     </>
   );
 }
@@ -163,7 +194,7 @@ export function RunningDigits({ startedAt, display }: { startedAt: number; displ
 }
 
 /** OK / +2 / DNF after a solve. Keys: Enter or 1 = OK, 2 = +2, 3 = DNF. Sends by itself after 5 s. */
-function ConfirmSolve({ solveKeyText, penalty, auto }: { solveKeyText: string; penalty: Penalty; auto: boolean }) {
+function ConfirmSolve({ solveKeyText, timeMs, penalty, auto }: { solveKeyText: string; timeMs: number; penalty: Penalty; auto: boolean }) {
   useEffect(() => {
     if (!auto) return;
     const timeout = setTimeout(() => confirmSolve(solveKeyText, penalty), AUTO_CONFIRM_MS);
@@ -185,27 +216,46 @@ function ConfirmSolve({ solveKeyText, penalty, auto }: { solveKeyText: string; p
 
   return (
     <>
-      <div className="penalty" role="group" aria-label="Penalty">
-        {(["OK", "+2", "DNF"] as const).map((choice, i) => (
-          <button
-            key={choice}
-            type="button"
-            aria-pressed={choice === penalty}
-            className={choice === "DNF" ? "danger" : ""}
-            onClick={() => confirmSolve(solveKeyText, choice)}
-          >
-            {choice}
-            <span className="kbd">{i + 1}</span>
-          </button>
-        ))}
-      </div>
-      <div className="progress" aria-label="Sends as OK in 5 seconds">
-        <div
-          className="progress-fill"
-          style={{ animationDuration: `${AUTO_CONFIRM_MS}ms`, animationPlayState: auto ? "running" : "paused" }}
-        />
+      <PenaltyChoices timeMs={timeMs} penalty={penalty} onChoose={(choice) => confirmSolve(solveKeyText, choice)} keys />
+      <div className="auto-send">
+        <span>Sends as OK in {AUTO_CONFIRM_MS / 1000} s</span>
+        <div className="progress" aria-label={`Sends as OK in ${AUTO_CONFIRM_MS / 1000} seconds`}>
+          <div
+            className="progress-fill"
+            style={{ animationDuration: `${AUTO_CONFIRM_MS}ms`, animationPlayState: auto ? "running" : "paused" }}
+          />
+        </div>
       </div>
     </>
+  );
+}
+
+/** The three penalty tiles, each showing what the time becomes: "11.87", "13.87+", "DNF". */
+export function PenaltyChoices(props: {
+  timeMs: number;
+  penalty?: Penalty;
+  onChoose: (penalty: Penalty) => void;
+  disabled?: boolean;
+  /** Show the 1 / 2 / 3 key hints. */
+  keys?: boolean;
+}) {
+  return (
+    <div className="penalty" role="group" aria-label="Penalty">
+      {(["OK", "+2", "DNF"] as const).map((choice, i) => (
+        <button
+          key={choice}
+          type="button"
+          aria-pressed={props.penalty === undefined ? undefined : choice === props.penalty}
+          className={`pen pen-${choice === "OK" ? "ok" : choice === "+2" ? "plus" : "dnf"}`}
+          disabled={props.disabled}
+          onClick={() => props.onChoose(choice)}
+        >
+          <span className="pen-label">{choice}</span>
+          <span className="pen-time">{choice === "DNF" ? `(${formatSolve(props.timeMs, "OK")})` : formatSolve(props.timeMs, choice)}</span>
+          {props.keys && <span className="kbd">{i + 1}</span>}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -244,8 +294,8 @@ export function TypeIn({ onSubmit }: { onSubmit: (timeMs: number, penalty: Penal
         12.34, 1:02.34 or DNF
       </p>
       {error && <p className="error-text">{error}</p>}
-      <button className="primary" type="submit">
-        Submit
+      <button className="primary xl" type="submit">
+        Submit time
       </button>
     </form>
   );

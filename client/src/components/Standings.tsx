@@ -8,7 +8,7 @@ import { formatMark, formatResult, formatResultLong, formatSolve } from "../time
 import type { CubeMoves } from "../useRoom";
 import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
 import { LiveCube } from "./Scramble";
-import { EventIcon } from "./ui";
+import { Avatar, EventIcon, Icon } from "./ui";
 
 interface Props {
   room: RoomSnapshot;
@@ -48,6 +48,12 @@ export function ranks(ids: string[], points: Record<string, number>): Map<string
     result.set(id, previous !== undefined && (points[previous] ?? 0) === (points[id] ?? 0) ? result.get(previous)! : i + 1);
   });
   return result;
+}
+
+/** Gold, silver and bronze for the top three, once they have points. */
+export function medalOf(rank: number | undefined, points: number | undefined): string {
+  if (!points || !rank || rank > 3) return "";
+  return ["gold", "silver", "bronze"][rank - 1];
 }
 
 /** Dense live standings: #, player, this solve, average, points. Tap a row for the whole set. */
@@ -97,14 +103,21 @@ export const Standings = memo(function Standings(props: Props) {
             return (
               <Fragment key={id}>
                 <tr className={`${isMe ? "me" : ""} ${expanded ? "open" : ""}`} onClick={() => setOpen(expanded ? null : id)}>
-                  <td className="rank">{rankOf.get(id)}</td>
+                  <td className="rank">
+                    <span className={`rank-badge ${medalOf(rankOf.get(id), match.points[id])}`}>{rankOf.get(id)}</span>
+                  </td>
                   <th scope="row" className="name-col">
                     <button type="button" className="row-toggle" aria-expanded={expanded} data-dense title={player?.nickname ?? names[id]}>
-                      {player?.nickname ?? names[id] ?? "Player"}
-                      {id === room.hostId && <span className="tiny muted"> host</span>}
+                      <Avatar id={id} name={player?.nickname ?? names[id]} size="xs" />
+                      <span className="row-name">{player?.nickname ?? names[id] ?? "Player"}</span>
+                      {id === room.hostId && (
+                        <span className="host-mark" title="Host">
+                          <Icon name="crown" size={12} />
+                          <span className="sr-only"> host</span>
+                        </span>
+                      )}
                       {liveMovesOf(id) && (
                         <span className="smart-mark" title="Smart cube: tap to watch it live">
-                          {" "}
                           <EventIcon id="333" />
                         </span>
                       )}
@@ -120,8 +133,10 @@ export const Standings = memo(function Standings(props: Props) {
                       solvingPhase={match.phase === "solving"}
                     />
                   </td>
-                  {hasAverage && <td className="num">{formatMark(match.standings[id]?.result)}</td>}
-                  <td className="num">{match.points[id] ?? 0}</td>
+                  {hasAverage && <td className="num avg">{formatMark(match.standings[id]?.result)}</td>}
+                  <td className="num pts">
+                    <span className={(match.points[id] ?? 0) > 0 ? "pts-pill" : "pts-zero"}>{match.points[id] ?? 0}</span>
+                  </td>
                 </tr>
                 {expanded && (
                   <tr className="details">

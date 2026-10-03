@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AUTO_START_DELAY_MS, type PlayerSnapshot, type RoomSettings, type RoomSnapshot } from "@cube-racing/shared";
+import { AUTO_START_DELAY_MS, getCubeEvent, type PlayerSnapshot, type RoomSettings, type RoomSnapshot } from "@cube-racing/shared";
 import { serverNow } from "../clock";
 import { settingsSummary } from "../labels";
 import { PlayerList } from "./RoomPanels";
 import { LobbySettings } from "./SettingsForm";
-import { useCopy } from "./TopBar";
+import { roomLink, useCopy } from "./TopBar";
+import { EventIcon, Icon } from "./ui";
 
 interface Props {
   room: RoomSnapshot;
@@ -18,6 +19,9 @@ interface Props {
   chat: ReactNode;
 }
 
+/** Phones can hand the invite to WhatsApp, Messenger…; elsewhere copying is enough. */
+const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function" && matchMedia("(hover: none)").matches;
+
 /**
  * Before a race. Alone, the room code and "Copy link" come first. There's no
  * need to press Start: the race starts by itself 3 seconds after someone joins.
@@ -27,50 +31,76 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
   const alone = room.players.length === 1;
   const isPrivate = room.settings.visibility === "private";
   const copyLabel = copied ? "Copied" : isPrivate ? "Copy invite link" : "Copy link";
+  const secondsLeft = useSecondsLeft(room.autoStartAt);
+
+  function share(): void {
+    void navigator
+      .share({ title: room.settings.name, text: `Race me on Cube Racing: room ${room.code}`, url: roomLink(room.code, room.pin) })
+      .catch(() => {});
+  }
 
   return (
     <main className="lobby">
       {/* Two columns on wide screens; on phones the columns dissolve into one list (display: contents). */}
       <div className="lobby-col">
-        <section className="panel section share" style={{ gridArea: "share" }}>
+        <section className="panel share" data-alone={alone} style={{ gridArea: "share" }}>
           <div className="share-title">
-            <h2 className="grow">{room.settings.name}</h2>
-            <span className="tag">{isPrivate ? "Private" : "Public"}</span>
-          </div>
-          {alone ? (
-            <>
-              <p className="big-code" aria-label={`Room code ${room.code.split("").join(" ")}`}>
-                {room.code}
-              </p>
-              {room.pin && (
-                <p className="pin-line">
-                  PIN <span className="mono">{room.pin}</span>
-                </p>
-              )}
-              <button type="button" className="primary" onClick={copy}>
-                {copyLabel}
-              </button>
-              <p className="small muted">
-                {isPrivate
-                  ? "Listed on the home page, but joining needs the PIN. The invite link includes it."
-                  : "Listed on the home page. You can also send the code or the link."}
-              </p>
-            </>
-          ) : (
-            <div className="share-row">
-              <span className="code grow">
-                {room.code}
-                {room.pin && <span className="pin-small"> PIN {room.pin}</span>}
-              </span>
-              <button type="button" onClick={copy}>
-                {copyLabel}
-              </button>
+            <span className="event-chip large">
+              <EventIcon id={room.settings.cubeEvent} />
+            </span>
+            <div className="grow">
+              <h2>{room.settings.name}</h2>
+              <p className="small muted">{settingsSummary(room.settings)}</p>
             </div>
+            <span className={`tag ${isPrivate ? "tag-lock" : "tag-open"}`}>
+              <Icon name={isPrivate ? "lock" : "globe"} size={11} />
+              {isPrivate ? "Private" : "Public"}
+            </span>
+          </div>
+
+          <div className="share-code">
+            <span className="field-label">Room code</span>
+            <p className="big-code code-tiles" aria-label={`Room code ${room.code.split("").join(" ")}`}>
+              {room.code.split("").map((char, i) => (
+                <span key={i} className="code-tile" aria-hidden>
+                  {char}
+                </span>
+              ))}
+            </p>
+            {room.pin && (
+              <p className="pin-line">
+                <Icon name="lock" size={14} />
+                PIN <span className="mono">{room.pin}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="share-actions">
+            <button type="button" className={alone ? "primary with-icon grow" : "with-icon grow"} onClick={copy}>
+              <Icon name={copied ? "check" : "link"} />
+              {copyLabel}
+            </button>
+            {canShare && (
+              <button type="button" className="with-icon" onClick={share}>
+                <Icon name="share" />
+                Share
+              </button>
+            )}
+          </div>
+          {alone && (
+            <p className="small muted">
+              {isPrivate
+                ? "Listed on the home page, but joining needs the PIN. The invite link includes it."
+                : "Listed on the home page. You can also send the code or the link."}
+            </p>
           )}
         </section>
 
-        <section className="panel section" style={{ gridArea: "settings" }}>
-          <h2>Settings</h2>
+        <section className="panel section settings-card" style={{ gridArea: "settings" }}>
+          <h2 className="card-title">
+            <Icon name="sliders" />
+            Race settings
+          </h2>
           {isHost ? (
             <LobbySettings
               settings={room.settings}
@@ -79,17 +109,30 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
               onChange={onUpdateSettings}
             />
           ) : (
-            <p>{settingsSummary(room.settings)}</p>
+            <div className="settings-summary">
+              <span className="event-chip large">
+                <EventIcon id={room.settings.cubeEvent} />
+              </span>
+              <div>
+                <b>{getCubeEvent(room.settings.cubeEvent).name}</b>
+                <p className="small muted">{settingsSummary(room.settings)}</p>
+                <p className="tiny muted">The host picks the event and format.</p>
+              </div>
+            </div>
           )}
         </section>
       </div>
 
       <div className="lobby-col">
-        <section className="panel section" style={{ gridArea: "players" }}>
-          <h2>
-            Players <span className="muted">{room.players.length}/{room.settings.maxPlayers}</span>
+        <section className="panel section players-card" style={{ gridArea: "players" }}>
+          <h2 className="card-title">
+            <Icon name="users" />
+            Racers
+            <span className="count-pill">
+              {room.players.length}/{room.settings.maxPlayers}
+            </span>
           </h2>
-          <PlayerList players={room.players} hostId={room.hostId} youId={youId} onKick={isHost ? onKick : undefined} />
+          <PlayerList players={room.players} hostId={room.hostId} youId={youId} onKick={isHost ? onKick : undefined} seats />
         </section>
 
         <section className="panel lobby-chat" style={{ gridArea: "chat" }} aria-label="Room chat">
@@ -97,9 +140,18 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
         </section>
       </div>
 
-      <div className="start-bar">
+      {secondsLeft !== null && (
+        <div className="countdown-burst" aria-hidden>
+          <span key={secondsLeft} className="burst-number">
+            {secondsLeft > 0 ? secondsLeft : "GO"}
+          </span>
+          <span className="burst-label">Get your cube ready</span>
+        </div>
+      )}
+
+      <div className="start-bar" data-counting={secondsLeft !== null}>
         <div className="inner">
-          <StartBar room={room} isHost={isHost} alone={alone} starting={starting} onStart={onStart} />
+          <StartBar room={room} isHost={isHost} alone={alone} starting={starting} onStart={onStart} secondsLeft={secondsLeft} />
         </div>
       </div>
     </main>
@@ -125,11 +177,19 @@ function useSecondsLeft(endsAt: number | null): number | null {
  *  - alone: waiting for someone, or practise alone;
  *  - back in the lobby after a match: the host starts the next race.
  */
-function StartBar(props: { room: RoomSnapshot; isHost: boolean; alone: boolean; starting: boolean; onStart: () => void }) {
-  const secondsLeft = useSecondsLeft(props.room.autoStartAt);
+function StartBar(props: {
+  room: RoomSnapshot;
+  isHost: boolean;
+  alone: boolean;
+  starting: boolean;
+  onStart: () => void;
+  secondsLeft: number | null;
+}) {
+  const { secondsLeft } = props;
   const startButton = (label: string, primary: boolean) =>
     props.isHost && (
-      <button type="button" className={primary ? "primary" : ""} onClick={props.onStart} disabled={props.starting}>
+      <button type="button" className={`with-icon ${primary ? "primary" : ""}`} onClick={props.onStart} disabled={props.starting}>
+        <Icon name="bolt" />
         {props.starting ? "Starting…" : label}
       </button>
     );
@@ -137,6 +197,9 @@ function StartBar(props: { room: RoomSnapshot; isHost: boolean; alone: boolean; 
   if (secondsLeft !== null) {
     return (
       <>
+        <span className="start-ring" aria-hidden>
+          <span key={secondsLeft}>{secondsLeft}</span>
+        </span>
         <p className="grow countdown" role="status">
           Race starts in <span className="mono">{secondsLeft}</span>
         </p>
@@ -147,7 +210,14 @@ function StartBar(props: { room: RoomSnapshot; isHost: boolean; alone: boolean; 
   if (props.alone) {
     return (
       <>
-        <p className="grow small muted">Waiting for someone to join. The race starts by itself.</p>
+        <span className="waiting-dots" aria-hidden>
+          <span />
+          <span />
+          <span />
+        </span>
+        <p className="grow small muted">
+          Waiting for someone to join.<span className="hide-narrow"> The race starts by itself.</span>
+        </p>
         {startButton("Practise alone", false)}
       </>
     );
