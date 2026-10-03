@@ -68,6 +68,11 @@ export interface SessionStats {
   mean: number | null;
   bestAo5: number | null | undefined;
   bestAo12: number | null | undefined;
+  /** The current ao5 / ao12: your latest 5 / 12 solves (undefined = not enough solves yet). */
+  ao5: number | null | undefined;
+  ao12: number | null | undefined;
+  /** The latest solve's scored time (null = DNF, undefined = no solves yet). */
+  last: number | null | undefined;
 }
 
 export function sessionStats(solves: SolveResult[]): SessionStats {
@@ -79,5 +84,8 @@ export function sessionStats(solves: SolveResult[]): SessionStats {
     mean,
     bestAo5: bestRollingAverage(solves, 5),
     bestAo12: bestRollingAverage(solves, 12),
+    ao5: solves.length >= 5 ? trimmedAverage(solves.slice(-5)) : undefined,
+    ao12: solves.length >= 12 ? trimmedAverage(solves.slice(-12)) : undefined,
+    last: solves.length ? scoredMs(solves[solves.length - 1]) : undefined,
   };
 }

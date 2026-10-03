@@ -15,9 +15,21 @@ export interface CardData {
 const W = 1200;
 const H = 630;
 // The dark theme's colours (the card looks the same whatever theme you use).
-const COLORS = { bg: "#121316", surface: "#1a1b1f", border: "#262830", text: "#ececf0", text2: "#b4b4bd", muted: "#8f909b", accent: "#7aa7ec", green: "#4cc26b" };
+const COLORS = {
+  bg: "#07090d",
+  surface: "#0f1218",
+  border: "#222835",
+  text: "#eef1f7",
+  text2: "#aeb6c8",
+  muted: "#7e879c",
+  accent: "#6ea2ff",
+  green: "#3ddc84",
+  gold: "#ffc83d",
+};
+/** The six faces, for the stripe along the top. */
+const STICKERS = ["#2a6cf5", "#ec3c41", "#19b35a", "#ff7f1f", "#ffd426", "#f4f6fa"];
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
-const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const SANS = '"Space Grotesk Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 /** Each player's best set result in the match (their best ao5 / single). */
 function bestSet(match: MatchSnapshot, id: string): number | "DNF" | undefined {
@@ -29,7 +41,11 @@ function bestSet(match: MatchSnapshot, id: string): number | "DNF" | undefined {
 /** Draws the card and returns it as a PNG. */
 export async function drawResultCard({ match, settings, names }: CardData): Promise<Blob> {
   // The fonts must be loaded before drawing with them (a page only loads a font once it's used).
-  await Promise.all([document.fonts.load(`500 28px ${MONO}`), document.fonts.load(`700 28px ${MONO}`)]).catch(() => {});
+  await Promise.all([
+    document.fonts.load(`500 28px ${MONO}`),
+    document.fonts.load(`700 28px ${MONO}`),
+    document.fonts.load(`700 64px ${SANS}`),
+  ]).catch(() => {});
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -38,9 +54,17 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
 
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, W, H);
-  // A thin accent line along the top.
-  ctx.fillStyle = COLORS.accent;
-  ctx.fillRect(0, 0, W, 6);
+  // A soft blue glow in the top left corner, like the app.
+  const glow = ctx.createRadialGradient(120, -40, 0, 120, -40, 620);
+  glow.addColorStop(0, "rgba(42, 108, 245, 0.28)");
+  glow.addColorStop(1, "rgba(42, 108, 245, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  // The six faces along the top.
+  STICKERS.forEach((color, i) => {
+    ctx.fillStyle = color;
+    ctx.fillRect((W / STICKERS.length) * i, 0, W / STICKERS.length + 1, 8);
+  });
 
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = COLORS.accent;
@@ -89,7 +113,7 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
     ctx.fillStyle = COLORS.muted;
     ctx.font = `500 28px ${MONO}`;
     ctx.fillText(String(i + 1), 80, y);
-    ctx.fillStyle = won ? COLORS.green : COLORS.text;
+    ctx.fillStyle = won ? COLORS.gold : COLORS.text;
     ctx.font = `${won ? 700 : 500} 30px ${SANS}`;
     ctx.fillText(fit(ctx, nameOf(id), 600), 130, y);
     ctx.textAlign = "right";

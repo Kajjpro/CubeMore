@@ -13,9 +13,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ClientEvents, NICKNAME_MAX_LENGTH, type DailyStatus, type Penalty } from "@cube-racing/shared";
 import { serverNow, updateServerOffset } from "../clock";
 import { ScrambleBlock } from "../components/Scramble";
-import { RunningDigits, TypeIn } from "../components/Timer";
+import { HoldMeter, IdleHint, PenaltyChoices, RunningDigits, TypeIn } from "../components/Timer";
 import { copyText } from "../components/TopBar";
-import { EventIcon } from "../components/ui";
+import { Avatar, Brand, Confetti, EventIcon, Icon, ThemeButton } from "../components/ui";
 import { setPref, usePrefs } from "../prefs";
 import { navigate } from "../router";
 import { request, socket } from "../socket";
@@ -101,20 +101,25 @@ export function DailyView(props: {
 
   return (
     <div className="daily" data-focus={focus}>
-      <header className="daily-head">
-        <button type="button" className="quiet" onClick={() => navigate("/")}>
-          Cube Racing
-        </button>
+      <header className="daily-head site-head">
+        <Brand onClick={() => navigate("/")} />
         <span className="grow" />
         {daily && <NextIn nextAt={daily.nextAt} />}
+        <ThemeButton />
       </header>
 
       <main className="daily-main">
         <div className="daily-title">
-          <EventIcon id="333" />
+          <span className="daily-badge large" aria-hidden>
+            <EventIcon id="333" />
+          </span>
           <div>
+            <p className="eyebrow">
+              <Icon name="calendar" size={14} />
+              {daily ? dayLabel(daily.day) : "Loading…"}
+            </p>
             <h1>Daily scramble</h1>
-            <p className="small muted">{daily ? dayLabel(daily.day) : "Loading…"} · 3x3 · one attempt</p>
+            <p className="small muted">3x3 · one attempt · the same scramble for everyone</p>
           </div>
         </div>
 
@@ -151,7 +156,12 @@ function NextIn({ nextAt }: { nextAt: number }) {
   useTick(30_000);
   const minutes = Math.max(0, Math.ceil((nextAt - serverNow()) / 60_000));
   const text = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
-  return <span className="small muted">New scramble in {text}</span>;
+  return (
+    <span className="live-pill">
+      <Icon name="timer" size={14} />
+      New in {text}
+    </span>
+  );
 }
 
 function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname: string) => Promise<boolean> }) {
@@ -170,15 +180,38 @@ function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname:
   return (
     <section className="panel section daily-start">
       <ul className="daily-rules">
-        <li>Everyone in the world gets the same scramble today.</li>
-        <li>You get one attempt. The scramble shows when you start; then you have 10 minutes to scramble your cube and solve.</li>
-        <li>{daily.total ? `${daily.total} ${daily.total === 1 ? "cuber has" : "cubers have"} finished today.` : "Nobody has finished yet today. Be the first."}</li>
+        <li>
+          <span className="rule-icon">
+            <Icon name="globe" />
+          </span>
+          <span>Everyone in the world gets the same scramble today.</span>
+        </li>
+        <li>
+          <span className="rule-icon">
+            <Icon name="timer" />
+          </span>
+          <span>You get one attempt. The scramble shows when you start; then you have 10 minutes to scramble your cube and solve.</span>
+        </li>
+        <li>
+          <span className="rule-icon">
+            <Icon name="trophy" />
+          </span>
+          <span>
+            {daily.total
+              ? `${daily.total} ${daily.total === 1 ? "cuber has" : "cubers have"} finished today.`
+              : "Nobody has finished yet today. Be the first."}
+          </span>
+        </li>
       </ul>
-      <label className="field">
-        <span className="field-label">Nickname on the leaderboard</span>
-        <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={NICKNAME_MAX_LENGTH} placeholder="Your name" autoComplete="nickname" />
-      </label>
-      <button type="button" className="primary" onClick={start} disabled={busy || !nickname.trim()}>
+      <div className="you-row">
+        <Avatar id={daily.youId} name={nickname || "?"} size="lg" />
+        <label className="field grow">
+          <span className="field-label">Nickname on the leaderboard</span>
+          <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={NICKNAME_MAX_LENGTH} placeholder="Your name" autoComplete="nickname" />
+        </label>
+      </div>
+      <button type="button" className="primary xl with-icon" onClick={start} disabled={busy || !nickname.trim()}>
+        <Icon name="bolt" size={20} />
         {busy ? "Starting…" : "Start my attempt"}
       </button>
     </section>
@@ -219,19 +252,7 @@ function Attempt(props: {
         <div className="daily-confirm">
           <p className="timer-digits mono">{formatSolve(pending.timeMs, "OK")}</p>
           <p className="small muted">Pick one to send your time. This is your only attempt.</p>
-          <div className="penalty" role="group" aria-label="Penalty">
-            {(["OK", "+2", "DNF"] as const).map((penalty) => (
-              <button
-                key={penalty}
-                type="button"
-                className={penalty === "DNF" ? "danger" : ""}
-                disabled={sending}
-                onClick={() => void send(pending.timeMs, penalty)}
-              >
-                {penalty === "+2" ? formatSolve(pending.timeMs, "+2") : penalty}
-              </button>
-            ))}
-          </div>
+          <PenaltyChoices timeMs={pending.timeMs} disabled={sending} onChoose={(penalty) => void send(pending.timeMs, penalty)} />
         </div>
       ) : prefs.inputMode === "typing" ? (
         <TypeIn onSubmit={(timeMs, penalty) => void send(timeMs, penalty)} />
@@ -256,8 +277,12 @@ function TimeLeft({ deadline }: { deadline: number }) {
   const minutes = Math.floor(left / 60_000);
   const seconds = Math.floor((left % 60_000) / 1000);
   return (
-    <p className={`daily-left small ${left < 60_000 ? "t-amber" : "muted"}`} role="timer">
-      {minutes}:{String(seconds).padStart(2, "0")} left to solve
+    <p className={`daily-left ${left < 60_000 ? "urgent" : ""}`} role="timer">
+      <Icon name="timer" size={14} />
+      <span className="mono">
+        {minutes}:{String(seconds).padStart(2, "0")}
+      </span>{" "}
+      left to solve
     </p>
   );
 }
@@ -274,24 +299,15 @@ function DailyTimer(props: { onStop: (timeMs: number) => void; onPhase: (phase: 
   return (
     <div className="timer-zone" data-phase={phase}>
       <div ref={setTouchArea} className="timer-touch" role="button" tabIndex={-1} aria-label="Timer. Hold, then let go to start.">
+        <span className="timer-aura" aria-hidden />
         {phase === "running" && !props.demoPhase ? (
           <RunningDigits startedAt={timer.startedAt} display={runningDisplay} />
         ) : (
           <div className="timer-digits mono">0.00</div>
         )}
+        <HoldMeter />
         <p className="timer-hint">
-          {phase === "holding" ? (
-            "Hold…"
-          ) : phase === "ready" ? (
-            "Release to start"
-          ) : phase === "idle" ? (
-            <>
-              <span className="hint-keys">Hold spacebar to ready</span>
-              <span className="hint-touch">Hold the timer to ready</span>
-            </>
-          ) : (
-            ""
-          )}
+          {phase === "holding" ? "Hold…" : phase === "ready" ? "Release to start" : phase === "idle" ? <IdleHint /> : ""}
         </p>
       </div>
     </div>
@@ -316,18 +332,32 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
     if (await copyText(text)) setShared("Copied");
   }
 
+  // "Top 3%": where your rank sits among today's finishers (only for a real time).
+  const rank = daily.rank ?? daily.total;
+  const top = daily.total > 0 ? Math.max(1, Math.ceil((rank / daily.total) * 100)) : 100;
+  const ahead = daily.total > 1 ? (daily.total - rank) / (daily.total - 1) : 1;
   return (
     <section className="panel section daily-done">
-      <p className="small muted">Your time today</p>
+      {rank <= 3 && result.penalty !== "DNF" && <Confetti pieces={30} />}
+      <p className="eyebrow">Your time today</p>
       <p className={`daily-result mono ${result.penalty === "DNF" ? "t-red" : ""}`}>{formatResultLong(result)}</p>
-      <p>
-        <b>#{daily.rank}</b> <span className="muted">of {daily.total} today</span>
-      </p>
+      <div className="daily-rank">
+        <span className={`rank-badge large ${rank <= 3 && result.penalty !== "DNF" ? ["gold", "silver", "bronze"][rank - 1] : ""}`}>#{rank}</span>
+        <span className="muted">of {daily.total} today</span>
+        {result.penalty !== "DNF" && daily.total > 1 && <span className="top-pill">Top {top}%</span>}
+      </div>
+      {result.penalty !== "DNF" && daily.total > 1 && (
+        <div className="percentile" aria-hidden>
+          <span style={{ width: `${Math.round(ahead * 100)}%` }} />
+        </div>
+      )}
       <div className="row">
-        <button type="button" className="primary grow" onClick={share}>
+        <button type="button" className="primary grow with-icon" onClick={share}>
+          <Icon name="share" />
           {shared ?? "Share my result"}
         </button>
-        <button type="button" className="grow" onClick={() => navigate("/")}>
+        <button type="button" className="grow with-icon" onClick={() => navigate("/")}>
+          <Icon name="bolt" />
           Race someone
         </button>
       </div>
@@ -341,7 +371,10 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
   return (
     <section className="panel daily-board" aria-labelledby="daily-board-title">
       <div className="panel-head">
-        <h3 id="daily-board-title">Today's leaderboard</h3>
+        <h3 id="daily-board-title">
+          <Icon name="trophy" size={14} />
+          Today's leaderboard
+        </h3>
         <span className="tiny muted">{daily.total} finished</span>
       </div>
       {rows.length === 0 ? (
@@ -350,8 +383,15 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
         <ol className="daily-rows">
           {rows.map((row) => (
             <li key={row.playerId} className={row.playerId === daily.youId ? "me" : ""}>
-              <span className="rank">{row.rank}</span>
-              <span className="name">{row.name}</span>
+              <span className="rank">
+                <span className={`rank-badge ${row.rank <= 3 && row.result.penalty !== "DNF" ? ["gold", "silver", "bronze"][row.rank - 1] : ""}`}>
+                  {row.rank}
+                </span>
+              </span>
+              <span className="name">
+                <Avatar id={row.playerId} name={row.name} size="xs" />
+                <span className="name-text">{row.name}</span>
+              </span>
               <span className={`time ${row.result.penalty === "DNF" ? "t-red" : row.rank === 1 ? "t-green" : ""}`}>
                 {formatResult(row.result)}
               </span>
@@ -359,8 +399,13 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
           ))}
           {!youInTop && daily.status === "done" && daily.result && (
             <li className="me">
-              <span className="rank">{daily.rank}</span>
-              <span className="name">You</span>
+              <span className="rank">
+                <span className="rank-badge">{daily.rank}</span>
+              </span>
+              <span className="name">
+                <Avatar id={daily.youId} name="You" size="xs" />
+                <span className="name-text">You</span>
+              </span>
               <span className="time">{formatResult(daily.result)}</span>
             </li>
           )}

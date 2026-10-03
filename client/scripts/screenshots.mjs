@@ -62,9 +62,12 @@ function checkPage() {
   // standings rows, chat input, tabs) are marked data-dense and need 28 px height.
   for (const el of document.querySelectorAll("button, a[href], input, select, summary")) {
     if (!visible(el)) continue;
-    // Partly scrolled out of a sideways strip: its real size is still 44 px.
-    const strip = el.closest(".warmup-events");
-    if (strip && el.getBoundingClientRect().right > strip.getBoundingClientRect().right) continue;
+    // Partly scrolled out of a sideways strip (the event picker): its real size is still 44 px.
+    const strip = el.closest(".event-strip");
+    if (strip) {
+      const [t, b] = [el.getBoundingClientRect(), strip.getBoundingClientRect()];
+      if (t.right > b.right || t.left < b.left) continue;
+    }
     const r = el.getBoundingClientRect();
     if (el.hasAttribute("data-dense")) {
       if (r.height < 27.5 || r.width < 27.5) issues.push(`small dense target ${Math.round(r.width)}x${Math.round(r.height)}: ${describe(el)}`);
@@ -117,8 +120,16 @@ function checkPage() {
 
   // Overlapping controls / key elements (overlays like an open sheet or the menu are expected).
   const overlay = document.querySelector(".sheet[data-open='true'], .menu");
+  // Tiles scrolled out of the sideways event strip aren't drawn, so they can't overlap anything.
+  const outOfStrip = (el) => {
+    const strip = el.closest(".event-strip");
+    if (!strip) return false;
+    const r = el.getBoundingClientRect();
+    const s = strip.getBoundingClientRect();
+    return r.left < s.left - 1 || r.right > s.right + 1;
+  };
   const keys = [...document.querySelectorAll("button, input, .timer-digits, .scramble-text, .preview, h1, h2, .big-code, .waiting-line, .status-line")].filter(
-    (el) => visible(el) && !el.closest(".start-bar"),
+    (el) => visible(el) && !el.closest(".start-bar") && !outOfStrip(el),
   );
   for (let i = 0; i < keys.length; i++) {
     for (let j = i + 1; j < keys.length; j++) {

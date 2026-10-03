@@ -2,16 +2,15 @@ import { useEffect, useState } from "react";
 import { ClientEvents, type PublicRoomInfo } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS } from "../labels";
 import { request, socket, useIsConnected } from "../socket";
-import { EventIcon } from "./ui";
+import { EventIcon, Icon } from "./ui";
 
 const REFRESH_MS = 5000;
 
 /**
  * Every open room, public and private, refreshed every few seconds while the
- * page is visible. Anyone can see all rooms; a private one asks for its PIN
- * when you open it (the room page does that).
+ * page is visible. null until the first answer arrives.
  */
-export function RoomList({ onJoin, demoRooms }: { onJoin: (code: string) => void; demoRooms?: PublicRoomInfo[] }) {
+export function useRooms(demoRooms?: PublicRoomInfo[]): { rooms: PublicRoomInfo[] | null; connected: boolean } {
   const [rooms, setRooms] = useState<PublicRoomInfo[] | null>(demoRooms ?? null);
   const connected = useIsConnected();
 
@@ -34,43 +33,95 @@ export function RoomList({ onJoin, demoRooms }: { onJoin: (code: string) => void
     };
   }, [connected, demoRooms]);
 
+  return { rooms, connected: demoRooms ? true : connected };
+}
+
+/**
+ * Every open room as a card. Anyone can see all rooms; a private one asks for
+ * its PIN when you open it (the room page does that).
+ */
+export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[] | null; connected: boolean; onJoin: (code: string) => void }) {
+  const racing = rooms?.filter((room) => room.racing).length ?? 0;
   return (
     <section className="panel room-list-panel" aria-labelledby="rooms-title">
-      <div className="room-list-head">
-        <h2 id="rooms-title">Rooms</h2>
-        {rooms && rooms.length > 0 && <span className="small muted">{rooms.length} open</span>}
+      <div className="card-head">
+        <h2 id="rooms-title">
+          <Icon name="globe" />
+          Open rooms
+        </h2>
+        {rooms && rooms.length > 0 && (
+          <span className="card-head-meta">
+            {racing > 0 && (
+              <span className="live-count">
+                <span className="dot live" aria-hidden />
+                {racing} racing
+              </span>
+            )}
+            <span className="muted">{rooms.length} open</span>
+          </span>
+        )}
       </div>
 
       {rooms === null ? (
-        <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
+        <div className="empty-state">
+          <span className="loader" aria-hidden />
+          <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
+        </div>
       ) : rooms.length === 0 ? (
-        <p className="small muted">No rooms right now. Create one: the race starts as soon as someone joins.</p>
+        <div className="empty-state">
+          <span className="empty-icon" aria-hidden>
+            <Icon name="flag" size={22} />
+          </span>
+          <p className="small">No rooms right now.</p>
+          <p className="tiny muted">Create one: the race starts as soon as someone joins.</p>
+        </div>
       ) : (
-        <ul className="list room-list">
+        <ul className="room-list">
           {rooms.map((room) => {
             const full = room.players >= room.maxPlayers;
             const isPrivate = room.visibility === "private";
+            const bestOf = room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`;
             return (
-              <li key={room.code}>
-                <EventIcon id={room.cubeEvent} />
+              <li key={room.code} className="room-card" data-racing={room.racing}>
+                <span className="event-chip">
+                  <EventIcon id={room.cubeEvent} />
+                </span>
                 <div className="room-info">
                   <span className="room-title">
                     <span className="name" title={room.name}>
                       {room.name}
                     </span>
-                    {isPrivate && <span className="tag">PIN</span>}
+                    {isPrivate && (
+                      <span className="tag tag-lock">
+                        <Icon name="lock" size={11} />
+                        PIN
+                      </span>
+                    )}
                   </span>
-                  <span className="tiny muted">
-                    <span className="mono room-code">{room.code}</span> · {EVENT_SHORT[room.cubeEvent]} ·{" "}
-                    {FORMAT_LABELS[room.format]} ·{" "}
-                    {room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`} · {room.players}/
-                    {room.maxPlayers}
-                    {room.racing ? " · racing" : ""}
+                  <span className="room-meta">
+                    <span className="mono room-code">{room.code}</span>
+                    <span>
+                      {EVENT_SHORT[room.cubeEvent]} · {FORMAT_LABELS[room.format]} · {bestOf}
+                    </span>
+                  </span>
+                  <span className="room-stats">
+                    <span className={full ? "t-red" : ""}>
+                      <Icon name="users" size={13} />
+                      {room.players}/{room.maxPlayers}
+                    </span>
+                    {room.racing ? (
+                      <span className="state-racing">
+                        <span className="dot live" aria-hidden />
+                        Racing
+                      </span>
+                    ) : (
+                      <span className="state-open">In lobby</span>
+                    )}
                   </span>
                 </div>
                 <button
                   type="button"
-                  className={isPrivate ? "" : "primary"}
+                  className={isPrivate || full ? "" : "primary"}
                   onClick={() => onJoin(room.code)}
                   disabled={full}
                   aria-label={`${isPrivate ? "Join with PIN" : "Join"}: ${room.name}`}

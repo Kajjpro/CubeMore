@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ClientEvents, NICKNAME_MAX_LENGTH, PIN_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
 import { RoomView, type RoomActions } from "../components/RoomView";
+import { Brand, Icon } from "../components/ui";
 import { navigate } from "../router";
 import { request, useIsConnected } from "../socket";
 import { loadIdentity, loadRoomPin, saveNickname, saveRoomPin } from "../storage";
@@ -93,8 +94,11 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
 
   if (!room) {
     return (
-      <main className="page">
-        <p className="muted">{connected ? `Joining room ${code}…` : "Connecting…"}</p>
+      <main className="page page-center">
+        <div className="joining">
+          <span className="loader" aria-hidden />
+          <p className="muted">{connected ? `Joining room ${code}…` : "Connecting…"}</p>
+        </div>
       </main>
     );
   }
@@ -117,14 +121,18 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
 /** "Room not found", "You were removed…": you can't be in this room. */
 export function JoinError({ code, error }: { code: string; error: string }) {
   return (
-    <main className="page">
-      <div className="page-head">
+    <main className="page page-center">
+      <div className="panel auth-card">
+        <Brand onClick={() => navigate("/")} />
+        <span className="hero-icon danger" aria-hidden>
+          <Icon name="x" size={26} />
+        </span>
         <h1>Room {code}</h1>
+        <p className="banner banner-error">{error}</p>
+        <button type="button" className="primary" onClick={() => navigate("/")}>
+          Back to home
+        </button>
       </div>
-      <p className="banner banner-error">{error}</p>
-      <button type="button" className="primary" onClick={() => navigate("/")}>
-        Back to home
-      </button>
     </main>
   );
 }
@@ -139,34 +147,38 @@ export function PinForm(props: { code: string; error: string | null; onSubmit: (
   }
 
   return (
-    <main className="page">
-      <div className="page-head">
+    <main className="page page-center">
+      <div className="panel auth-card">
+        <Brand onClick={() => navigate("/")} />
+        <span className="hero-icon" aria-hidden>
+          <Icon name="lock" size={26} />
+        </span>
         <h1>Private room</h1>
+        <p className="intro">
+          Room <span className="mono">{props.code}</span> is private. Enter its {PIN_LENGTH}-digit PIN.
+        </p>
+        {props.error && <p className="banner banner-error">{props.error}</p>}
+        <form className="field auth-form" onSubmit={submit}>
+          <label className="field">
+            <span className="field-label">PIN</span>
+            <input
+              className="pin-input"
+              value={value}
+              onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="0000"
+              autoFocus
+            />
+          </label>
+          <button className="primary" type="submit" disabled={value.length !== PIN_LENGTH}>
+            Join
+          </button>
+          <button type="button" className="quiet" onClick={() => navigate("/")}>
+            Back to home
+          </button>
+        </form>
       </div>
-      <p className="intro">
-        Room <span className="mono">{props.code}</span> is private. Enter its {PIN_LENGTH}-digit PIN.
-      </p>
-      {props.error && <p className="banner banner-error">{props.error}</p>}
-      <form className="field" onSubmit={submit} style={{ gap: 12 }}>
-        <label className="field">
-          <span className="field-label">PIN</span>
-          <input
-            className="pin-input"
-            value={value}
-            onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="0000"
-            autoFocus
-          />
-        </label>
-        <button className="primary" type="submit" disabled={value.length !== PIN_LENGTH}>
-          Join
-        </button>
-        <button type="button" className="quiet" onClick={() => navigate("/")}>
-          Back to home
-        </button>
-      </form>
     </main>
   );
 }
@@ -183,25 +195,30 @@ function NicknameForm({ code, onDone }: { code: string; onDone: (nickname: strin
   }
 
   return (
-    <main className="page">
-      <div className="page-head">
+    <main className="page page-center">
+      <div className="panel auth-card">
+        <Brand onClick={() => navigate("/")} />
+        <span className="hero-icon" aria-hidden>
+          <Icon name="users" size={26} />
+        </span>
         <h1>Join room {code}</h1>
+        <p className="intro">Pick a nickname. It's how the other racers see you.</p>
+        <form className="field auth-form" onSubmit={submit}>
+          <label className="field">
+            <span className="field-label">Nickname</span>
+            <input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={NICKNAME_MAX_LENGTH}
+              autoComplete="nickname"
+              autoFocus
+            />
+          </label>
+          <button className="primary" type="submit" disabled={!nickname.trim()}>
+            Join
+          </button>
+        </form>
       </div>
-      <form className="field" onSubmit={submit} style={{ gap: 12 }}>
-        <label className="field">
-          <span className="field-label">Nickname</span>
-          <input
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            maxLength={NICKNAME_MAX_LENGTH}
-            autoComplete="nickname"
-            autoFocus
-          />
-        </label>
-        <button className="primary" type="submit" disabled={!nickname.trim()}>
-          Join
-        </button>
-      </form>
     </main>
   );
 }
