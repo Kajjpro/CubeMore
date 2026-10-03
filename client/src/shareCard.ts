@@ -73,7 +73,7 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   ctx.textAlign = "right";
   ctx.fillStyle = COLORS.muted;
   ctx.font = `500 22px ${SANS}`;
-  ctx.fillText(`${window.location.host} · ${new Date().toLocaleDateString()}`, W - 64, 84);
+  ctx.fillText(`${window.location.host}, ${new Date().toLocaleDateString()}`, W - 64, 84);
   ctx.textAlign = "left";
 
   // Headline: who won, and the score.
@@ -84,12 +84,12 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   ctx.font = `700 64px ${SANS}`;
   ctx.fillText(fit(ctx, headline, W - 128), 64, 174);
 
-  const score = ranking.length > 1 ? ` · ${ranking[0][1]}–${ranking[1][1]}` : "";
-  const handicap = settings.scoring === "handicap" ? " · Handicap" : "";
+  const score = ranking.length > 1 ? `, ${ranking[0][1]}–${ranking[1][1]}` : "";
+  const handicap = settings.scoring === "handicap" ? ", Handicap" : "";
   ctx.fillStyle = COLORS.text2;
   ctx.font = `500 28px ${MONO}`;
   ctx.fillText(
-    `${EVENT_SHORT[settings.cubeEvent]} · ${FORMAT_LABELS[settings.format]} · ${WIN_CONDITION_LABELS[settings.winCondition]}${handicap}${score}`,
+    `${EVENT_SHORT[settings.cubeEvent]}, ${FORMAT_LABELS[settings.format]}, ${WIN_CONDITION_LABELS[settings.winCondition]}${handicap}${score}`,
     64,
     226,
   );

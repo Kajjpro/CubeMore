@@ -50,12 +50,12 @@ export function timeLimitLabel(limit: SolveTimeLimit): string {
   return limit === "off" ? "Off" : `${limit} min`;
 }
 
-/** The one-line summary used everywhere: "3x3 · ao5 · Best of 3". */
+/** The one-line summary used everywhere: "3x3, ao5, Best of 3". */
 export function settingsSummary(settings: RoomSettings): string {
   const parts = [EVENT_SHORT[settings.cubeEvent], FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
   if (settings.scoring === "handicap") parts.push("Handicap");
   if (settings.solveTimeLimit !== "off") parts.push(`${settings.solveTimeLimit} min limit`);
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
 /** "Bat", "Bat and Nomin", "Bat, Nomin and 3 others". */
