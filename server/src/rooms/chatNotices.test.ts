@@ -38,7 +38,7 @@ describe("chat notices", () => {
   it("announces the match start with its settings", () => {
     let room = createRoom("ABC234", { ...DEFAULT_SETTINGS, format: "single", winCondition: "bo1" }, alice, 0);
     room = ok(joinRoom(room, bob, 1));
-    expect(chatNotices(room, started())).toEqual(["Match started: 3x3x3 · single · Best of 1"]);
+    expect(chatNotices(room, started())).toEqual(["Match started: 3x3x3, single, Best of 1"]);
   });
 
   it("announces submitted times like cubers write them", () => {

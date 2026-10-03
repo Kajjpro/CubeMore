@@ -7,7 +7,6 @@ import { formatResult, formatRunning, formatSolve, parseTypedTime } from "../tim
 import { useSmartCube, type SmartState } from "../smartCube";
 import { useSmartSolve } from "../timer/useSmartSolve";
 import { HOLD_MS, useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
-import { Icon } from "./ui";
 
 /** Events a smart cube can time: the 3x3 ones. */
 const SMART_EVENTS = new Set(["333", "333oh"]);
@@ -96,7 +95,6 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
           tabIndex={-1}
           aria-label="Timer. Hold, then let go to start. Tap or press any key to stop."
         >
-          <span className="timer-aura" aria-hidden />
           {phase === "running" ? (
             demo ? (
               <div className={`timer-digits mono ${runningDisplay === "hidden" ? "as-text" : ""}`}>
@@ -120,16 +118,10 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
           <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
         )}
         {pending?.confirmed && (
-          <p className="status-line">
-            <span className="loader small" aria-hidden />
-            Sending…
-          </p>
+          <p className="status-line">Sending…</p>
         )}
         {!pending && myResult && (
-          <p className="status-line done-line">
-            <Icon name="check" size={16} />
-            {waiting ?? "Time in"}
-          </p>
+          <p className="status-line done-line">{waiting ?? "Time in"}</p>
         )}
       </div>
     </div>
@@ -203,6 +195,8 @@ function ConfirmSolve({ solveKeyText, timeMs, penalty, auto }: { solveKeyText: s
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
+      // A key still held down from stopping the timer repeats: never let that pick a penalty.
+      if (event.repeat) return;
       const choices: Record<string, Penalty> = { Enter: "OK", "1": "OK", "2": "+2", "3": "DNF" };
       const choice = choices[event.key];
       if (choice) {
@@ -230,7 +224,14 @@ function ConfirmSolve({ solveKeyText, timeMs, penalty, auto }: { solveKeyText: s
   );
 }
 
-/** The three penalty tiles, each showing what the time becomes: "11.87", "13.87+", "DNF". */
+/**
+ * The three penalty tiles, each showing what the time becomes: "11.87", "13.87+", "DNF".
+ *
+ * On phones you stop the timer with a tap, and the tiles appear right under
+ * that finger: the phone then delivers the same tap as a click on whichever
+ * tile is there (often DNF). So a click only counts if the press started on
+ * that tile (a finger or mouse down on it, or Enter / Space while it has focus).
+ */
 export function PenaltyChoices(props: {
   timeMs: number;
   penalty?: Penalty;
@@ -239,6 +240,7 @@ export function PenaltyChoices(props: {
   /** Show the 1 / 2 / 3 key hints. */
   keys?: boolean;
 }) {
+  const pressedOn = useRef<Penalty | null>(null);
   return (
     <div className="penalty" role="group" aria-label="Penalty">
       {(["OK", "+2", "DNF"] as const).map((choice, i) => (
@@ -248,7 +250,13 @@ export function PenaltyChoices(props: {
           aria-pressed={props.penalty === undefined ? undefined : choice === props.penalty}
           className={`pen pen-${choice === "OK" ? "ok" : choice === "+2" ? "plus" : "dnf"}`}
           disabled={props.disabled}
-          onClick={() => props.onChoose(choice)}
+          onPointerDown={() => (pressedOn.current = choice)}
+          onKeyDown={(event) => (event.key === "Enter" || event.key === " ") && (pressedOn.current = choice)}
+          onClick={() => {
+            if (pressedOn.current !== choice) return; // the tap that stopped the timer, not a press on this tile
+            pressedOn.current = null;
+            props.onChoose(choice);
+          }}
         >
           <span className="pen-label">{choice}</span>
           <span className="pen-time">{choice === "DNF" ? `(${formatSolve(props.timeMs, "OK")})` : formatSolve(props.timeMs, choice)}</span>

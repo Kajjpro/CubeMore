@@ -5,7 +5,7 @@ import { settingsSummary } from "../labels";
 import { PlayerList } from "./RoomPanels";
 import { LobbySettings } from "./SettingsForm";
 import { roomLink, useCopy } from "./TopBar";
-import { EventIcon, Icon } from "./ui";
+import { EventIcon } from "./ui";
 
 interface Props {
   room: RoomSnapshot;
@@ -52,10 +52,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
               <h2>{room.settings.name}</h2>
               <p className="small muted">{settingsSummary(room.settings)}</p>
             </div>
-            <span className={`tag ${isPrivate ? "tag-lock" : "tag-open"}`}>
-              <Icon name={isPrivate ? "lock" : "globe"} size={11} />
-              {isPrivate ? "Private" : "Public"}
-            </span>
+            <span className={`tag ${isPrivate ? "tag-lock" : "tag-open"}`}>{isPrivate ? "Private" : "Public"}</span>
           </div>
 
           <div className="share-code">
@@ -69,20 +66,17 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
             </p>
             {room.pin && (
               <p className="pin-line">
-                <Icon name="lock" size={14} />
                 PIN <span className="mono">{room.pin}</span>
               </p>
             )}
           </div>
 
           <div className="share-actions">
-            <button type="button" className={alone ? "primary with-icon grow" : "with-icon grow"} onClick={copy}>
-              <Icon name={copied ? "check" : "link"} />
+            <button type="button" className={alone ? "primary grow" : "grow"} onClick={copy}>
               {copyLabel}
             </button>
             {canShare && (
-              <button type="button" className="with-icon" onClick={share}>
-                <Icon name="share" />
+              <button type="button" onClick={share}>
                 Share
               </button>
             )}
@@ -97,10 +91,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
         </section>
 
         <section className="panel section settings-card" style={{ gridArea: "settings" }}>
-          <h2 className="card-title">
-            <Icon name="sliders" />
-            Race settings
-          </h2>
+          <h2 className="card-title">Race settings</h2>
           {isHost ? (
             <LobbySettings
               settings={room.settings}
@@ -126,7 +117,6 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
       <div className="lobby-col">
         <section className="panel section players-card" style={{ gridArea: "players" }}>
           <h2 className="card-title">
-            <Icon name="users" />
             Racers
             <span className="count-pill">
               {room.players.length}/{room.settings.maxPlayers}
@@ -145,7 +135,6 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
           <span key={secondsLeft} className="burst-number">
             {secondsLeft > 0 ? secondsLeft : "GO"}
           </span>
-          <span className="burst-label">Get your cube ready</span>
         </div>
       )}
 
@@ -188,8 +177,7 @@ function StartBar(props: {
   const { secondsLeft } = props;
   const startButton = (label: string, primary: boolean) =>
     props.isHost && (
-      <button type="button" className={`with-icon ${primary ? "primary" : ""}`} onClick={props.onStart} disabled={props.starting}>
-        <Icon name="bolt" />
+      <button type="button" className={primary ? "primary" : ""} onClick={props.onStart} disabled={props.starting}>
         {props.starting ? "Starting…" : label}
       </button>
     );
@@ -210,11 +198,6 @@ function StartBar(props: {
   if (props.alone) {
     return (
       <>
-        <span className="waiting-dots" aria-hidden>
-          <span />
-          <span />
-          <span />
-        </span>
         <p className="grow small muted">
           Waiting for someone to join.<span className="hide-narrow"> The race starts by itself.</span>
         </p>

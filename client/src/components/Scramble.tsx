@@ -1,7 +1,6 @@
 import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { getCubeEvent, type CubeEventId, type Scramble } from "@cube-racing/shared";
 import type { PreviewPref } from "../prefs";
-import { Icon } from "./ui";
 
 /** Splits a scramble into moves. Square-1 moves like "(0, 5)" stay in one piece. */
 function movesOf(line: string): string[] {
@@ -113,7 +112,6 @@ export const ScrambleBlock = memo(function ScrambleBlock(props: {
         </span>
         {tracked > 0 ? (
           <button type="button" className="mini-button" onClick={() => setTrack({ text: props.scramble.text, count: 0 })} data-dense>
-            <Icon name="undo" size={13} />
             Reset
           </button>
         ) : (

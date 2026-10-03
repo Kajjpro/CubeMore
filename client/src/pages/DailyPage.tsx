@@ -15,7 +15,7 @@ import { serverNow, updateServerOffset } from "../clock";
 import { ScrambleBlock } from "../components/Scramble";
 import { HoldMeter, IdleHint, PenaltyChoices, RunningDigits, TypeIn } from "../components/Timer";
 import { copyText } from "../components/TopBar";
-import { Avatar, Brand, Confetti, EventIcon, Icon, ThemeButton } from "../components/ui";
+import { Avatar, Brand, ThemeButton } from "../components/ui";
 import { setPref, usePrefs } from "../prefs";
 import { navigate } from "../router";
 import { request, socket } from "../socket";
@@ -110,16 +110,11 @@ export function DailyView(props: {
 
       <main className="daily-main">
         <div className="daily-title">
-          <span className="daily-badge large" aria-hidden>
-            <EventIcon id="333" />
-          </span>
           <div>
-            <p className="eyebrow">
-              <Icon name="calendar" size={14} />
-              {daily ? dayLabel(daily.day) : "Loading…"}
-            </p>
             <h1>Daily scramble</h1>
-            <p className="small muted">3x3 · one attempt · the same scramble for everyone</p>
+            <p className="small muted">
+              {daily ? dayLabel(daily.day) : "Loading…"}. One 3x3 attempt, the same scramble for everyone.
+            </p>
           </div>
         </div>
 
@@ -157,10 +152,7 @@ function NextIn({ nextAt }: { nextAt: number }) {
   const minutes = Math.max(0, Math.ceil((nextAt - serverNow()) / 60_000));
   const text = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
   return (
-    <span className="live-pill">
-      <Icon name="timer" size={14} />
-      New in {text}
-    </span>
+    <span className="live-pill">New scramble in {text}</span>
   );
 }
 
@@ -180,22 +172,9 @@ function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname:
   return (
     <section className="panel section daily-start">
       <ul className="daily-rules">
+        <li>Everyone in the world gets the same scramble today.</li>
+        <li>You get one attempt. The scramble shows when you start; then you have 10 minutes to scramble your cube and solve.</li>
         <li>
-          <span className="rule-icon">
-            <Icon name="globe" />
-          </span>
-          <span>Everyone in the world gets the same scramble today.</span>
-        </li>
-        <li>
-          <span className="rule-icon">
-            <Icon name="timer" />
-          </span>
-          <span>You get one attempt. The scramble shows when you start; then you have 10 minutes to scramble your cube and solve.</span>
-        </li>
-        <li>
-          <span className="rule-icon">
-            <Icon name="trophy" />
-          </span>
           <span>
             {daily.total
               ? `${daily.total} ${daily.total === 1 ? "cuber has" : "cubers have"} finished today.`
@@ -210,8 +189,7 @@ function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname:
           <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={NICKNAME_MAX_LENGTH} placeholder="Your name" autoComplete="nickname" />
         </label>
       </div>
-      <button type="button" className="primary xl with-icon" onClick={start} disabled={busy || !nickname.trim()}>
-        <Icon name="bolt" size={20} />
+      <button type="button" className="primary xl" onClick={start} disabled={busy || !nickname.trim()}>
         {busy ? "Starting…" : "Start my attempt"}
       </button>
     </section>
@@ -278,7 +256,6 @@ function TimeLeft({ deadline }: { deadline: number }) {
   const seconds = Math.floor((left % 60_000) / 1000);
   return (
     <p className={`daily-left ${left < 60_000 ? "urgent" : ""}`} role="timer">
-      <Icon name="timer" size={14} />
       <span className="mono">
         {minutes}:{String(seconds).padStart(2, "0")}
       </span>{" "}
@@ -299,7 +276,6 @@ function DailyTimer(props: { onStop: (timeMs: number) => void; onPhase: (phase: 
   return (
     <div className="timer-zone" data-phase={phase}>
       <div ref={setTouchArea} className="timer-touch" role="button" tabIndex={-1} aria-label="Timer. Hold, then let go to start.">
-        <span className="timer-aura" aria-hidden />
         {phase === "running" && !props.demoPhase ? (
           <RunningDigits startedAt={timer.startedAt} display={runningDisplay} />
         ) : (
@@ -319,7 +295,7 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
   const result = daily.result!;
 
   async function share(): Promise<void> {
-    const text = `Cube Racing daily ${daily.day}: ${formatResult(result)} · #${daily.rank} of ${daily.total}\n${window.location.origin}/daily`;
+    const text = `Cube Racing daily ${daily.day}: ${formatResult(result)}, #${daily.rank} of ${daily.total}\n${window.location.origin}/daily`;
     if (navigator.share) {
       try {
         await navigator.share({ text });
@@ -338,8 +314,7 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
   const ahead = daily.total > 1 ? (daily.total - rank) / (daily.total - 1) : 1;
   return (
     <section className="panel section daily-done">
-      {rank <= 3 && result.penalty !== "DNF" && <Confetti pieces={30} />}
-      <p className="eyebrow">Your time today</p>
+      <p className="small muted">Your time today</p>
       <p className={`daily-result mono ${result.penalty === "DNF" ? "t-red" : ""}`}>{formatResultLong(result)}</p>
       <div className="daily-rank">
         <span className={`rank-badge large ${rank <= 3 && result.penalty !== "DNF" ? ["gold", "silver", "bronze"][rank - 1] : ""}`}>#{rank}</span>
@@ -352,12 +327,10 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
         </div>
       )}
       <div className="row">
-        <button type="button" className="primary grow with-icon" onClick={share}>
-          <Icon name="share" />
+        <button type="button" className="primary grow" onClick={share}>
           {shared ?? "Share my result"}
         </button>
-        <button type="button" className="grow with-icon" onClick={() => navigate("/")}>
-          <Icon name="bolt" />
+        <button type="button" className="grow" onClick={() => navigate("/")}>
           Race someone
         </button>
       </div>
@@ -371,10 +344,7 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
   return (
     <section className="panel daily-board" aria-labelledby="daily-board-title">
       <div className="panel-head">
-        <h3 id="daily-board-title">
-          <Icon name="trophy" size={14} />
-          Today's leaderboard
-        </h3>
+        <h3 id="daily-board-title">Today's leaderboard</h3>
         <span className="tiny muted">{daily.total} finished</span>
       </div>
       {rows.length === 0 ? (

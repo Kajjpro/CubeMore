@@ -242,9 +242,6 @@ export function RoomView(props: RoomViewProps) {
                   />
                 ) : (
                   <div className="result-screen spectating">
-                    <span className="hero-icon" aria-hidden>
-                      <Icon name="eye" size={28} />
-                    </span>
                     <h2>Spectating</h2>
                     <p className="small muted">You joined during this set. You race from the next set.</p>
                     <p className="small">{waitingText(waitingNames(room, match, youId))}</p>
@@ -289,8 +286,7 @@ export function RoomView(props: RoomViewProps) {
                   onClick={() => setSheetOpen((open) => !open)}
                 >
                   <span className="grabber" aria-hidden />
-                  <Icon name="users" />
-                  <span>Room · {room.players.length}</span>
+                  <span>Room ({room.players.length})</span>
                   {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
                   <span className="grow" />
                   <span className="sheet-summary">{sheetOpen ? "Close" : sheetSummary(room, youId)}</span>
@@ -309,10 +305,7 @@ export function RoomView(props: RoomViewProps) {
             <aside className="side" aria-label="Room">
               <section className="side-panel standings-panel" aria-label="Live standings">
                 <div className="panel-head">
-                  <h3>
-                    <Icon name="trophy" size={14} />
-                    Live Standings
-                  </h3>
+                  <h3>Live Standings</h3>
                   <span className="tiny muted mono">{setLabel(match)}</span>
                 </div>
                 <div className="panel-scroll">{sidePanel}</div>
@@ -328,7 +321,6 @@ export function RoomView(props: RoomViewProps) {
       <div className="focus-offline" role="status">
         {!props.connected && (
           <>
-            <span className="dot warn" aria-hidden />
             reconnecting
           </>
         )}
@@ -348,25 +340,12 @@ function roomStatus(room: RoomSnapshot): string {
   return `${solved}/${match.roster.length} Solved`;
 }
 
-/** Above the scramble: "Set 2" and a pip for every solve of the set (done, now, still to come). */
+/** Above the scramble: "Set 2, solve 3 of 5". */
 function RoundPips({ match }: { match: NonNullable<RoomSnapshot["match"]> }) {
-  const solves = match.solvesPerSet;
   return (
     <span className="round">
-      <span className="round-set">Set {match.setIndex + 1}</span>
-      {solves > 1 && (
-        <>
-          <span className={`pips ${solves > 5 ? "many" : ""}`} aria-hidden>
-            {Array.from({ length: solves }, (_, i) => (
-              <span key={i} className={`pip ${i < match.solveIndex ? "done" : i === match.solveIndex ? "now" : ""}`} />
-            ))}
-          </span>
-          <span className="round-solve mono">
-            <span className="sr-only">Solve </span>
-            {match.solveIndex + 1}/{solves}
-          </span>
-        </>
-      )}
+      Set {match.setIndex + 1}
+      {match.solvesPerSet > 1 && `, solve ${match.solveIndex + 1} of ${match.solvesPerSet}`}
     </span>
   );
 }
@@ -399,9 +378,9 @@ function SessionStrip({ stats }: { stats: ReturnType<typeof useSessionStats> }) 
   );
 }
 
-/** "Set 2 · Solve 3/5" above the standings. */
+/** "Set 2, solve 3/5" above the standings. */
 function setLabel(match: NonNullable<RoomSnapshot["match"]>): string {
-  const solve = match.solvesPerSet > 1 ? ` · Solve ${match.solveIndex + 1}/${match.solvesPerSet}` : "";
+  const solve = match.solvesPerSet > 1 ? `, solve ${match.solveIndex + 1}/${match.solvesPerSet}` : "";
   return `Set ${match.setIndex + 1}${solve}`;
 }
 
@@ -486,10 +465,7 @@ function SidePanel(props: {
     <>
       <div className="side-section">
         {waiting && (
-          <p className="waiting-line">
-            <span className="dot live" aria-hidden />
-            {waiting}
-          </p>
+          <p className="waiting-line">{waiting}</p>
         )}
         <Standings
           room={room}
