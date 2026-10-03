@@ -10,7 +10,7 @@ import {
   markSmartCubeSolved,
   useSmartCube,
 } from "../smartCube";
-import { EventIcon, Segmented } from "./ui";
+import { EventIcon, Icon, LogoMark, Segmented } from "./ui";
 
 /**
  * The room's links. A private room's links include the PIN, so friends just tap
@@ -90,13 +90,24 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
   const bestOf = settings.winCondition === "unlimited" ? "Unlimited" : `Bo${settings.winCondition.slice(2)}`;
   return (
     <header className="topbar">
+      <span className="topbar-logo">
+        <LogoMark size={26} />
+      </span>
       <span className="event-badge" title={getCubeEvent(settings.cubeEvent).name}>
         <EventIcon id={settings.cubeEvent} />
         <span className="long">{getCubeEvent(settings.cubeEvent).name}</span>
         <span className="short">{EVENT_SHORT[settings.cubeEvent]}</span>
       </span>
-      <button type="button" className="code-button" onClick={copy} aria-label={`Room ${props.code}. Copy link`} data-dense>
-        {copied ? "Copied" : props.code}
+      <button
+        type="button"
+        className="code-button"
+        onClick={copy}
+        aria-label={`Room ${props.code}. Copy link`}
+        data-copied={copied}
+        data-dense
+      >
+        <span className="code-text">{copied ? "Copied" : props.code}</span>
+        <Icon name={copied ? "check" : "copy"} size={14} />
       </button>
       <span className="format">
         <span className="long">
@@ -120,10 +131,12 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
         className="quiet menu-button"
         aria-expanded={props.menuOpen}
         aria-controls="room-menu"
+        aria-label="Menu"
         onClick={props.onToggleMenu}
         data-dense
       >
-        Menu
+        <Icon name={props.menuOpen ? "x" : "menu"} />
+        <span className="menu-label">Menu</span>
       </button>
       {props.menuOpen && (
         <Menu name={props.name} code={props.code} pin={props.pin} onCopy={copy} copied={copied} onClose={props.onCloseMenu} onLeave={props.onLeave} />
@@ -177,13 +190,18 @@ function Menu(props: {
             </>
           )}
         </p>
-        <button type="button" onClick={props.onCopy}>
+        <button type="button" className="with-icon" onClick={props.onCopy}>
+          <Icon name={props.copied ? "check" : "link"} />
           {props.copied ? "Copied" : props.pin ? "Copy invite link" : "Copy link"}
         </button>
       </div>
       <SmartCubeSection />
       <OverlaySection code={props.code} pin={props.pin} />
       <div className="section">
+        <h3>
+          <Icon name="sliders" size={15} />
+          Preferences
+        </h3>
         <Segmented label="Theme" value={prefs.theme} onChange={set("theme")} options={[
           { value: "system", label: "System" },
           { value: "light", label: "Light" },
@@ -209,20 +227,28 @@ function Menu(props: {
         ]} />
       </div>
       <div className="section hint-keys">
-        <h3>Keyboard</h3>
+        <h3>
+          <Icon name="keyboard" size={15} />
+          Keyboard
+        </h3>
         <div className="shortcuts">
-          <span className="mono">Space</span>
+          <kbd>Space</kbd>
           <span>hold, then let go to start</span>
-          <span className="mono">any key</span>
+          <kbd>any key</kbd>
           <span>stop</span>
-          <span className="mono">1 2 3</span>
+          <span className="kbd-group">
+            <kbd>1</kbd>
+            <kbd>2</kbd>
+            <kbd>3</kbd>
+          </span>
           <span>OK, +2, DNF after a solve</span>
-          <span className="mono">Esc</span>
+          <kbd>Esc</kbd>
           <span>cancel holding, close this menu</span>
         </div>
       </div>
       <div className="section">
-        <button type="button" className="danger" onClick={onLeave}>
+        <button type="button" className="danger with-icon" onClick={onLeave}>
+          <Icon name="logout" />
           Leave room
         </button>
       </div>
@@ -235,12 +261,16 @@ function OverlaySection({ code, pin }: { code: string; pin: string | null }) {
   const [copied, copy] = useCopy(code, pin, "overlay");
   return (
     <div className="section">
-      <h3>Streamer overlay</h3>
+      <h3>
+        <Icon name="monitor" size={15} />
+        Streamer overlay
+      </h3>
       <p className="tiny muted">
         Live standings with running clocks on a transparent page. In OBS: add a Browser Source with this link, about
         420 × 520.
       </p>
-      <button type="button" onClick={copy}>
+      <button type="button" className="with-icon" onClick={copy}>
+        <Icon name={copied ? "check" : "copy"} />
         {copied ? "Copied" : "Copy overlay link"}
       </button>
     </div>
@@ -253,14 +283,20 @@ function SmartCubeSection() {
   if (!bluetoothSupported && !keyboardCubeAllowed) {
     return (
       <div className="section">
-        <h3>Smart cube (beta)</h3>
+        <h3>
+          <Icon name="bluetooth" size={15} />
+          Smart cube <span className="tag">beta</span>
+        </h3>
         <p className="tiny muted">Needs Chrome or Edge with Bluetooth (not on iPhone).</p>
       </div>
     );
   }
   return (
     <div className="section">
-      <h3>Smart cube (beta)</h3>
+      <h3>
+        <Icon name="bluetooth" size={15} />
+        Smart cube <span className="tag">beta</span>
+      </h3>
       {cube.status === "on" ? (
         <>
           <p className="tiny muted">

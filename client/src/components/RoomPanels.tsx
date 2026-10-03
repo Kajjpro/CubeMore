@@ -1,7 +1,7 @@
 // The smaller pieces of the room: player list, host tools, session stats, and
 // the solve review / set result / match over screens.
 
-import { memo, useState, type CSSProperties } from "react";
+import { memo, useState, type CSSProperties, type ReactNode } from "react";
 import type { CubeEventId, MatchSnapshot, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS, nameList, paceDelta } from "../labels";
 import type { SessionStats } from "../stats";
@@ -11,9 +11,9 @@ import { ConfirmButton } from "./ConfirmButton";
 import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
 import { shareResultCard } from "../shareCard";
 import { EventSelect } from "./SettingsForm";
+import { Avatar, Confetti, Icon, playerColor, ProgressBar } from "./ui";
 
 type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
-import { ProgressBar } from "./ui";
 
 type Names = Record<string, string>;
 const nameOf = (id: string, names: Names) => names[id] ?? "Player";
@@ -38,21 +38,35 @@ export const PlayerList = memo(function PlayerList(props: {
   hostId: string | null;
   youId: string | null;
   onKick?: (player: PlayerSnapshot) => void;
+  /** The lobby: a card per player, and an empty seat while you're alone. */
+  seats?: boolean;
 }) {
   return (
-    <ul className="list">
+    <ul className={props.seats ? "seats" : "list player-list"}>
       {props.players.map((player) => (
-        <li key={player.id}>
-          <span className={`dot ${player.status === "connected" ? "ok" : "warn"}`} aria-hidden />
-          <span className="name" title={player.nickname}>
-            {player.nickname}
+        <li key={player.id} className={`${props.seats ? "seat" : ""} ${player.id === props.youId ? "me" : ""}`}>
+          <span className="seat-avatar">
+            <Avatar id={player.id} name={player.nickname} size={props.seats ? "md" : "xs"} />
+            <span className={`dot ${player.status === "connected" ? "ok" : "warn"}`} aria-hidden />
           </span>
-          {player.id === props.youId && <span className="tag">you</span>}
-          {player.id === props.hostId && <span className="tag">host</span>}
-          {player.status === "reconnecting" && <span className="tiny t-amber">reconnecting</span>}
+          <span className="seat-info">
+            <span className="name" title={player.nickname}>
+              {player.nickname}
+            </span>
+            <span className="seat-tags">
+              {player.id === props.hostId && (
+                <span className="tag tag-host">
+                  <Icon name="crown" size={11} />
+                  host
+                </span>
+              )}
+              {player.id === props.youId && <span className="tag tag-you">you</span>}
+              {player.status === "reconnecting" && <span className="tiny t-amber">reconnecting</span>}
+            </span>
+          </span>
           {props.onKick && player.id !== props.youId && (
             <ConfirmButton
-              className="quiet danger"
+              className="quiet danger kick-button"
               label="Kick"
               confirmLabel="Confirm kick"
               ariaLabel={`Kick ${player.nickname}`}
@@ -61,6 +75,19 @@ export const PlayerList = memo(function PlayerList(props: {
           )}
         </li>
       ))}
+      {props.seats && props.players.length < 2 && (
+        <li className="seat empty">
+          <span className="seat-avatar">
+            <span className="avatar avatar-md avatar-empty" aria-hidden>
+              <Icon name="plus" size={16} />
+            </span>
+          </span>
+          <span className="seat-info">
+            <span className="name">Waiting for a racer…</span>
+            <span className="tiny muted">Share the code to fill this seat</span>
+          </span>
+        </li>
+      )}
     </ul>
   );
 });
@@ -85,12 +112,16 @@ export const HostPanel = memo(function HostPanel(props: {
       : [];
 
   return (
-    <div className="side-section">
-      <h3>Host</h3>
+    <div className="side-section host-panel">
+      <h3 className="section-label">
+        <Icon name="crown" size={14} />
+        Host tools
+      </h3>
       {waiting.length > 0 && (
         <ul className="list">
           {waiting.map((player) => (
             <li key={player.id}>
+              <Avatar id={player.id} name={player.nickname} size="xs" />
               <span className="name">{player.nickname}</span>
               <span className="tiny muted">{player.timerStatus === "solving" ? "solving" : "not started"}</span>
               <button type="button" onClick={() => props.onSkip(player)} aria-label={`Skip ${player.nickname} (DNF for this solve)`}>
@@ -138,7 +169,10 @@ export const SessionPanel = memo(function SessionPanel({ stats }: { stats: Sessi
   const show = (value: number | null | undefined) => (value === undefined ? "–" : formatMark(value ?? "DNF"));
   return (
     <details className="side-section">
-      <summary>Your session</summary>
+      <summary>
+        <Icon name="timer" size={15} />
+        Your session
+      </summary>
       <dl className="stats">
         <div>
           <dt>solves</dt>
@@ -193,10 +227,13 @@ export function FinishLine(props: {
 
   return (
     <div className="result-screen finish-line">
-      <h2>
-        Solve {match.solveIndex + 1} of {match.solvesPerSet}
-      </h2>
-      <p className="small">{finishHeadline(rows, names, youId)}</p>
+      <div className="result-head">
+        <p className="eyebrow">
+          <Icon name="flag" size={14} />
+          Solve {match.solveIndex + 1} of {match.solvesPerSet}
+        </p>
+        <h2>{finishHeadline(rows, names, youId)}</h2>
+      </div>
       <ol className="finish-rows">
         {rows.map((row, index) => {
           const isMe = row.id === youId;
@@ -213,13 +250,16 @@ export function FinishLine(props: {
                 aria-pressed={!isMe && target?.id === row.id}
                 onClick={() => setPicked(row.id)}
               >
-                <span className="rank">{index + 1}</span>
+                <span className={`rank ${index === 0 && !dnf ? "first" : ""}`}>{index + 1}</span>
                 <span className="who">
-                  {isMe ? "You" : nameOf(row.id, names)}
+                  <Avatar id={row.id} name={nameOf(row.id, names)} size="xs" />
+                  <span className="who-name">{isMe ? "You" : nameOf(row.id, names)}</span>
                   <Pops pops={props.pops[row.id]} />
                 </span>
                 <span className="track" aria-hidden>
-                  <span className={`bar ${dnf ? "dnf" : index === 0 ? "first" : ""}`} style={{ "--reach": reach } as CSSProperties} />
+                  <span className={`bar ${dnf ? "dnf" : index === 0 ? "first" : isMe ? "mine" : ""}`} style={{ "--reach": reach } as CSSProperties}>
+                    <span className="runner" data-c={playerColor(row.id)} />
+                  </span>
                 </span>
                 <span className={`time ${dnf ? "t-red" : index === 0 ? "t-green" : row.result.penalty === "+2" ? "t-amber" : ""}`}>
                   {formatResultLong(row.result)}
@@ -233,7 +273,12 @@ export function FinishLine(props: {
       {target && (
         <ReactionTray label={`React to ${nameOf(target.id, names)}`} onReact={(emoji) => props.onReact(target.id, emoji)} />
       )}
-      {match.phaseEndsAt !== null && <ProgressBar endsAt={match.phaseEndsAt} label="Next scramble" />}
+      {match.phaseEndsAt !== null && (
+        <div className="next-up">
+          <span>Next scramble</span>
+          <ProgressBar endsAt={match.phaseEndsAt} label="Next scramble" />
+        </div>
+      )}
     </div>
   );
 }
@@ -246,6 +291,44 @@ function finishHeadline(rows: { id: string; ms: number | null }[], names: Names,
   if (second?.ms === first.ms) return `${who(first.id)} and ${who(second.id, false)} tied`;
   const lead = second && second.ms !== null ? `, ${formatTime(second.ms - first.ms)} ahead of ${who(second.id, false)}` : "";
   return `${who(first.id)} finished first${lead}`;
+}
+
+/** One spot on the podium. */
+interface PodiumEntry {
+  id: string;
+  name: string;
+  value: string;
+  sub?: ReactNode;
+}
+
+/**
+ * The top three on a podium: 2nd, 1st, 3rd from left to right (the list stays
+ * in rank order for screen readers; CSS moves the spots).
+ */
+function Podium({ entries, youId, size = "lg" }: { entries: PodiumEntry[]; youId: string | null; size?: "md" | "lg" }) {
+  const top = entries.slice(0, 3);
+  if (top.length === 0) return null;
+  return (
+    <ol className={`podium podium-${size}`} data-count={top.length}>
+      {top.map((entry, i) => (
+        <li key={entry.id} className={`podium-spot place-${i + 1} ${entry.id === youId ? "me" : ""}`}>
+          <span className="podium-avatar">
+            {i === 0 && <Icon name="crown" size={size === "lg" ? 22 : 18} className="podium-crown" />}
+            <Avatar id={entry.id} name={entry.name} size={size === "lg" ? "xl" : "lg"} />
+          </span>
+          <span className="podium-name" title={entry.name}>
+            {entry.name}
+          </span>
+          <span className="podium-value">{entry.value}</span>
+          {entry.sub && <span className="podium-sub">{entry.sub}</span>}
+          <span className="podium-block">
+            <span className="sr-only">Place </span>
+            {i + 1}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 /** After each set: the winner in plain text, averages and points. */
@@ -262,10 +345,28 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
     ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} set ${set.setIndex + 1}`
     : `No point in set ${set.setIndex + 1}: every result is DNF`;
   const label = resultLabel(match);
+  const youWon = !!youId && set.winnerIds.includes(youId);
 
   return (
     <div className="result-screen">
-      <h2>{heading}</h2>
+      {youWon && <Confetti pieces={28} />}
+      <div className="result-head">
+        <p className="eyebrow">
+          <Icon name="trophy" size={14} />
+          Set {set.setIndex + 1} result
+        </p>
+        <h2>{youWon ? `You win set ${set.setIndex + 1}!` : heading}</h2>
+      </div>
+      <Podium
+        size="md"
+        youId={youId}
+        entries={rows.map(([id, standing]) => ({
+          id,
+          name: nameOf(id, names),
+          value: formatMark(standing.result),
+          sub: set.winnerIds.includes(id) ? "+1 pt" : undefined,
+        }))}
+      />
       <table className="ranking">
         <thead>
           <tr>
@@ -282,7 +383,9 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
             return (
               <tr key={id} className={`${won ? "winner" : ""} ${id === youId ? "me" : ""}`}>
                 <td className="rank">{index + 1}</td>
-                <td className="who">{nameOf(id, names)}</td>
+                <td className="who">
+                  <PlayerCell id={id} names={names} />
+                </td>
                 <td className={`num ${standing.result === "DNF" ? "t-red" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num">{formatMark(standing.best)}</td>
                 <td className="num">
@@ -294,8 +397,23 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
           })}
         </tbody>
       </table>
-      {match.phaseEndsAt !== null && <ProgressBar endsAt={match.phaseEndsAt} label="Next set" />}
+      {match.phaseEndsAt !== null && (
+        <div className="next-up">
+          <span>Next set</span>
+          <ProgressBar endsAt={match.phaseEndsAt} label="Next set" />
+        </div>
+      )}
     </div>
+  );
+}
+
+/** A name with its avatar, in the result tables. */
+function PlayerCell({ id, names }: { id: string; names: Names }) {
+  return (
+    <span className="player-cell">
+      <Avatar id={id} name={nameOf(id, names)} size="xs" />
+      <span className="player-cell-name">{nameOf(id, names)}</span>
+    </span>
   );
 }
 
@@ -333,10 +451,18 @@ function HandicapSetResult(props: {
     ? "Everyone has a pace now: their result from this set. From the next set, beat your own pace to win."
     : "Whoever beats their own pace by the most wins the set.";
 
+  const youWon = !!youId && set.winnerIds.includes(youId);
   return (
     <div className="result-screen">
-      <h2>{heading}</h2>
-      <p className="small muted">{note}</p>
+      {youWon && <Confetti pieces={28} />}
+      <div className="result-head">
+        <p className="eyebrow">
+          <Icon name="trophy" size={14} />
+          Set {set.setIndex + 1} · Handicap
+        </p>
+        <h2>{youWon ? `You win set ${set.setIndex + 1}!` : heading}</h2>
+        <p className="small muted">{note}</p>
+      </div>
       <table className="ranking">
         <thead>
           <tr>
@@ -356,7 +482,9 @@ function HandicapSetResult(props: {
             return (
               <tr key={id} className={`${won ? "winner" : ""} ${id === youId ? "me" : ""}`}>
                 <td className="rank">{index + 1}</td>
-                <td className="who">{nameOf(id, names)}</td>
+                <td className="who">
+                  <PlayerCell id={id} names={names} />
+                </td>
                 <td className={`num ${standing.result === "DNF" ? "t-red" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num muted">{paces[id] == null ? "–" : formatMark(paces[id]!)}</td>
                 <td className={`num ${delta?.startsWith("−") ? "t-green" : ""}`}>{delta ?? <span className="tiny muted">new</span>}</td>
@@ -369,7 +497,12 @@ function HandicapSetResult(props: {
           })}
         </tbody>
       </table>
-      {match.phaseEndsAt !== null && <ProgressBar endsAt={match.phaseEndsAt} label="Next set" />}
+      {match.phaseEndsAt !== null && (
+        <div className="next-up">
+          <span>Next set</span>
+          <ProgressBar endsAt={match.phaseEndsAt} label="Next set" />
+        </div>
+      )}
     </div>
   );
 }
@@ -396,52 +529,97 @@ export function MatchOver(props: {
   }
   const winners = match.winnerIds.map((id) => nameOf(id, names));
   const rows = Object.entries(match.points).sort(([, a], [, b]) => b - a);
+  const setsWon = (id: string) => match.finishedSets.filter((s) => s.winnerIds.includes(id)).length;
+  const youWon = !!props.youId && match.winnerIds.includes(props.youId);
+  const score = rows.length > 1 ? `${rows[0][1]}–${rows[1][1]}` : null;
 
   return (
-    <div className="result-screen">
-      <h2>{winners.length ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} the match` : "Match over. No winner"}</h2>
-      <table className="ranking">
-        <thead>
-          <tr>
-            <th className="rank">#</th>
-            <th className="who">Player</th>
-            <th>pts</th>
-            <th>sets won</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([id, points], index) => (
-            <tr key={id} className={`${match.winnerIds.includes(id) ? "winner" : ""} ${id === props.youId ? "me" : ""}`}>
-              <td className="rank">{index + 1}</td>
-              <td className="who">{nameOf(id, names)}</td>
-              <td className="num">{points}</td>
-              <td className="num">{match.finishedSets.filter((s) => s.winnerIds.includes(id)).length}</td>
+    <div className="result-screen match-over">
+      {winners.length > 0 && <Confetti />}
+      <div className="result-head centered">
+        <span className="hero-icon trophy" aria-hidden>
+          <Icon name="trophy" size={30} />
+        </span>
+        <p className="eyebrow">Match over{score ? ` · ${score}` : ""}</p>
+        <h2>
+          {youWon && winners.length === 1
+            ? "You win the match!"
+            : winners.length
+              ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} the match`
+              : "Match over. No winner"}
+        </h2>
+        <p className="small muted">
+          {EVENT_SHORT[props.settings.cubeEvent]} · {FORMAT_LABELS[props.settings.format]} · {match.finishedSets.length} set
+          {match.finishedSets.length === 1 ? "" : "s"} played
+        </p>
+      </div>
+      <Podium
+        youId={props.youId}
+        entries={rows.map(([id, points]) => ({
+          id,
+          name: nameOf(id, names),
+          value: `${points} pt${points === 1 ? "" : "s"}`,
+          sub: `${setsWon(id)} set${setsWon(id) === 1 ? "" : "s"} won`,
+        }))}
+      />
+      <div className="match-actions panel">
+        <button type="button" className="with-icon" onClick={share}>
+          <Icon name="share" />
+          {shared ?? "Share result card"}
+        </button>
+        {props.isHost ? (
+          <>
+            <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />
+            <div className="row">
+              <button type="button" className="grow" onClick={props.onBackToLobby} disabled={props.busy}>
+                Back to lobby
+              </button>
+              <button
+                type="button"
+                className="primary grow with-icon"
+                onClick={() => props.onRematch({ cubeEvent: nextEvent })}
+                disabled={props.busy}
+              >
+                <Icon name="rotate" />
+                {props.busy ? "Starting…" : nextEvent === props.settings.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="small muted waiting-host">
+            <span className="waiting-dots" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </span>
+            Waiting for the host to pick what's next
+          </p>
+        )}
+      </div>
+      {rows.length > 3 && (
+        <table className="ranking">
+          <caption className="sr-only">The rest of the field</caption>
+          <thead>
+            <tr>
+              <th className="rank">#</th>
+              <th className="who">Player</th>
+              <th>pts</th>
+              <th>sets won</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <button type="button" onClick={share}>
-        {shared ?? "Share result card"}
-      </button>
-      {props.isHost ? (
-        <>
-          <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />
-          <div className="row">
-            <button type="button" className="grow" onClick={props.onBackToLobby} disabled={props.busy}>
-              Back to lobby
-            </button>
-            <button
-              type="button"
-              className="primary grow"
-              onClick={() => props.onRematch({ cubeEvent: nextEvent })}
-              disabled={props.busy}
-            >
-              {props.busy ? "Starting…" : nextEvent === props.settings.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
-            </button>
-          </div>
-        </>
-      ) : (
-        <p className="small muted">Waiting for host</p>
+          </thead>
+          <tbody>
+            {rows.slice(3).map(([id, points], index) => (
+              <tr key={id} className={id === props.youId ? "me" : ""}>
+                <td className="rank">{index + 4}</td>
+                <td className="who">
+                  <PlayerCell id={id} names={names} />
+                </td>
+                <td className="num">{points}</td>
+                <td className="num">{setsWon(id)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

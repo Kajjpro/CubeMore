@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   CUBE_EVENTS,
   MAX_PLAYERS_LIMIT,
@@ -11,10 +11,10 @@ import {
   type CubeEventId,
   type RoomSettings,
 } from "@cube-racing/shared";
-import { FORMAT_LABELS, timeLimitLabel, WIN_CONDITION_LABELS } from "../labels";
-import { EventIcon, Segmented } from "./ui";
+import { EVENT_SHORT, FORMAT_LABELS, timeLimitLabel, WIN_CONDITION_LABELS } from "../labels";
+import { EventIcon, Icon, Segmented, type IconName } from "./ui";
 
-/** The event as a compact menu (with its WCA icon), not a grid of every puzzle. */
+/** The event as a compact menu (with its WCA icon), for tight spots like the rematch controls. */
 export function EventSelect(props: { value: CubeEventId; onChange: (id: CubeEventId) => void; label?: string }) {
   const id = useId();
   return (
@@ -32,6 +32,89 @@ export function EventSelect(props: { value: CubeEventId; onChange: (id: CubeEven
           ))}
         </select>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Every WCA event as a tile with its icon: a sideways strip ("strip", the home
+ * page) or a wrapping grid ("grid", the lobby). A radio group: arrow keys move
+ * the choice.
+ */
+export function EventPicker(props: {
+  value: CubeEventId;
+  onChange: (id: CubeEventId) => void;
+  label: string;
+  layout: "strip" | "grid";
+}) {
+  const labelId = useId();
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // The strip starts scrolled to the chosen event (it may be far to the right).
+  useLayoutEffect(() => {
+    if (props.layout !== "strip") return;
+    const list = listRef.current;
+    const chosen = list?.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (list && chosen) list.scrollLeft = chosen.offsetLeft - list.clientWidth / 2 + chosen.clientWidth / 2;
+    // Only on mount: later changes come from a tap, which is already in view.
+  }, []);
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const index = CUBE_EVENTS.findIndex((e) => e.id === props.value);
+    const next = CUBE_EVENTS[(index + step + CUBE_EVENTS.length) % CUBE_EVENTS.length];
+    props.onChange(next.id);
+    listRef.current?.querySelector<HTMLElement>(`[data-event="${next.id}"]`)?.focus();
+  }
+
+  return (
+    <div className="field event-picker">
+      <span className="field-label" id={labelId}>
+        {props.label}
+      </span>
+      <div
+        ref={listRef}
+        className={`event-tiles ${props.layout === "strip" ? "event-strip" : "event-grid"}`}
+        role="radiogroup"
+        aria-labelledby={labelId}
+        onKeyDown={onKeyDown}
+      >
+        {CUBE_EVENTS.map((event) => {
+          const checked = event.id === props.value;
+          return (
+            <button
+              key={event.id}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              aria-label={event.name}
+              tabIndex={checked ? 0 : -1}
+              data-event={event.id}
+              className="event-tile"
+              title={event.name}
+              onClick={() => props.onChange(event.id)}
+            >
+              <EventIcon id={event.id} />
+              <span className="event-tile-name">{EVENT_SHORT[event.id]}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** A titled group of settings. */
+function Group({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) {
+  return (
+    <div className="settings-group">
+      <h3 className="group-title">
+        <Icon name={icon} size={16} />
+        {title}
+      </h3>
+      {children}
     </div>
   );
 }
@@ -108,67 +191,74 @@ export function LobbySettings(props: {
   const isPrivate = settings.visibility === "private";
   return (
     <div className="settings-form">
-      <CommitInput
-        label="Room name"
-        value={settings.name}
-        maxLength={ROOM_NAME_MAX_LENGTH}
-        onCommit={(name) => onChange({ name })}
-      />
+      <Group icon="cube" title="Puzzle">
+        <EventPicker label="Event" layout="grid" value={settings.cubeEvent} onChange={(cubeEvent) => onChange({ cubeEvent })} />
+      </Group>
 
-      <Segmented
-        label="Who can join"
-        value={settings.visibility}
-        options={[
-          { value: "public", label: "Everyone" },
-          { value: "private", label: "With PIN" },
-        ]}
-        onChange={(visibility) => onChange({ visibility }, visibility === "private" ? (props.pin ?? randomPin()) : undefined)}
-      />
-      {isPrivate && props.pin && (
-        <CommitInput
-          label="PIN"
-          className="pin-field"
-          inputClassName="pin-input"
-          value={props.pin}
-          inputMode="numeric"
-          maxLength={PIN_LENGTH}
-          clean={(text) => text.replace(/\D/g, "")}
-          onCommit={(pin) => (pin.length === PIN_LENGTH ? onChange({}, pin) : false)}
+      <Group icon="trophy" title="Format">
+        <FormatField value={settings.format} onChange={(format) => onChange({ format })} />
+        {props.bestOfLocked ? (
+          <p className="locked-setting">
+            <span className="field-label">Best of</span>
+            <span>
+              {WIN_CONDITION_LABELS[settings.winCondition]}
+              <span className="muted"> · fixed after the first race</span>
+            </span>
+          </p>
+        ) : (
+          <BestOfField value={settings.winCondition} onChange={(winCondition) => onChange({ winCondition })} />
+        )}
+        <Segmented
+          label="Scoring"
+          value={settings.scoring}
+          options={[
+            { value: "fastest", label: "Fastest wins" },
+            { value: "handicap", label: "Handicap" },
+          ]}
+          onChange={(scoring) => onChange({ scoring })}
         />
-      )}
-      <p className="tiny muted">
-        {isPrivate
-          ? "Listed on the home page, but joining needs the PIN. The invite link includes it."
-          : "Listed on the home page; anyone can join."}
-      </p>
-
-      <EventSelect value={settings.cubeEvent} onChange={(cubeEvent) => onChange({ cubeEvent })} />
-      <FormatField value={settings.format} onChange={(format) => onChange({ format })} />
-      <Segmented
-        label="Scoring"
-        value={settings.scoring}
-        options={[
-          { value: "fastest", label: "Fastest wins" },
-          { value: "handicap", label: "Handicap" },
-        ]}
-        onChange={(scoring) => onChange({ scoring })}
-      />
-      <p className="tiny muted">
-        {settings.scoring === "handicap"
-          ? "Everyone races their own pace (their average from earlier sets). Set 1 sets the pace; after that, whoever beats their pace by the most wins. Fair for mixed levels."
-          : "The best average wins each set, like a WCA round."}
-      </p>
-      {props.bestOfLocked ? (
-        <p className="small">
-          <span className="field-label">Best of</span>
-          <br />
-          {WIN_CONDITION_LABELS[settings.winCondition]}
-          <span className="muted"> · fixed after the first race</span>
+        <p className="tiny muted">
+          {settings.scoring === "handicap"
+            ? "Everyone races their own pace (their average from earlier sets). Set 1 sets the pace; after that, whoever beats their pace by the most wins. Fair for mixed levels."
+            : "The best average wins each set, like a WCA round."}
         </p>
-      ) : (
-        <BestOfField value={settings.winCondition} onChange={(winCondition) => onChange({ winCondition })} />
-      )}
-      <MoreOptions settings={settings} onChange={onChange} />
+      </Group>
+
+      <Group icon="sliders" title="Room">
+        <CommitInput
+          label="Room name"
+          value={settings.name}
+          maxLength={ROOM_NAME_MAX_LENGTH}
+          onCommit={(name) => onChange({ name })}
+        />
+        <Segmented
+          label="Who can join"
+          value={settings.visibility}
+          options={[
+            { value: "public", label: "Everyone" },
+            { value: "private", label: "With PIN" },
+          ]}
+          onChange={(visibility) => onChange({ visibility }, visibility === "private" ? (props.pin ?? randomPin()) : undefined)}
+        />
+        {isPrivate && props.pin && (
+          <CommitInput
+            label="PIN"
+            className="pin-field"
+            inputClassName="pin-input"
+            value={props.pin}
+            inputMode="numeric"
+            maxLength={PIN_LENGTH}
+            clean={(text) => text.replace(/\D/g, "")}
+            onCommit={(pin) => (pin.length === PIN_LENGTH ? onChange({}, pin) : false)}
+          />
+        )}
+        <p className="tiny muted">
+          {isPrivate
+            ? "Listed on the home page, but joining needs the PIN. The invite link includes it."
+            : "Listed on the home page; anyone can join."}
+        </p>
+        <MoreOptions settings={settings} onChange={onChange} />
+      </Group>
     </div>
   );
 }

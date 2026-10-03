@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { CHAT_MAX_LENGTH, type ChatMessage } from "@cube-racing/shared";
+import { Icon, playerColor } from "./ui";
 
 interface Props {
   messages: ChatMessage[];
@@ -62,7 +63,10 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
   return (
     <div className="chat">
       <div className="panel-head">
-        <h3>Room Chat</h3>
+        <h3>
+          <Icon name="message" size={14} />
+          Room Chat
+        </h3>
         <span className="online">
           <span className="dot ok" aria-hidden />
           {online} online
@@ -70,12 +74,14 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
       </div>
 
       <ol className="chat-feed" ref={feed} aria-live="polite" aria-label="Chat messages">
-        {messages.length === 0 && <li className="chat-empty">No messages yet.</li>}
+        {messages.length === 0 && <li className="chat-empty">No messages yet. Say hi!</li>}
         {messages.map((m) =>
           m.kind === "reaction" ? (
             <li key={m.id} className="chat-line chat-reaction">
               <time>{clock(m.at)}</time>
-              <b className={m.senderId === youId ? "me" : ""}>{m.name}</b>
+              <b className={m.senderId === youId ? "me" : ""} data-c={playerColor(m.senderId)}>
+                {m.name}
+              </b>
               <span className="chat-text">{m.text}</span>
             </li>
           ) : m.kind === "system" ? (
@@ -84,9 +90,11 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
               <time>{clock(m.at)}</time>
             </li>
           ) : (
-            <li key={m.id} className="chat-line">
+            <li key={m.id} className={`chat-line ${m.senderId === youId ? "mine" : ""}`}>
               <time>{clock(m.at)}</time>
-              <b className={m.senderId === youId ? "me" : ""}>{m.name}</b>
+              <b className={m.senderId === youId ? "me" : ""} data-c={playerColor(m.senderId)}>
+                {m.name}
+              </b>
               <span className="chat-text">{m.text}</span>
             </li>
           ),
@@ -100,15 +108,15 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
           // Escape leaves the chat, so the spacebar starts the timer again.
           onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
           maxLength={CHAT_MAX_LENGTH}
-          placeholder={connected ? "Message" : "Reconnecting…"}
+          placeholder={connected ? "Say something…" : "Reconnecting…"}
           disabled={!connected}
           aria-label="Chat message"
           enterKeyHint="send"
           autoComplete="off"
           data-dense
         />
-        <button type="submit" disabled={!connected || sending || !text.trim()} data-dense>
-          Send
+        <button type="submit" className="send-button" disabled={!connected || sending || !text.trim()} aria-label="Send" data-dense>
+          <Icon name="send" size={15} />
         </button>
       </form>
       {error && <p className="chat-error">{error}</p>}
