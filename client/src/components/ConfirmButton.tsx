@@ -24,6 +24,7 @@ export function ConfirmButton(props: {
     <button
       type="button"
       className={props.className}
+      data-armed={armed}
       aria-label={armed ? props.confirmLabel : props.ariaLabel}
       onClick={() => {
         if (armed) {

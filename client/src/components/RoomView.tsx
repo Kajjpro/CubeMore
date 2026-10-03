@@ -30,7 +30,8 @@ import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
 import { Standings } from "./Standings";
 import { Timer, type TimerDemo } from "./Timer";
 import { TopBar } from "./TopBar";
-import { ProgressBar } from "./ui";
+import { formatMark } from "../time";
+import { Icon, ProgressBar } from "./ui";
 
 export interface RoomActions {
   leave: () => void;
@@ -144,7 +145,12 @@ export function RoomView(props: RoomViewProps) {
   const online = room.players.filter((p) => p.status === "connected").length;
   const pops = useReactionPops(props.chat);
   const sidePanel = match && (
-    <SidePanel {...{ room, match, youId, names, isHost, actions, stats, pops }} cubeMoves={props.cubeMoves ?? {}} pinMe={layout !== "wide"} />
+    <SidePanel
+      {...{ room, match, youId, names, isHost, actions, stats, pops }}
+      cubeMoves={props.cubeMoves ?? {}}
+      pinMe={layout !== "wide"}
+      showSession={layout === "landscape"}
+    />
   );
   const chatPanel = (
     <ChatPanel
@@ -208,7 +214,12 @@ export function RoomView(props: RoomViewProps) {
         <div className="room-body">
           <section className="stage" aria-label="Solve">
             {match.scramble && (match.phase === "solving" || match.phase === "solve_review") && (
-              <ScrambleBlock scramble={match.scramble} preview={prefs.preview} onTogglePreview={togglePreview} />
+              <ScrambleBlock
+                scramble={match.scramble}
+                preview={prefs.preview}
+                onTogglePreview={togglePreview}
+                round={<RoundPips match={match} />}
+              />
             )}
             {match.phase === "solving" && match.solveDeadline !== null && room.settings.solveTimeLimit !== "off" && (
               <div className="limit-bar">
@@ -230,7 +241,10 @@ export function RoomView(props: RoomViewProps) {
                     demo={demo?.timer}
                   />
                 ) : (
-                  <div className="result-screen">
+                  <div className="result-screen spectating">
+                    <span className="hero-icon" aria-hidden>
+                      <Icon name="eye" size={28} />
+                    </span>
                     <h2>Spectating</h2>
                     <p className="small muted">You joined during this set. You race from the next set.</p>
                     <p className="small">{waitingText(waitingNames(room, match, youId))}</p>
@@ -261,25 +275,32 @@ export function RoomView(props: RoomViewProps) {
                 </div>
               )}
             </div>
+            {match.phase === "solving" && <SessionStrip stats={stats} />}
           </section>
 
           {layout === "phone" ? (
-            <div className="sheet" data-open={sheetOpen}>
-              <button
-                type="button"
-                className="sheet-handle"
-                aria-expanded={sheetOpen}
-                onClick={() => setSheetOpen((open) => !open)}
-              >
-                <span>Room ({room.players.length})</span>
-                {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
-                <span className="grow" />
-                <span className="muted small">{sheetOpen ? "Close" : sheetSummary(room, youId)}</span>
-              </button>
-              <div className="sheet-body" inert={!sheetOpen}>
-                <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
+            <>
+              <div className="scrim" data-open={sheetOpen} onClick={() => setSheetOpen(false)} aria-hidden />
+              <div className="sheet" data-open={sheetOpen}>
+                <button
+                  type="button"
+                  className="sheet-handle"
+                  aria-expanded={sheetOpen}
+                  onClick={() => setSheetOpen((open) => !open)}
+                >
+                  <span className="grabber" aria-hidden />
+                  <Icon name="users" />
+                  <span>Room · {room.players.length}</span>
+                  {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
+                  <span className="grow" />
+                  <span className="sheet-summary">{sheetOpen ? "Close" : sheetSummary(room, youId)}</span>
+                  <Icon name="chevronUp" className="sheet-chevron" />
+                </button>
+                <div className="sheet-body" inert={!sheetOpen}>
+                  <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
+                </div>
               </div>
-            </div>
+            </>
           ) : layout === "landscape" ? (
             <aside className="side" aria-label="Room">
               <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
@@ -288,7 +309,10 @@ export function RoomView(props: RoomViewProps) {
             <aside className="side" aria-label="Room">
               <section className="side-panel standings-panel" aria-label="Live standings">
                 <div className="panel-head">
-                  <h3>Live Standings</h3>
+                  <h3>
+                    <Icon name="trophy" size={14} />
+                    Live Standings
+                  </h3>
                   <span className="tiny muted mono">{setLabel(match)}</span>
                 </div>
                 <div className="panel-scroll">{sidePanel}</div>
@@ -322,6 +346,57 @@ function roomStatus(room: RoomSnapshot): string {
   if (match.phase === "match_over") return "Match over";
   const solved = match.roster.filter((id) => match.results[id]?.[match.solveIndex]).length;
   return `${solved}/${match.roster.length} Solved`;
+}
+
+/** Above the scramble: "Set 2" and a pip for every solve of the set (done, now, still to come). */
+function RoundPips({ match }: { match: NonNullable<RoomSnapshot["match"]> }) {
+  const solves = match.solvesPerSet;
+  return (
+    <span className="round">
+      <span className="round-set">Set {match.setIndex + 1}</span>
+      {solves > 1 && (
+        <>
+          <span className={`pips ${solves > 5 ? "many" : ""}`} aria-hidden>
+            {Array.from({ length: solves }, (_, i) => (
+              <span key={i} className={`pip ${i < match.solveIndex ? "done" : i === match.solveIndex ? "now" : ""}`} />
+            ))}
+          </span>
+          <span className="round-solve mono">
+            <span className="sr-only">Solve </span>
+            {match.solveIndex + 1}/{solves}
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Under the timer: your session, like csTimer's stats (the current ao5 and
+ * ao12). A new session best single or ao5 gets a "new" badge.
+ */
+function SessionStrip({ stats }: { stats: ReturnType<typeof useSessionStats> }) {
+  const show = (value: number | null | undefined) => (value === undefined ? "–" : formatMark(value ?? "DNF"));
+  const newBest = stats.solves > 1 && stats.last != null && stats.last === stats.best;
+  const newAo5 = stats.solves > 5 && stats.ao5 != null && stats.ao5 === stats.bestAo5;
+  const items: { label: string; value: string; fresh?: boolean }[] = [
+    { label: "solves", value: String(stats.solves) },
+    { label: "best", value: stats.solves ? show(stats.best) : "–", fresh: newBest },
+    { label: "ao5", value: show(stats.ao5), fresh: newAo5 },
+    { label: "ao12", value: show(stats.ao12) },
+    { label: "mean", value: stats.solves ? show(stats.mean) : "–" },
+  ];
+  return (
+    <dl className="session-strip" aria-label="Your session">
+      {items.map(({ label, value, fresh }) => (
+        <div key={label} className={fresh ? "fresh" : ""}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+          {fresh && <span className="pb-badge">new best</span>}
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 /** "Set 2 · Solve 3/5" above the standings. */
@@ -400,6 +475,8 @@ function SidePanel(props: {
   stats: ReturnType<typeof useSessionStats>;
   /** Phones and landscape: your own row first. */
   pinMe: boolean;
+  /** Landscape phones have no room for the session strip under the timer: the stats go here. */
+  showSession: boolean;
   pops: ReactionPops;
   cubeMoves: CubeMoves;
 }) {
@@ -408,7 +485,12 @@ function SidePanel(props: {
   return (
     <>
       <div className="side-section">
-        {waiting && <p className="waiting-line">{waiting}</p>}
+        {waiting && (
+          <p className="waiting-line">
+            <span className="dot live" aria-hidden />
+            {waiting}
+          </p>
+        )}
         <Standings
           room={room}
           match={match}
@@ -432,7 +514,7 @@ function SidePanel(props: {
           onRestart={actions.rematch}
         />
       )}
-      <SessionPanel stats={props.stats} />
+      {props.showSession && <SessionPanel stats={props.stats} />}
     </>
   );
 }

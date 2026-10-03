@@ -1,13 +1,339 @@
-// Small building blocks used across the screens.
+// Small building blocks used across the screens: icons, the sticker-coloured
+// avatars, the logo, the 3D cube on the home page, segmented controls and the
+// countdown bar.
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import type { CubeEventId } from "@cube-racing/shared";
 import { serverNow } from "../clock";
+import { setPref, usePrefs, type ThemePref } from "../prefs";
 
 /** A WCA event icon from @cubing/icons (decorative: always shown next to a text label). */
 export function EventIcon({ id }: { id: CubeEventId }) {
   return <span className={`cubing-icon event-${id}`} aria-hidden />;
 }
+
+// ---------------------------------------------------------------------------
+// Icons: 24 × 24 line icons, drawn with currentColor.
+
+const ICONS = {
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+  bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />,
+  calendar: (
+    <>
+      <rect x="3" y="4.5" width="18" height="17" rx="3" />
+      <path d="M8 2.5v4M16 2.5v4M3 10h18" />
+    </>
+  ),
+  check: <path d="M20 6 9 17l-5-5" />,
+  chevronUp: <path d="m6 15 6-6 6 6" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2.5" />
+      <path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" />
+    </>
+  ),
+  cube: (
+    <>
+      <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" />
+      <path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" />
+    </>
+  ),
+  crown: (
+    <>
+      <path d="m3 7 4.5 4L12 4l4.5 7L21 7l-2 11H5L3 7z" />
+      <path d="M5 21h14" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  flag: (
+    <>
+      <path d="M5 21V4" />
+      <path d="M5 4h13l-2.5 4.5L18 13H5" />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M2.5 12h19M12 2.5c2.6 2.6 4 6 4 9.5s-1.4 6.9-4 9.5c-2.6-2.6-4-6-4-9.5s1.4-6.9 4-9.5z" />
+    </>
+  ),
+  keyboard: (
+    <>
+      <rect x="2" y="6" width="20" height="12" rx="2.5" />
+      <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7.5 14h9" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 13.5a4.5 4.5 0 0 0 6.4.4l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2" />
+      <path d="M14 10.5a4.5 4.5 0 0 0-6.4-.4l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2.5" />
+      <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M9 21H5.5A2.5 2.5 0 0 1 3 18.5v-13A2.5 2.5 0 0 1 5.5 3H9" />
+      <path d="m16 17 5-5-5-5M21 12H9" />
+    </>
+  ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  message: <path d="M20 15.5a2.5 2.5 0 0 1-2.5 2.5H8l-5 4V5.5A2.5 2.5 0 0 1 5.5 3h12A2.5 2.5 0 0 1 20 5.5z" />,
+  monitor: (
+    <>
+      <rect x="2.5" y="3.5" width="19" height="13" rx="2.5" />
+      <path d="M8 21h8M12 16.5V21" />
+    </>
+  ),
+  moon: <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  rotate: (
+    <>
+      <path d="M3 12a9 9 0 0 1 15.4-6.4L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15.4 6.4L3 16" />
+      <path d="M3 21v-5h5" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="M21.5 2.5 14.5 21l-3.5-8-8-3.5z" />
+      <path d="M21.5 2.5 11 13" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M4 13v6.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V13" />
+      <path d="M16 7l-4-4-4 4M12 3v12" />
+    </>
+  ),
+  sliders: (
+    <>
+      <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
+      <circle cx="15" cy="6" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="17" cy="18" r="2" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
+    </>
+  ),
+  timer: (
+    <>
+      <circle cx="12" cy="13.5" r="8" />
+      <path d="M12 9.5v4l2.5 2.5M9.5 2.5h5" />
+    </>
+  ),
+  trophy: (
+    <>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4z" />
+      <path d="M7 6H4.5a2.5 2.5 0 0 0 2.5 4.5M17 6h2.5a2.5 2.5 0 0 1-2.5 4.5M12 14v3.5M8 21h8M9.5 17.5h5" />
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M4 9h11a5 5 0 0 1 0 10H8" />
+      <path d="m8 5-4 4 4 4" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.2A6.5 6.5 0 0 1 21.5 20" />
+    </>
+  ),
+  bluetooth: <path d="m7 7 10 10-5 5V2l5 5L7 17" />,
+  x: <path d="M18 6 6 18M6 6l12 12" />,
+} satisfies Record<string, ReactNode>;
+
+export type IconName = keyof typeof ICONS;
+
+/** A line icon. Decorative: always next to a text label (or inside a labelled button). */
+export function Icon({ name, size = 18, className }: { name: IconName; size?: number; className?: string }) {
+  return (
+    <svg
+      className={`icon ${className ?? ""}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      focusable="false"
+    >
+      {ICONS[name]}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Player colours: every player gets one of the six cube faces, from their id,
+// so they keep the same colour in the standings, the chat and the finish line.
+
+export const STICKER_COUNT = 6;
+
+/** 0..5: white, yellow, red, orange, blue, green (see --sticker-N in the CSS). */
+export function playerColor(id: string | null | undefined): number {
+  if (!id) return 4;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return Math.abs(hash) % STICKER_COUNT;
+}
+
+/** The first letter of a nickname ("Temuulen" -> "T"), emoji-safe. */
+export function initialOf(name: string | null | undefined): string {
+  const first = Array.from((name ?? "").trim())[0];
+  return first ? first.toUpperCase() : "?";
+}
+
+/** A round sticker with the player's initial. Decorative: the name is always shown next to it. */
+export function Avatar(props: { id: string | null | undefined; name: string | null | undefined; size?: "xs" | "sm" | "md" | "lg" | "xl" }) {
+  return (
+    <span className={`avatar avatar-${props.size ?? "sm"}`} data-c={playerColor(props.id)} aria-hidden>
+      {initialOf(props.name)}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The logo: a 3x3 face, mid-solve.
+
+const LOGO_FACE = [4, 4, 3, 4, 4, 4, 5, 4, 1];
+
+export function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg className="logo-mark" width={size} height={size} viewBox="0 0 30 30" aria-hidden focusable="false">
+      <rect width="30" height="30" rx="7" className="logo-bg" />
+      {LOGO_FACE.map((c, i) => (
+        <rect key={i} x={3 + (i % 3) * 8.2} y={3 + Math.floor(i / 3) * 8.2} width="7.4" height="7.4" rx="1.8" className={`logo-s s-${c}`} />
+      ))}
+    </svg>
+  );
+}
+
+/** "Cube Racing" with the logo. */
+export function Brand({ onClick }: { onClick?: () => void }) {
+  const content = (
+    <>
+      <LogoMark />
+      <span className="brand-name">
+        Cube<span>Racing</span>
+      </span>
+    </>
+  );
+  return onClick ? (
+    <a
+      className="brand"
+      href="/"
+      onClick={(event) => {
+        event.preventDefault();
+        onClick();
+      }}
+    >
+      {content}
+    </a>
+  ) : (
+    <span className="brand">{content}</span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The 3D cube on the home page: it turns by itself; drag it to spin it, tap it
+// to scramble it (tap again to solve it).
+
+/** Faces in the Western colour scheme: white top, green front, red right. */
+const CUBE_FACES = [
+  { face: "front", color: 5 },
+  { face: "back", color: 4 },
+  { face: "right", color: 2 },
+  { face: "left", color: 3 },
+  { face: "top", color: 0 },
+  { face: "bottom", color: 1 },
+] as const;
+
+function scrambledStickers(): number[][] {
+  return CUBE_FACES.map(({ color }) =>
+    Array.from({ length: 9 }, (_, i) => (i === 4 ? color : Math.floor(Math.random() * STICKER_COUNT))),
+  );
+}
+
+export function Cube3D({ className }: { className?: string }) {
+  const [stickers, setStickers] = useState<number[][] | null>(null);
+  const [angle, setAngle] = useState({ x: -24, y: 0 });
+  const drag = useRef<{ x: number; y: number; moved: boolean; start: { x: number; y: number } } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function onPointerDown(event: PointerEvent<HTMLButtonElement>): void {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { x: event.clientX, y: event.clientY, moved: false, start: angle };
+  }
+  function onPointerMove(event: PointerEvent<HTMLButtonElement>): void {
+    const d = drag.current;
+    if (!d) return;
+    const dx = event.clientX - d.x;
+    const dy = event.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 6) return;
+    d.moved = true;
+    setDragging(true);
+    setAngle({ x: Math.max(-80, Math.min(80, d.start.x - dy * 0.6)), y: d.start.y + dx * 0.6 });
+  }
+  function onPointerUp(): void {
+    const d = drag.current;
+    drag.current = null;
+    setDragging(false);
+    if (d && !d.moved) setStickers((s) => (s ? null : scrambledStickers()));
+  }
+
+  return (
+    <button
+      type="button"
+      className={`cube3d ${className ?? ""}`}
+      data-dragging={dragging}
+      aria-label={stickers ? "Solve the cube" : "Scramble the cube"}
+      aria-pressed={!!stickers}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        drag.current = null;
+        setDragging(false);
+      }}
+      // Keyboard (Enter / Space): a click without a pointer. Pointer taps are handled on pointer up.
+      onClick={(event) => event.detail === 0 && setStickers((s) => (s ? null : scrambledStickers()))}
+    >
+      <span className="cube3d-tilt" style={{ "--rx": `${angle.x}deg`, "--ry": `${angle.y}deg` } as CSSProperties}>
+        <span className="cube3d-spin">
+          {CUBE_FACES.map(({ face, color }, f) => (
+            <span key={face} className={`cube3d-face face-${face}`}>
+              {Array.from({ length: 9 }, (_, i) => (
+                <span key={i} className={`cube3d-sticker s-${stickers ? stickers[f][i] : color}`} />
+              ))}
+            </span>
+          ))}
+        </span>
+      </span>
+      <span className="cube3d-shadow" aria-hidden />
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 
 interface SegmentedProps<T extends string | number> {
   label: string;
@@ -60,5 +386,73 @@ export function ProgressBar({ endsAt, totalMs, label }: { endsAt: number; totalM
         style={{ animationDuration: `${start.left}ms`, ["--from" as string]: start.from }}
       />
     </div>
+  );
+}
+
+/**
+ * Confetti in the six cube colours, falling once. Decorative; nothing with
+ * reduced motion.
+ */
+export function Confetti({ pieces = 36 }: { pieces?: number }) {
+  const [bits] = useState(() =>
+    Array.from({ length: pieces }, (_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 400,
+      duration: 1600 + Math.random() * 1400,
+      drift: (Math.random() - 0.5) * 160,
+      spin: (Math.random() - 0.5) * 900,
+      color: i % STICKER_COUNT,
+      size: 6 + Math.random() * 6,
+    })),
+  );
+  // Gone after the last piece lands, so it never sits on top of anything.
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    const timeout = setTimeout(() => setDone(true), 3600);
+    return () => clearTimeout(timeout);
+  }, []);
+  if (done) return null;
+  return (
+    <div className="confetti" aria-hidden>
+      {bits.map((bit, i) => (
+        <span
+          key={i}
+          className={`confetti-bit s-${bit.color}`}
+          style={
+            {
+              left: `${bit.left}%`,
+              width: bit.size,
+              height: bit.size * 0.6,
+              animationDelay: `${bit.delay}ms`,
+              animationDuration: `${bit.duration}ms`,
+              "--drift": `${bit.drift}px`,
+              "--spin": `${bit.spin}deg`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const THEME_ORDER: ThemePref[] = ["dark", "light", "system"];
+const THEME_ICON: Record<ThemePref, IconName> = { system: "monitor", light: "sun", dark: "moon" };
+
+/** Cycles dark / light / system. */
+export function ThemeButton() {
+  const { theme } = usePrefs();
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+  return (
+    <button
+      type="button"
+      className="icon-button"
+      onClick={() => setPref("theme", next)}
+      aria-label={`Theme: ${theme}. Switch to ${next}`}
+      title={`Theme: ${theme}`}
+    >
+      <Icon name={THEME_ICON[theme]} />
+    </button>
   );
 }
