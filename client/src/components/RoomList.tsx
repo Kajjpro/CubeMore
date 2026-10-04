@@ -86,7 +86,7 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
                     )}
                   </span>
                   <span className="room-meta">
-                    <span className="mono room-code">{room.code}</span>
+                    {isPrivate && <span className="mono room-code">{room.code}</span>}
                     <span>
                       {EVENT_SHORT[room.cubeEvent]}, {FORMAT_LABELS[room.format]}, {bestOf}
                     </span>

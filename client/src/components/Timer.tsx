@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { AUTO_CONFIRM_MS, ClientEvents, type MatchSnapshot, type Penalty } from "@cube-racing/shared";
 import { addSolve, confirmSolve, solveKey, useOutbox } from "../outbox";
 import type { InputMode, RunningDisplay } from "../prefs";
@@ -78,7 +79,7 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   useEffect(() => onPhaseChange(phase), [phase, onPhaseChange]);
 
   const typing = inputMode === "typing" && canStart && phase === "idle";
-  // Just stopped: the time and OK / +2 / DNF sit together in the middle.
+  // Just stopped: the time and OK / +2 / DNF float over the blurred room.
   const choosing = !!pending && !pending.confirmed;
 
   let text = "0.00";
@@ -86,16 +87,9 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   else if (myResult) text = formatResult(myResult);
 
   return (
-    <div className="timer-zone" data-phase={phase}>
+    <div className="timer-zone" data-phase={phase} data-choosing={choosing}>
       {typing ? (
         <TypeIn onSubmit={(timeMs, penalty) => addSolve({ ...solveId, timeMs, penalty })} />
-      ) : choosing ? (
-        <div className="timer-choose">
-          <div className="timer-digits mono" aria-live="polite">
-            {text}
-          </div>
-          <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
-        </div>
       ) : (
         <div
           ref={setTouchArea}
@@ -121,6 +115,19 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
           <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart?.state)}</p>
         </div>
       )}
+
+      {choosing &&
+        createPortal(
+          <div className="choose-overlay" role="dialog" aria-modal="true" aria-label="OK, +2 or DNF">
+            <div className="choose-card">
+              <div className="timer-digits mono" aria-live="polite">
+                {text}
+              </div>
+              <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <div className="timer-below">
         {pending?.confirmed && <p className="status-line">Sending…</p>}

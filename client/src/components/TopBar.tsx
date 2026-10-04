@@ -81,8 +81,8 @@ interface TopBarProps {
 }
 
 /**
- * The compact 40 px header. Left: event, room code (tap to copy the link),
- * format. Right: the live room status and the Menu. Phones get short forms.
+ * The compact 40 px header. Left: event, room code (tap to copy the link;
+ * public rooms show no code, just "Link"), format. Right: the live room status and the Menu. Phones get short forms.
  */
 export const TopBar = memo(function TopBar(props: TopBarProps) {
   const [copied, copy] = useCopy(props.code, props.pin);
@@ -102,11 +102,11 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
         type="button"
         className="code-button"
         onClick={copy}
-        aria-label={`Room ${props.code}. Copy link`}
+        aria-label={props.pin ? `Room ${props.code}. Copy link` : "Copy link"}
         data-copied={copied}
         data-dense
       >
-        <span className="code-text">{copied ? "Copied" : props.code}</span>
+        <span className="code-text">{copied ? "Copied" : props.pin ? props.code : "Link"}</span>
         <Icon name={copied ? "check" : "copy"} size={14} />
       </button>
       <span className="format">
@@ -178,14 +178,11 @@ function Menu(props: {
     <div className="menu" id="room-menu" ref={ref}>
       <div className="section menu-room">
         <h2 title={props.name}>{props.name}</h2>
-        <p className="small muted">
-          Room <span className="mono">{props.code}</span>
-          {props.pin && (
-            <>
-              , PIN <span className="mono">{props.pin}</span>
-            </>
-          )}
-        </p>
+        {props.pin && (
+          <p className="small muted">
+            Room <span className="mono">{props.code}</span>, PIN <span className="mono">{props.pin}</span>
+          </p>
+        )}
         <button type="button" className="with-icon" onClick={props.onCopy}>
           <Icon name={props.copied ? "check" : "link"} />
           {props.copied ? "Copied" : props.pin ? "Copy invite link" : "Copy link"}
