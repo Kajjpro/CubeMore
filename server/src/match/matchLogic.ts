@@ -3,7 +3,7 @@
  *
  * A match is a series of SETS. A set has 1 solve (single), 5 (ao5) or 12 (ao12).
  *
- *   solving ──(everyone in the set has a result)──> solve_review (3 s)
+ *   solving ──(everyone in the set has a result)──> solve_review (0 s = skipped)
  *      ^                                                  │
  *      └──────────── next solve of the set ───────────────┤
  *                                                         │ (last solve)
@@ -226,11 +226,15 @@ function setResult(match: Match, playerId: string, solveIndex: number, result: S
   return { ...match, results: { ...match.results, [playerId]: row } };
 }
 
-/** If every roster player has a result for the current solve, move on to the review screen. */
+/**
+ * If every roster player has a result for the current solve, move on: to the
+ * review screen, or (review time 0, the default) straight to the next scramble.
+ */
 function finishSolveIfEveryoneDone(match: Match, now: number): Match {
   if (match.phase !== "solving") return match;
   const everyoneDone = match.roster.every((id) => match.results[id][match.solveIndex] !== null);
   if (!everyoneDone) return match;
+  if (match.timing.solveReviewMs <= 0) return finishSolve(match, now);
   return {
     ...match,
     phase: "solve_review",
@@ -277,8 +281,7 @@ function tickOnce(match: Match, now: number, presentIds: string[]): Match {
 
     case "solve_review": {
       if (match.phaseEndsAt === null || now < match.phaseEndsAt) return match;
-      const isLastSolve = match.solveIndex + 1 >= solvesPerSet(match.settings.format);
-      return isLastSolve ? finishSet(match, now) : startSolve(match, match.solveIndex + 1, now);
+      return finishSolve(match, now);
     }
 
     case "set_result": {
@@ -294,6 +297,12 @@ function tickOnce(match: Match, now: number, presentIds: string[]): Match {
     case "match_over":
       return match;
   }
+}
+
+/** The current solve is over: the next scramble, or the set result after the last one. */
+function finishSolve(match: Match, now: number): Match {
+  const isLastSolve = match.solveIndex + 1 >= solvesPerSet(match.settings.format);
+  return isLastSolve ? finishSet(match, now) : startSolve(match, match.solveIndex + 1, now);
 }
 
 /** True when set_result is over and nobody has won yet: time to start the next set. */

@@ -78,6 +78,8 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   useEffect(() => onPhaseChange(phase), [phase, onPhaseChange]);
 
   const typing = inputMode === "typing" && canStart && phase === "idle";
+  // Just stopped: the time and OK / +2 / DNF sit together in the middle.
+  const choosing = !!pending && !pending.confirmed;
 
   let text = "0.00";
   if (pending) text = formatSolve(pending.timeMs, pending.penalty);
@@ -87,6 +89,13 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
     <div className="timer-zone" data-phase={phase}>
       {typing ? (
         <TypeIn onSubmit={(timeMs, penalty) => addSolve({ ...solveId, timeMs, penalty })} />
+      ) : choosing ? (
+        <div className="timer-choose">
+          <div className="timer-digits mono" aria-live="polite">
+            {text}
+          </div>
+          <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
+        </div>
       ) : (
         <div
           ref={setTouchArea}
@@ -114,15 +123,8 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
       )}
 
       <div className="timer-below">
-        {pending && !pending.confirmed && (
-          <ConfirmSolve solveKeyText={key} timeMs={pending.timeMs} penalty={pending.penalty} auto={!demo} />
-        )}
-        {pending?.confirmed && (
-          <p className="status-line">Sending…</p>
-        )}
-        {!pending && myResult && (
-          <p className="status-line done-line">{waiting ?? "Time in"}</p>
-        )}
+        {pending?.confirmed && <p className="status-line">Sending…</p>}
+        {!pending && myResult && <p className="status-line done-line">{waiting ?? "Time in"}</p>}
       </div>
     </div>
   );
@@ -212,8 +214,8 @@ function ConfirmSolve({ solveKeyText, timeMs, penalty, auto }: { solveKeyText: s
     <>
       <PenaltyChoices timeMs={timeMs} penalty={penalty} onChoose={(choice) => confirmSolve(solveKeyText, choice)} keys />
       <div className="auto-send">
-        <span>Sends as OK in {AUTO_CONFIRM_MS / 1000} s</span>
-        <div className="progress" aria-label={`Sends as OK in ${AUTO_CONFIRM_MS / 1000} seconds`}>
+        <span>Counts as OK in {AUTO_CONFIRM_MS / 1000} s</span>
+        <div className="progress" aria-label={`Counts as OK in ${AUTO_CONFIRM_MS / 1000} seconds`}>
           <div
             className="progress-fill"
             style={{ animationDuration: `${AUTO_CONFIRM_MS}ms`, animationPlayState: auto ? "running" : "paused" }}

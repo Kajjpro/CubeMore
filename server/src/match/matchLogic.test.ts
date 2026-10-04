@@ -89,6 +89,26 @@ describe("a solve", () => {
     expect(match).toMatchObject({ phase: "solving", solveIndex: 1 });
   });
 
+  it("with no review time, goes straight to the next scramble (and the set result after the last)", () => {
+    const settings = { ...DEFAULT_SETTINGS, format: "ao5" as const };
+    let match = createMatch({
+      matchId: "m1",
+      settings,
+      timing: { ...timing, solveReviewMs: 0 },
+      roster: ["a", "b"],
+      scrambles: scramblesFor(settings),
+      now: 0,
+    });
+    match = submit(match, "a", 10_000);
+    expect(match).toMatchObject({ phase: "solving", solveIndex: 0 });
+    match = submit(match, "b", 11_000);
+    expect(match).toMatchObject({ phase: "solving", solveIndex: 1, phaseEndsAt: null });
+    for (let i = 1; i < 5; i++) {
+      match = submit(submit(match, "a", 10_000), "b", 11_000);
+    }
+    expect(match.phase).toBe("set_result");
+  });
+
   it("ignores a duplicate submission, but still answers ok", () => {
     let match = startMatch(["a", "b"]);
     match = submit(match, "a", 10_000);
