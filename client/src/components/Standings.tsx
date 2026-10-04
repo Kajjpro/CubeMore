@@ -50,12 +50,6 @@ export function ranks(ids: string[], points: Record<string, number>): Map<string
   return result;
 }
 
-/** Gold, silver and bronze for the top three, once they have points. */
-export function medalOf(rank: number | undefined, points: number | undefined): string {
-  if (!points || !rank || rank > 3) return "";
-  return ["gold", "silver", "bronze"][rank - 1];
-}
-
 /** Dense live standings: #, player, this solve, average, points. Tap a row for the whole set. */
 export const Standings = memo(function Standings(props: Props) {
   const { room, match, youId, names } = props;
@@ -104,7 +98,7 @@ export const Standings = memo(function Standings(props: Props) {
               <Fragment key={id}>
                 <tr className={`${isMe ? "me" : ""} ${expanded ? "open" : ""}`} onClick={() => setOpen(expanded ? null : id)}>
                   <td className="rank">
-                    <span className={`rank-badge ${medalOf(rankOf.get(id), match.points[id])}`}>{rankOf.get(id)}</span>
+                    <span className={`rank-badge ${rankOf.get(id) === 1 && match.points[id] ? "leader" : ""}`}>{rankOf.get(id)}</span>
                   </td>
                   <th scope="row" className="name-col">
                     <button type="button" className="row-toggle" aria-expanded={expanded} data-dense title={player?.nickname ?? names[id]}>
@@ -135,7 +129,7 @@ export const Standings = memo(function Standings(props: Props) {
                   </td>
                   {hasAverage && <td className="num avg">{formatMark(match.standings[id]?.result)}</td>}
                   <td className="num pts">
-                    <span className={(match.points[id] ?? 0) > 0 ? "pts-pill" : "pts-zero"}>{match.points[id] ?? 0}</span>
+                    <span className={(match.points[id] ?? 0) > 0 ? "pts-some" : "pts-zero"}>{match.points[id] ?? 0}</span>
                   </td>
                 </tr>
                 {expanded && (
@@ -169,7 +163,7 @@ export const Standings = memo(function Standings(props: Props) {
   );
 });
 
-/** The "this solve" cell: the time, or what the player is doing. Colour always comes with text. */
+/** The "this solve" cell: the time, or what the player is doing. Plain text: the fastest is bold, DNF is grey. */
 function CurrentCell(props: {
   result: SolveResult | null;
   pending: string | null;
@@ -179,7 +173,7 @@ function CurrentCell(props: {
 }) {
   const { result, player } = props;
   if (result) {
-    const tone = result.penalty === "DNF" ? "t-red" : props.fastest ? "fastest" : result.penalty === "+2" ? "t-amber" : "";
+    const tone = result.penalty === "DNF" ? "dnf" : props.fastest ? "fastest" : "";
     return (
       <span className={tone} title={formatResultLong(result)}>
         {formatResult(result)}
@@ -189,7 +183,7 @@ function CurrentCell(props: {
   }
   if (props.pending) return <span className="pending" title="Sending">{props.pending}</span>;
   if (!player) return <span className="status muted">left</span>;
-  if (player.status === "reconnecting") return <span className="status t-amber">offline</span>;
+  if (player.status === "reconnecting") return <span className="status muted">offline</span>;
   if (player.spectator) return <span className="status muted">watching</span>;
   if (props.solvingPhase && player.timerStatus === "solving") {
     return player.solvingSince !== null ? (
@@ -262,7 +256,7 @@ function SetDetails(props: {
         {row.map((result, i) => {
           const text = result ? formatResult(result) : "–";
           const shown = dropped.includes(i) ? `(${text})` : text;
-          const tone = !result ? "muted" : dropped.includes(i) ? "dropped" : result.penalty === "DNF" ? "t-red" : result.penalty === "+2" ? "t-amber" : "";
+          const tone = !result ? "muted" : dropped.includes(i) ? "dropped" : result.penalty === "DNF" ? "dnf" : "";
           const canEdit = props.editable && result?.source === "submitted";
           return (
             <li key={i}>

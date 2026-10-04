@@ -92,7 +92,7 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
                     </span>
                   </span>
                   <span className="room-stats">
-                    <span className={full ? "t-red" : ""}>
+                    <span>
                       {room.players}/{room.maxPlayers} players
                     </span>
                     {room.racing ? (
@@ -104,7 +104,6 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
                 </div>
                 <button
                   type="button"
-                  className={isPrivate || full ? "" : "primary"}
                   onClick={() => onJoin(room.code)}
                   disabled={full}
                   aria-label={`${isPrivate ? "Join with PIN" : "Join"}: ${room.name}`}

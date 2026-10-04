@@ -2,9 +2,12 @@
  * RoomView: the whole room screen, built only from props.
  * The real room (pages/RoomPage.tsx) and the /dev/states page both render it.
  *
- * Layouts (see DESIGN.md): phone = stage + bottom sheet with tabs,
- * landscape = stage + sidebar with tabs, wide = stage + 320 px sidebar with
- * Live Standings above Room Chat.
+ * Layouts (see DESIGN.md). The standings are the most important thing after
+ * the timer, so they are always on screen:
+ *  phone     = stage with the standings right under the timer, plus a bottom
+ *              sheet for the chat, your stats and the host controls
+ *  landscape = stage + sidebar (Standings | Chat tabs)
+ *  wide      = stage + a wide standings column (Standings | Chat tabs)
  *
  * Focus mode: from the moment you hold the timer until the solve is over, the
  * header, scramble, standings and chat fade out and only the digits stay.
@@ -77,7 +80,7 @@ export interface RoomViewProps {
   demo?: RoomDemo;
 }
 
-type SideTab = "standings" | "chat";
+type SideTab = "standings" | "chat" | "stats" | "host";
 
 /** Keeps showing the old value while `frozen` is true. */
 function useFrozen<T>(value: T, frozen: boolean): T {
@@ -111,6 +114,8 @@ export function RoomView(props: RoomViewProps) {
   const [sheetOpen, setSheetOpen] = useState(demo?.sheetOpen ?? false);
   const [menuOpen, setMenuOpen] = useState(demo?.menuOpen ?? false);
   const [tab, setTab] = useState<SideTab>(demo?.tab ?? "standings");
+  // The phone sheet has no Standings tab (they're on the stage): it opens on the chat.
+  const [sheetTab, setSheetTab] = useState<SideTab>(demo?.tab && demo.tab !== "standings" ? demo.tab : "chat");
   useEffect(() => {
     // Getting ready or solving: never cover the timer.
     if (timerPhase === "holding" || timerPhase === "ready" || timerPhase === "running") {
@@ -138,18 +143,29 @@ export function RoomView(props: RoomViewProps) {
   const match = room.match;
   const isHost = room.hostId === youId;
 
-  // The chat is "on screen" in the lobby, in the wide sidebar, or when its tab is open.
-  const chatVisible = !match || layout === "wide" || (tab === "chat" && (layout === "landscape" || sheetOpen));
+  // The chat is "on screen" in the lobby, or when its tab is open.
+  const chatVisible = !match || (layout === "phone" ? sheetOpen && sheetTab === "chat" : tab === "chat");
   const liveUnread = useUnread(props.chat, youId, chatVisible);
   const unread = demo?.unread ?? liveUnread;
   const online = room.players.filter((p) => p.status === "connected").length;
   const pops = useReactionPops(props.chat);
-  const sidePanel = match && (
-    <SidePanel
-      {...{ room, match, youId, names, isHost, actions, stats, pops }}
+  const standings = match && (
+    <StandingsBlock
+      {...{ room, match, youId, names, actions, pops }}
       cubeMoves={props.cubeMoves ?? {}}
-      pinMe={layout !== "wide"}
-      showSession={layout === "landscape"}
+      pinMe={layout === "landscape"}
+      showWaiting={layout !== "phone"}
+    />
+  );
+  const hostPanel = match && isHost && (
+    <HostPanel
+      room={room}
+      match={match}
+      youId={youId}
+      onSkip={actions.skip}
+      onKick={actions.kick}
+      onEndMatch={actions.endMatch}
+      onRestart={actions.rematch}
     />
   );
   const chatPanel = (
@@ -272,7 +288,12 @@ export function RoomView(props: RoomViewProps) {
                 </div>
               )}
             </div>
-            {match.phase === "solving" && <SessionStrip stats={stats} />}
+            {match.phase === "solving" && layout === "phone" && (
+              <section className="stage-standings" aria-label="Standings">
+                {standings}
+              </section>
+            )}
+            {match.phase === "solving" && layout === "wide" && <SessionStrip stats={stats} />}
           </section>
 
           {layout === "phone" ? (
@@ -286,33 +307,45 @@ export function RoomView(props: RoomViewProps) {
                   onClick={() => setSheetOpen((open) => !open)}
                 >
                   <span className="grabber" aria-hidden />
-                  <span>Room ({room.players.length})</span>
+                  <span>{isHost ? "Chat, stats and host" : "Chat and stats"}</span>
                   {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
                   <span className="grow" />
-                  <span className="sheet-summary">{sheetOpen ? "Close" : sheetSummary(room, youId)}</span>
+                  {sheetOpen && <span className="sheet-summary">Close</span>}
                   <Icon name="chevronUp" className="sheet-chevron" />
                 </button>
                 <div className="sheet-body" inert={!sheetOpen}>
-                  <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
+                  <SideTabs
+                    tab={sheetTab}
+                    onTab={setSheetTab}
+                    items={[
+                      { id: "chat", label: "Chat", badge: unread, content: chatPanel },
+                      { id: "stats", label: "Your stats", content: <SessionPanel stats={stats} open /> },
+                      ...(hostPanel ? [{ id: "host" as const, label: "Host", content: hostPanel }] : []),
+                    ]}
+                  />
                 </div>
               </div>
             </>
-          ) : layout === "landscape" ? (
-            <aside className="side" aria-label="Room">
-              <SideTabs tab={tab} onTab={setTab} unread={unread} standings={sidePanel} chat={chatPanel} />
-            </aside>
           ) : (
             <aside className="side" aria-label="Room">
-              <section className="side-panel standings-panel" aria-label="Live standings">
-                <div className="panel-head">
-                  <h3>Live Standings</h3>
-                  <span className="tiny muted mono">{setLabel(match)}</span>
-                </div>
-                <div className="panel-scroll">{sidePanel}</div>
-              </section>
-              <section className="side-panel chat-panel" aria-label="Room chat">
-                {chatPanel}
-              </section>
+              <SideTabs
+                tab={tab}
+                onTab={setTab}
+                items={[
+                  {
+                    id: "standings",
+                    label: "Standings",
+                    content: (
+                      <>
+                        {standings}
+                        {hostPanel}
+                        {layout === "landscape" && <SessionPanel stats={stats} />}
+                      </>
+                    ),
+                  },
+                  { id: "chat", label: "Chat", badge: unread, content: chatPanel },
+                ]}
+              />
             </aside>
           )}
         </div>
@@ -378,22 +411,6 @@ function SessionStrip({ stats }: { stats: ReturnType<typeof useSessionStats> }) 
   );
 }
 
-/** "Set 2, solve 3/5" above the standings. */
-function setLabel(match: NonNullable<RoomSnapshot["match"]>): string {
-  const solve = match.solvesPerSet > 1 ? `, solve ${match.solveIndex + 1}/${match.solvesPerSet}` : "";
-  return `Set ${match.setIndex + 1}${solve}`;
-}
-
-/** What the collapsed sheet handle says next to "Room (N)". */
-function sheetSummary(room: RoomSnapshot, youId: string | null): string {
-  const match = room.match;
-  if (!match) return "";
-  const waiting = waitingNames(room, match, youId).length;
-  if (match.phase === "solving" && waiting > 0) return `${waiting} still solving`;
-  const mine = youId ? match.points[youId] : undefined;
-  return mine === undefined ? "Standings" : `You: ${mine} pt${mine === 1 ? "" : "s"}`;
-}
-
 /**
  * How many chat messages from other players arrived while the chat was not on
  * screen. Messages from before you joined (the history) count as read.
@@ -409,88 +426,78 @@ function useUnread(messages: ChatMessage[], youId: string | null, visible: boole
   return messages.filter((m) => m.kind === "user" && m.senderId !== youId && m.at > seenAt).length;
 }
 
-/** Standings | Chat tabs, for the landscape sidebar and the phone sheet. Both stay mounted (the chat keeps its draft). */
-function SideTabs(props: { tab: SideTab; onTab: (tab: SideTab) => void; unread: number; standings: ReactNode; chat: ReactNode }) {
-  const tabs: { id: SideTab; label: string }[] = [
-    { id: "standings", label: "Standings" },
-    { id: "chat", label: "Chat" },
-  ];
+/** Tabs for the sidebar and the phone sheet. Every panel stays mounted (the chat keeps its draft). */
+function SideTabs(props: {
+  tab: SideTab;
+  onTab: (tab: SideTab) => void;
+  items: { id: SideTab; label: string; badge?: number; content: ReactNode }[];
+}) {
+  const current = props.items.some((item) => item.id === props.tab) ? props.tab : props.items[0].id;
   return (
     <div className="side-tabs">
       <div className="tabs" role="tablist" aria-label="Room">
-        {tabs.map(({ id, label }) => (
+        {props.items.map(({ id, label, badge }) => (
           <button
             key={id}
             type="button"
             role="tab"
             id={`tab-${id}`}
-            aria-selected={props.tab === id}
+            aria-selected={current === id}
             aria-controls={`tabpanel-${id}`}
             onClick={() => props.onTab(id)}
             data-dense
           >
             {label}
-            {id === "chat" && props.unread > 0 && <span className="badge">{props.unread}</span>}
+            {!!badge && current !== id && <span className="badge">{badge}</span>}
           </button>
         ))}
       </div>
-      <div className="tab-panel standings-panel" role="tabpanel" id="tabpanel-standings" aria-labelledby="tab-standings" hidden={props.tab !== "standings"}>
-        {props.standings}
-      </div>
-      <div className="tab-panel chat-panel" role="tabpanel" id="tabpanel-chat" aria-labelledby="tab-chat" hidden={props.tab !== "chat"}>
-        {props.chat}
-      </div>
+      {props.items.map(({ id, content }) => (
+        <div
+          key={id}
+          className={`tab-panel ${id}-panel`}
+          role="tabpanel"
+          id={`tabpanel-${id}`}
+          aria-labelledby={`tab-${id}`}
+          hidden={current !== id}
+        >
+          {content}
+        </div>
+      ))}
     </div>
   );
 }
 
-function SidePanel(props: {
+/** "Waiting for Bat and 2 others" and the live standings table. */
+function StandingsBlock(props: {
   room: RoomSnapshot;
   match: NonNullable<RoomSnapshot["match"]>;
   youId: string | null;
   names: Record<string, string>;
-  isHost: boolean;
   actions: RoomActions;
-  stats: ReturnType<typeof useSessionStats>;
-  /** Phones and landscape: your own row first. */
+  /** Landscape phones: your own row first. */
   pinMe: boolean;
-  /** Landscape phones have no room for the session strip under the timer: the stats go here. */
-  showSession: boolean;
+  /** Phones already say who you're waiting for under the timer. */
+  showWaiting: boolean;
   pops: ReactionPops;
   cubeMoves: CubeMoves;
 }) {
   const { room, match, youId, actions } = props;
-  const waiting = waitingText(waitingNames(room, match, youId));
+  const waiting = props.showWaiting && match.phase === "solving" ? waitingText(waitingNames(room, match, youId)) : null;
   return (
-    <>
-      <div className="side-section">
-        {waiting && (
-          <p className="waiting-line">{waiting}</p>
-        )}
-        <Standings
-          room={room}
-          match={match}
-          youId={youId}
-          names={props.names}
-          pinMe={props.pinMe}
-          pops={props.pops}
-          cubeMoves={props.cubeMoves}
-          onChangePenalty={actions.changePenalty}
-          onReact={actions.react}
-        />
-      </div>
-      {props.isHost && (
-        <HostPanel
-          room={room}
-          match={match}
-          youId={youId}
-          onSkip={actions.skip}
-          onKick={actions.kick}
-          onEndMatch={actions.endMatch}
-          onRestart={actions.rematch}
-        />
-      )}
-      {props.showSession && <SessionPanel stats={props.stats} />}
-    </>
+    <div className="standings-block">
+      {waiting && <p className="waiting-line">{waiting}</p>}
+      <Standings
+        room={room}
+        match={match}
+        youId={youId}
+        names={props.names}
+        pinMe={props.pinMe}
+        pops={props.pops}
+        cubeMoves={props.cubeMoves}
+        onChangePenalty={actions.changePenalty}
+        onReact={actions.react}
+      />
+    </div>
   );
 }
