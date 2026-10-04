@@ -48,8 +48,11 @@ export const REACTIONS = ["🔥", "👏", "😮", "😂"] as const;
 /** When a second player joins the lobby, the race starts this long after. */
 export const AUTO_START_DELAY_MS = 3_000;
 
-/** How long everyone's times for a solve are shown before the next scramble. */
-export const SOLVE_REVIEW_MS = 3_000;
+/**
+ * How long everyone's times for a solve are shown before the next scramble.
+ * 0 = no review screen: the next scramble comes as soon as everyone's time is in.
+ */
+export const SOLVE_REVIEW_MS = 0;
 
 /** How long the set result (averages, winner, points) is shown. */
 export const SET_RESULT_MS = 6_000;

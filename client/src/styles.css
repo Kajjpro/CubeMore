@@ -2419,6 +2419,26 @@ p.banner {
   display: none;
 }
 
+/* Just stopped: the time with OK / +2 / DNF right under it, in the middle. */
+.timer-choose {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  container-type: inline-size;
+}
+
+.timer-choose .timer-digits {
+  align-self: center;
+  font-size: clamp(2.5rem, 22cqi, 8rem);
+}
+
 /* OK / +2 / DNF: three big tiles, each with what the time becomes. */
 .penalty {
   display: grid;
