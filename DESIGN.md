@@ -4,23 +4,24 @@ A timer for racing other cubers, used on a phone between solves. Plain and quick
 scramble, a big timer and the standings, nothing decorative. Reference points: csTimer
 (timer focus, session stats) and WCA Live (results).
 
-## The idea: six faces
+## The idea: calm, and the standings first
 
-Every colour in the interface is a face of the cube, and every face has one job:
+Feedback from real users: the old screens felt chaotic and hard to read, and the standings
+felt unimportant. So:
 
-| Face | Job | Examples |
-| --- | --- | --- |
-| **Blue** | you, primary actions, links | your row, `Race now`, focus ring, points |
-| **Green** | ready, fastest, connected | timer "release to start", fastest time, OK, new best |
-| **Red** | holding, DNF, errors | timer "hold…", DNF, kick confirm |
-| **Yellow** | +2, reconnecting, warnings, private rooms | `11.87+`, PIN tag |
-| **Orange** | live | racing rooms, opponents' running clocks, the 3-2-1 countdown |
-| **White** | text | |
+- **Mostly black and white.** One accent colour, **blue**, for the one primary action on a
+  screen (`Race now`, `Copy link` while alone) and for "you" (your row tint). Everything else
+  is text, grey and borders.
+- **Colour is only kept where cubers expect it**: the timer is red while you hold and green
+  when ready (csTimer convention), and the scramble preview shows sticker colours. Player
+  avatars keep their colour so you can tell people apart.
+- **No status colours in results.** The fastest time is bold, DNF is grey, `+2` reads from
+  its `+`. No gold, silver or bronze: first place is the one solid block (`--gold` is the
+  text colour), 2nd and 3rd are grey. Opponents' running clocks are grey.
+- **The standings are always on screen** during a race (see Match below).
 
-Status colours always come with text ("DNF", "+", "reconnecting", "offline", "Racing").
-No decorative dots: no status dots, pulsing dots or progress pips, and no "·" separators in
-text (use commas or separate labels). No gradients, glows or rainbow stripes.
-Gold, silver and bronze are used only for ranks 1–3 (podium, rank badges, daily leaderboard).
+Status still always comes as text ("DNF", "+", "reconnecting", "offline", "Racing").
+No decorative dots, no "·" separators in text (use commas), no gradients or glows.
 
 ## Tokens
 
@@ -73,16 +74,19 @@ The home page goes two-column from 960 px. Room content is capped at 1600 px; th
 
 ## Screens
 
-**Home.** Header: logo, "2 racing now", theme button. Then straight to racing: the **race
-card**: your avatar + nickname, **Pick your puzzle** (all 17 events as tiles in a sideways
+**Home.** Header: logo, "2 racing now", theme button. A **hero**: "Race other cubers, live.",
+one sentence, and three numbered steps (pick a puzzle, solve the same scramble, best average
+wins the set). Then the **race card**: your avatar + nickname, **Pick your puzzle** (all 17 events as tiles in a sideways
 strip, arrow keys work), `Race 3x3 now` (big blue), then `Create a room for friends` and a
 code box with `Join`. Right column (below on phones): the **Daily** card, then **Open
-rooms**: cards with the event, name, `PIN` tag, code and event, format, Best of, players and
-`Racing` (orange, with an orange left edge) or `In lobby`. A one-line timer hint in the footer.
+rooms**: cards with the event, name, `PIN` tag (private rooms also show their code), event,
+format, Best of, players and `Racing` or `In lobby`. Their `Join` buttons are plain: `Race now`
+is the only blue button on the page. A one-line timer hint in the footer.
 
 **Room shell** (all room screens): a frosted header, 48 px (56 px wide).
 - Left: logo (wide), event pill ("3x3x3" with its WCA icon; "3x3" on phones), room code
-  pill (tap copies the link, shows "Copied" in green), format "ao5, Best of 3".
+  pill (tap copies the link, shows "Copied"; public rooms show "Link" instead of a code),
+  format "ao5, Best of 3".
 - Right: live status pill in mono ("3/5 Solved", "6 players", "Set 2 done", "Match over"),
   the word "offline" while disconnected, `Menu`.
 - The Menu starts with the room name, code / PIN and `Copy link`, then smart cube, streamer
@@ -94,7 +98,8 @@ rooms**: cards with the event, name, `PIN` tag, code and event, format, Best of,
 - wide: two columns: left = share card + settings, right = racers + chat. The bottom bar
   floats as a pill.
 - Share card: event, room name, summary ("3x3, ao5, Best of 3"), Public/Private tag, the
-  **room code as six letter tiles** (large while you're alone), the PIN, `Copy link` (primary while alone) and `Share`
+  room code as six letter tiles and the PIN (**private rooms only**: a public room is on the
+  home page, so it shows no code), `Copy link` (primary while alone) and `Share`
   (phones with a share sheet).
 - **Racers**: a card per player (avatar, "host" and "you" tags, "reconnecting", Kick for the
   host). Alone, an empty dashed seat says "Waiting for a racer…".
@@ -114,30 +119,33 @@ rooms**: cards with the event, name, `PIN` tag, code and event, format, Best of,
   starts at 0.
 - **Timer pad**: a plain card with the digits: red while you hold (a bar under them fills in
   300 ms), green when ready. Hints: "Space Hold to get ready" (touch: "Hold the timer
-  to get ready"), "Hold…", "Release to start". After a solve: three penalty tiles that show
-  what the time becomes (`OK 11.87`, `+2 13.87+`, `DNF (11.87)`) with 1 / 2 / 3 keycaps,
-  and "Sends as OK in 5 s" with a bar. A tile only counts a click if the press started on it
+  to get ready"), "Hold…", "Release to start". After a solve the whole room blurs and the
+  time sits in the middle over three plain penalty tiles that show what the time becomes
+  (`OK 11.87`, `+2 13.87+`, `DNF (11.87)`) with 1 / 2 / 3 keycaps, and "Counts as OK in
+  5 s" with a grey bar. A tile only counts a click if the press started on it
   (finger, mouse, or Enter / Space while focused): on phones the tap that stops the timer
   lands where the tiles appear, and must never pick DNF or +2. Repeated keys from a held key
   are ignored too.
-- **Session strip** under the pad: solves, best, ao5, ao12, mean (the current ao5 / ao12,
-  like csTimer). A new session best single or ao5 turns its cell green with a "new best"
-  badge. Landscape phones have no room: the stats are in the sidebar there.
-- wide: stage on the left; the sidebar on the right with **Live Standings** (at most 58% of
-  the height, scrolls, header row sticky) above **Room Chat** (the rest).
-- landscape: stage 2/3, sidebar 1/3 with `Standings | Chat` tabs.
-- phone: stage full screen; the sidebar is a bottom sheet (grabber, "Room (6)", summary,
-  unread badge) with the same tabs. Opening it blurs the stage behind; tap there to close.
+- **Session strip** under the pad (wide only): solves, best, ao5, ao12, mean (the current
+  ao5 / ao12, like csTimer). A new session best single or ao5 gets a dark border and a "new
+  best" badge.
+- wide: stage on the left; on the right a **wide standings column** (`clamp(380px, 36vw,
+  540px)`, full height) with `Standings | Chat` tabs, Standings open. Rows are 46 px with
+  15 px text. The host controls sit under the table.
+- landscape: stage 2/3, sidebar 1/3 with the same tabs (plus your session stats).
+- phone: the **standings card sits right under the timer** (up to 36% of the height,
+  scrolls), so you always see where you stand. The bottom sheet ("Chat and stats", unread
+  badge) holds `Chat | Your stats | Host` tabs. Opening it blurs the stage behind.
 - Focus mode: from holding the timer until the solve ends, the header, scramble, limit bar,
-  banners, session strip, sidebar and sheet fade to opacity 0 (150 ms), and the pad loses its
+  banners, session strip, standings, sidebar and sheet fade to opacity 0 (150 ms), and the pad loses its
   card. Only the digits, the hold bar, the hint and "reconnecting" (when offline) stay.
 - Review / set result / match over replace the timer in the stage; the standings stay.
 
-**Live Standings** (dense table, 38 px rows, mono numbers): `#` (rank badge; gold, silver,
-bronze once they have points), Player (avatar, name, crown icon for the host), this solve
-("Solve 3", or "Time" for single), `ao5`/`ao12`, `Pts` (a blue pill once above 0). Your row
-has the accent tint and a 3 px accent bar. The current-solve cell shows the time, or what the
-player is doing (an orange live clock in tenths, `offline`, `watching`, `left`, `–`). A
+**Live Standings** (table, mono numbers): `#` (plain number; rank 1 is darker once they have
+points), Player (avatar, name, a grey crown for the host), this solve ("Solve 3", or "Time"
+for single; the fastest in bold), `ao5`/`ao12`, `Pts` (bold; grey at 0). Your row has the
+accent tint and a 3 px accent bar. The current-solve cell shows the time, or what the
+player is doing (a grey live clock in tenths, `offline`, `watching`, `left`, `–`). A
 "Waiting for…" line above. Tap a row for that player's whole set: dropped times in parentheses;
 your own times can be tapped to change the penalty (only while that set is running).
 
@@ -149,9 +157,9 @@ characters per message, 5 quick messages then one per 2 s; the server keeps the 
 lines for people who join later. The feed follows new lines unless you scrolled up.
 
 **Results**
-- **Finish line** (after each solve): one lane per player: rank (gold for the winner),
-  avatar and name, a track ending in a **checkered flag**, the bar (green for the winner,
-  blue for you, grey for others, a red stub for DNF) with a **runner** in the player's colour
+- **Finish line** (after each solve, when the room has review time): one lane per player:
+  rank, avatar and name, a track ending in a **checkered flag**, the bar (dark for the winner,
+  blue for you, grey for others, a short grey stub for DNF) with a **runner** in the player's colour
   at its front, then the time and "+gap". Bars run 0.9 s linear to `fastest / time`, so each
   one moves at its player's speed. Lanes are buttons: tap one to pick who to react to.
 - **Set result**: "Set 2 result" + the winner, a small **podium** (2nd, 1st, 3rd; "+1 pt"
@@ -159,7 +167,7 @@ lines for people who join later. The feed follows new lines unless you scrolled 
 - **Match over**: "Match over, 2–1", "You win the match!" / "Nomin wins the match", a large
   podium with points and sets won, a card with `Share result card` and the host's `Next
   event` + `Back to lobby` / `Rematch`, then places 4 and below in a table.
-- Handicap: set result adds `pace` and `vs pace` ("−6.1%" green = faster than pace); the
+- Handicap: set result adds `pace` and `vs pace` ("−6.1%" = faster than pace); the
   first set is headed "Pace set done".
 
 **Extras**
@@ -169,7 +177,7 @@ lines for people who join later. The feed follows new lines unless you scrolled 
   nickname + `Start my attempt`; started = scramble card, a "8:42 left to solve" pill
   (yellow under a minute), the timer (focus mode like a race); done = big result, rank badge
   "#4 of 348 today", **Top 2%** and a bar of how many you beat, `Share my result`; then the
-  leaderboard (medals for the top 3, avatars, your row
+  leaderboard (plain ranks, avatars, your row
   added at the bottom if you're below).
 - PIN, nickname and "room not found": a centred card with the logo.
 - Streamer overlay: a 420 px panel on a transparent page, mono rows 36 px.

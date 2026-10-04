@@ -55,7 +55,7 @@ export const PlayerList = memo(function PlayerList(props: {
             <span className="seat-tags">
               {player.id === props.hostId && <span className="tag tag-host">host</span>}
               {player.id === props.youId && <span className="tag tag-you">you</span>}
-              {player.status === "reconnecting" && <span className="tiny t-amber">reconnecting</span>}
+              {player.status === "reconnecting" && <span className="tiny muted">reconnecting</span>}
             </span>
           </span>
           {props.onKick && player.id !== props.youId && (
@@ -154,10 +154,11 @@ function RestartControl({ current, onRestart }: { current: CubeEventId; onRestar
 
 // ---------------------------------------------------------------------------
 
-export const SessionPanel = memo(function SessionPanel({ stats }: { stats: SessionStats }) {
+/** Your session stats. `open`: shown expanded (the phone sheet's "Your stats" tab). */
+export const SessionPanel = memo(function SessionPanel({ stats, open }: { stats: SessionStats; open?: boolean }) {
   const show = (value: number | null | undefined) => (value === undefined ? "–" : formatMark(value ?? "DNF"));
   return (
-    <details className="side-section">
+    <details className="side-section" open={open}>
       <summary>Your session</summary>
       <dl className="stats">
         <div>
@@ -167,6 +168,14 @@ export const SessionPanel = memo(function SessionPanel({ stats }: { stats: Sessi
         <div>
           <dt>best</dt>
           <dd>{stats.solves ? show(stats.best) : "–"}</dd>
+        </div>
+        <div>
+          <dt>ao5</dt>
+          <dd>{show(stats.ao5)}</dd>
+        </div>
+        <div>
+          <dt>ao12</dt>
+          <dd>{show(stats.ao12)}</dd>
         </div>
         <div>
           <dt>best ao5</dt>
@@ -246,7 +255,7 @@ export function FinishLine(props: {
                     <span className="runner" data-c={playerColor(row.id)} />
                   </span>
                 </span>
-                <span className={`time ${dnf ? "t-red" : index === 0 ? "t-green" : row.result.penalty === "+2" ? "t-amber" : ""}`}>
+                <span className={`time ${dnf ? "dnf" : index === 0 ? "first" : ""}`}>
                   {formatResultLong(row.result)}
                 </span>
                 <span className="gap">{gap}</span>
@@ -366,7 +375,7 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
                 <td className="who">
                   <PlayerCell id={id} names={names} />
                 </td>
-                <td className={`num ${standing.result === "DNF" ? "t-red" : ""}`}>{formatMark(standing.result)}</td>
+                <td className={`num ${standing.result === "DNF" ? "dnf" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num">{formatMark(standing.best)}</td>
                 <td className="num">
                   {match.points[id] ?? 0}
@@ -461,7 +470,7 @@ function HandicapSetResult(props: {
                 <td className="who">
                   <PlayerCell id={id} names={names} />
                 </td>
-                <td className={`num ${standing.result === "DNF" ? "t-red" : ""}`}>{formatMark(standing.result)}</td>
+                <td className={`num ${standing.result === "DNF" ? "dnf" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num muted">{paces[id] == null ? "–" : formatMark(paces[id]!)}</td>
                 <td className={`num ${delta?.startsWith("−") ? "t-green" : ""}`}>{delta ?? <span className="tiny muted">new</span>}</td>
                 <td className="num">

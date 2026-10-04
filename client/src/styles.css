@@ -22,12 +22,14 @@
   --sticker-5: #19b35a;
   --sticker-core: #0b0d12;
 
-  --gold: #ffc83d;
-  --gold-ink: #2b1f00;
-  --silver: #cfd6e2;
-  --silver-ink: #1b2130;
-  --bronze: #e48a4c;
-  --bronze-ink: #2a1405;
+  /* Ranks: no gold, silver and bronze colours. First place is the one solid
+     block (dark in light mode, light in dark mode); 2nd and 3rd are grey. */
+  --gold: var(--text);
+  --gold-ink: var(--surface);
+  --silver: var(--surface-3);
+  --silver-ink: var(--text);
+  --bronze: var(--surface-3);
+  --bronze-ink: var(--text);
 
   /* The white face on light surfaces needs an edge. */
   --stripe-white: #cfd5e0;
@@ -75,7 +77,7 @@
 
   --topbar-h: 48px;
   --handle-h: 56px;
-  --side-w: 340px;
+  --side-w: clamp(380px, 36vw, 540px);
   --r-xs: 6px;
   --r-sm: 8px;
   --r: 12px;
@@ -177,12 +179,6 @@
 @media (min-width: 768px) and (min-height: 501px) {
   :root {
     --topbar-h: 56px;
-  }
-}
-
-@media (min-width: 1440px) {
-  :root {
-    --side-w: 360px;
   }
 }
 
@@ -589,14 +585,14 @@ kbd,
 }
 
 .tag-lock {
-  color: var(--amber);
-  background: var(--amber-soft);
+  color: var(--text-2);
+  background: var(--surface-3);
   border-color: transparent;
 }
 
 .tag-open {
-  color: var(--green);
-  background: var(--green-soft);
+  color: var(--text-2);
+  background: var(--surface-3);
   border-color: transparent;
 }
 
@@ -830,7 +826,7 @@ kbd,
   align-items: center;
   gap: 6px;
   font-weight: 650;
-  color: var(--orange);
+  color: var(--text);
 }
 
 .section-title {
@@ -987,6 +983,57 @@ p.banner {
   align-content: start;
 }
 
+/* What this is, in one look: a headline, one sentence and three steps. */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 2px 0;
+}
+
+.hero h1 {
+  font-size: clamp(28px, 6vw, 44px);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.hero-sub {
+  max-width: 34em;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.how {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.how li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.how-no {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font: 700 12px/1 var(--font-mono);
+  color: var(--text);
+}
+
 /* The card that gets you into a race. */
 .race-card {
   display: flex;
@@ -1068,7 +1115,6 @@ p.banner {
   padding: 16px;
   position: relative;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--orange) 40%, var(--border));
   background: var(--surface);
 }
 
@@ -1116,10 +1162,6 @@ p.banner {
 .room-card:hover {
   border-color: var(--border-strong);
   transform: translateY(-1px);
-}
-
-.room-card[data-racing="true"] {
-  border-left: 3px solid var(--orange);
 }
 
 .event-chip {
@@ -1203,7 +1245,7 @@ p.banner {
 }
 
 .state-racing {
-  color: var(--orange);
+  color: var(--text);
 }
 
 .room-card button {
@@ -1231,12 +1273,19 @@ p.banner {
 }
 
 @media (min-width: 960px) {
-  /* Left: the race card. Right: the daily card and the rooms. */
+  /* Left: what this is, then the race card. Right: the daily card and the rooms. */
   .home-main {
     grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
-    grid-template-areas: "race side";
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "hero side"
+      "race side";
     column-gap: clamp(24px, 4vw, 48px);
     padding-top: 8px;
+  }
+
+  .hero {
+    grid-area: hero;
   }
 
   .race-card {
@@ -1453,8 +1502,8 @@ p.banner {
   height: 30px;
   padding: 0 10px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-2);
+  color: var(--text);
   font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
@@ -1835,13 +1884,6 @@ p.banner {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-  }
-
-  .side-panel {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
@@ -1849,14 +1891,25 @@ p.banner {
     overflow: hidden;
   }
 
-  /* Standings take what they need, up to 58%; the chat gets the rest. */
-  .side-panel.standings-panel {
-    flex: 0 1 auto;
-    max-height: 58%;
+  /* Big, easy-to-read rows: the standings are the second thing you look at. */
+  .side .standings.dense th,
+  .side .standings.dense td {
+    height: 46px;
+    font-size: 15px;
   }
 
-  .side-panel.chat-panel {
-    flex: 1 1 0;
+  .side .standings.dense td.time-cell,
+  .side .standings.dense .num {
+    font-size: 15.5px;
+  }
+
+  .side .standings.dense thead th {
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .side .standings.dense .name-col {
+    max-width: 220px;
   }
 }
 
@@ -1930,10 +1983,8 @@ p.banner {
   background: transparent;
   box-shadow: none;
   color: var(--text-2);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .tabs button[aria-selected="true"] {
@@ -1972,7 +2023,8 @@ p.banner {
 .sheet,
 .scrim,
 .timer-below,
-.session-strip {
+.session-strip,
+.stage-standings {
   transition:
     opacity var(--fade) ease,
     visibility 0s linear 0s;
@@ -1986,7 +2038,8 @@ p.banner {
 .room[data-focus="true"] .sheet,
 .room[data-focus="true"] .scrim,
 .room[data-focus="true"] .timer-below,
-.room[data-focus="true"] .session-strip {
+.room[data-focus="true"] .session-strip,
+.room[data-focus="true"] .stage-standings {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -2266,7 +2319,7 @@ p.banner {
 }
 
 .limit-bar .progress-fill {
-  background: var(--amber);
+  background: var(--muted);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2630,12 +2683,7 @@ p.banner {
 }
 
 .session-strip > div.fresh {
-  border-color: var(--green);
-  background: var(--green-soft);
-}
-
-.session-strip > div.fresh dd {
-  color: var(--green);
+  border-color: var(--text);
 }
 
 .pb-badge {
@@ -2645,8 +2693,8 @@ p.banner {
   transform: translateX(-50%);
   padding: 0 7px;
   border-radius: 999px;
-  background: var(--green);
-  color: #04140b;
+  background: var(--text);
+  color: var(--surface);
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -2673,6 +2721,37 @@ p.banner {
 /* ---------------------------------------------------------------------------
    Standings
    --------------------------------------------------------------------------- */
+
+/* The live standings: "Waiting for…" and the table, edge to edge. */
+.standings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.standings-block .waiting-line {
+  margin-top: 10px;
+}
+
+/* Phones: the standings sit right under the timer, always in sight. When
+   space is short (long scrambles, small phones) they shrink and scroll before
+   the timer does. */
+.room.in-match .stage-main:has(+ .stage-standings) {
+  min-height: 160px;
+}
+
+.stage-standings {
+  flex: 0 1 auto;
+  min-height: 112px;
+  max-height: 36dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--hairline), var(--shadow-sm);
+}
 
 .side-section {
   padding: 12px 14px;
@@ -2779,8 +2858,16 @@ p.banner {
 }
 
 .standings .fastest {
-  color: var(--green);
-  font-weight: 700;
+  font-weight: 800;
+}
+
+/* DNF reads as text: grey, never red. */
+.dnf {
+  color: var(--muted);
+}
+
+.time.first {
+  font-weight: 800;
 }
 
 .standings .dropped {
@@ -2830,23 +2917,14 @@ p.banner {
   height: 22px;
   padding: 0 4px;
   border-radius: 7px;
-  font: 700 11.5px/1 var(--font-mono);
+  font: 700 12.5px/1 var(--font-mono);
   color: var(--muted);
 }
 
-.rank-badge.gold {
-  background: var(--gold);
-  color: var(--gold-ink);
-}
-
-.rank-badge.silver {
-  background: var(--silver);
-  color: var(--silver-ink);
-}
-
-.rank-badge.bronze {
-  background: var(--bronze);
-  color: var(--bronze-ink);
+/* Rank 1 (once they have points): just darker, no medal colour. */
+.rank-badge.leader {
+  color: var(--text);
+  font-weight: 800;
 }
 
 .rank-badge.large {
@@ -2857,21 +2935,6 @@ p.banner {
   font-size: 18px;
   background: var(--surface-2);
   color: var(--text);
-}
-
-.rank-badge.large.gold {
-  background: var(--gold);
-  color: var(--gold-ink);
-}
-
-.rank-badge.large.silver {
-  background: var(--silver);
-  color: var(--silver-ink);
-}
-
-.rank-badge.large.bronze {
-  background: var(--bronze);
-  color: var(--bronze-ink);
 }
 
 .standings.dense .name-col {
@@ -2931,41 +2994,30 @@ p.banner {
 }
 
 .standings.dense tr.me .row-name {
-  color: var(--accent);
+  font-weight: 750;
 }
 
 .host-mark {
   flex: none;
   display: inline-flex;
-  color: var(--gold);
+  color: var(--muted);
 }
 
-.pts-pill,
+.pts-some,
 .pts-zero {
-  display: inline-grid;
-  place-items: center;
-  min-width: 24px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font: 700 12px/1 var(--font-mono);
-}
-
-.pts-pill {
-  background: var(--accent-bg);
-  color: var(--on-accent);
+  font: 800 1em/1 var(--font-mono);
 }
 
 .pts-zero {
   color: var(--muted);
 }
 
-/* An opponent's running time: orange, with a pulsing dot, so it never looks final. */
+/* An opponent's running time: grey and in tenths, so it never looks final. */
 .live-clock {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--orange);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3392,11 +3444,11 @@ p.banner {
 }
 
 .finish-row .bar.first {
-  background: var(--green);
+  background: var(--text);
 }
 
 .finish-row .bar.dnf {
-  background: var(--red);
+  background: var(--muted);
 }
 
 /* The runner: the player's colour at the front of the bar. */

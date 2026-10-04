@@ -114,7 +114,22 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
       </header>
 
       <main className="home-main">
-        <h1 className="sr-only">Cube Racing</h1>
+        <section className="hero" aria-labelledby="hero-title">
+          <h1 id="hero-title">Race other cubers, live.</h1>
+          <p className="hero-sub">Everyone gets the same scramble. Solve it, stop the timer, and see where you stand.</p>
+          <ol className="how">
+            <li>
+              <span className="how-no">1</span>Pick a puzzle
+            </li>
+            <li>
+              <span className="how-no">2</span>Solve the same scramble
+            </li>
+            <li>
+              <span className="how-no">3</span>Best average wins the set
+            </li>
+          </ol>
+        </section>
+
         <section className="panel race-card" aria-label="Start racing">
           <div className="you-row">
             <Avatar id={publicId} name={nickname || "?"} size="lg" />
@@ -138,7 +153,7 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           <button type="button" className="primary xl race-button" onClick={raceNow} disabled={busy !== null}>
             {busy === "race" ? "Finding a race…" : `Race ${EVENT_SHORT[raceEvent]} now`}
           </button>
-          <p className="tiny muted race-hint">Joins an open room for this event, or opens one for the next racer.</p>
+          <p className="tiny muted race-hint">Puts you in an open race, or starts one the next cuber joins.</p>
 
           <div className="race-alt">
             <button type="button" className="create-button" onClick={createRoom} disabled={busy !== null}>
@@ -234,7 +249,7 @@ function DailyCard({ demo }: { demo?: DailyStatus }) {
           )}
         </p>
       </div>
-      <button type="button" className={done ? "" : "primary"} onClick={() => navigate("/daily")}>
+      <button type="button" onClick={() => navigate("/daily")}>
         {done ? "Leaderboard" : daily?.status === "started" ? "Continue" : "Play"}
       </button>
     </section>

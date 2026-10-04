@@ -315,9 +315,9 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
   return (
     <section className="panel section daily-done">
       <p className="small muted">Your time today</p>
-      <p className={`daily-result mono ${result.penalty === "DNF" ? "t-red" : ""}`}>{formatResultLong(result)}</p>
+      <p className={`daily-result mono ${result.penalty === "DNF" ? "dnf" : ""}`}>{formatResultLong(result)}</p>
       <div className="daily-rank">
-        <span className={`rank-badge large ${rank <= 3 && result.penalty !== "DNF" ? ["gold", "silver", "bronze"][rank - 1] : ""}`}>#{rank}</span>
+        <span className={`rank-badge large ${rank === 1 && result.penalty !== "DNF" ? "leader" : ""}`}>#{rank}</span>
         <span className="muted">of {daily.total} today</span>
         {result.penalty !== "DNF" && daily.total > 1 && <span className="top-pill">Top {top}%</span>}
       </div>
@@ -354,7 +354,7 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
           {rows.map((row) => (
             <li key={row.playerId} className={row.playerId === daily.youId ? "me" : ""}>
               <span className="rank">
-                <span className={`rank-badge ${row.rank <= 3 && row.result.penalty !== "DNF" ? ["gold", "silver", "bronze"][row.rank - 1] : ""}`}>
+                <span className={`rank-badge ${row.rank === 1 && row.result.penalty !== "DNF" ? "leader" : ""}`}>
                   {row.rank}
                 </span>
               </span>
@@ -362,7 +362,7 @@ function Leaderboard({ daily }: { daily: DailyStatus }) {
                 <Avatar id={row.playerId} name={row.name} size="xs" />
                 <span className="name-text">{row.name}</span>
               </span>
-              <span className={`time ${row.result.penalty === "DNF" ? "t-red" : row.rank === 1 ? "t-green" : ""}`}>
+              <span className={`time ${row.result.penalty === "DNF" ? "dnf" : row.rank === 1 ? "first" : ""}`}>
                 {formatResult(row.result)}
               </span>
             </li>
