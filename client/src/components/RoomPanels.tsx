@@ -76,7 +76,7 @@ export const PlayerList = memo(function PlayerList(props: {
           </span>
           <span className="seat-info">
             <span className="name">Waiting for a racer…</span>
-            <span className="tiny muted">Share the code to fill this seat</span>
+            <span className="tiny muted">Share the link to fill this seat</span>
           </span>
         </li>
       )}

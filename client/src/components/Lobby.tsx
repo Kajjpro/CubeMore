@@ -23,7 +23,8 @@ interface Props {
 const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function" && matchMedia("(hover: none)").matches;
 
 /**
- * Before a race. Alone, the room code and "Copy link" come first. There's no
+ * Before a race. Alone, "Copy link" comes first (and for a private room, its
+ * code and PIN; a public room is on the home page, so it needs no code). There's no
  * need to press Start: the race starts by itself 3 seconds after someone joins.
  */
 export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, chat }: Props) {
@@ -35,7 +36,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
 
   function share(): void {
     void navigator
-      .share({ title: room.settings.name, text: `Race me on Cube Racing: room ${room.code}`, url: roomLink(room.code, room.pin) })
+      .share({ title: room.settings.name, text: isPrivate ? `Race me on Cube Racing: room ${room.code}` : "Race me on Cube Racing", url: roomLink(room.code, room.pin) })
       .catch(() => {});
   }
 
@@ -55,21 +56,23 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
             <span className={`tag ${isPrivate ? "tag-lock" : "tag-open"}`}>{isPrivate ? "Private" : "Public"}</span>
           </div>
 
-          <div className="share-code">
-            <span className="field-label">Room code</span>
-            <p className="big-code code-tiles" aria-label={`Room code ${room.code.split("").join(" ")}`}>
-              {room.code.split("").map((char, i) => (
-                <span key={i} className="code-tile" aria-hidden>
-                  {char}
-                </span>
-              ))}
-            </p>
-            {room.pin && (
-              <p className="pin-line">
-                PIN <span className="mono">{room.pin}</span>
+          {isPrivate && (
+            <div className="share-code">
+              <span className="field-label">Room code</span>
+              <p className="big-code code-tiles" aria-label={`Room code ${room.code.split("").join(" ")}`}>
+                {room.code.split("").map((char, i) => (
+                  <span key={i} className="code-tile" aria-hidden>
+                    {char}
+                  </span>
+                ))}
               </p>
-            )}
-          </div>
+              {room.pin && (
+                <p className="pin-line">
+                  PIN <span className="mono">{room.pin}</span>
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="share-actions">
             <button type="button" className={alone ? "primary grow" : "grow"} onClick={copy}>
@@ -85,7 +88,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
             <p className="small muted">
               {isPrivate
                 ? "Listed on the home page, but joining needs the PIN. The invite link includes it."
-                : "Listed on the home page. You can also send the code or the link."}
+                : "Listed on the home page. You can also send the link."}
             </p>
           )}
         </section>
