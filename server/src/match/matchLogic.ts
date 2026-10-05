@@ -32,7 +32,8 @@ import {
   solvesPerSet,
   targetPoints,
 } from "./scoring";
-import type { Match, MatchTiming, PenaltyChange, SolveSubmission } from "./types";
+import { verifySmartSolve } from "@cube-racing/shared/smartSolve";
+import { replayKey, type Match, type MatchTiming, type PenaltyChange, type SolveSubmission } from "./types";
 
 export type MatchUpdate =
   | { ok: true; match: Match }
@@ -44,6 +45,11 @@ function ok(match: Match): MatchUpdate {
 
 function fail(error: string): MatchUpdate {
   return { ok: false, error };
+}
+
+/** "Rejected": this solve will never count, so the client stops sending it. */
+function rejected(error: string): MatchUpdate {
+  return { ok: false, error, code: "REJECTED" };
 }
 
 /** "Not current" tells the client to drop this request and trust the latest snapshot. */
@@ -80,6 +86,7 @@ export function createMatch({ matchId, settings, timing, roster, scrambles, now 
     phaseEndsAt: null,
     solveDeadline: null,
     winnerIds: [],
+    replays: {},
   };
   return beginSet(empty, 0, roster, scrambles, now);
 }
@@ -116,7 +123,7 @@ function beginSet(match: Match, setIndex: number, roster: string[], scrambles: S
     results[id] = new Array<SolveResult | null>(count).fill(null);
   }
 
-  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, results, points }, 0, now);
+  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, results, points, replays: {} }, 0, now);
 }
 
 function startSolve(match: Match, solveIndex: number, now: number): Match {
@@ -166,7 +173,23 @@ export function submitSolve(match: Match, playerId: string, submission: SolveSub
   }
 
   const result: SolveResult = { timeMs: submission.timeMs, penalty: submission.penalty, source: "submitted" };
-  return ok(finishSolveIfEveryoneDone(setResult(match, playerId, submission.solveIndex, result), now));
+  let updated = match;
+
+  // A smart cube solve: replay it on the scramble. Verified ones get a mark and keep their moves.
+  if (submission.smart) {
+    const scramble = match.scrambles[submission.solveIndex]?.text ?? "";
+    const verdict = verifySmartSolve(scramble, submission.timeMs, submission.smart);
+    if (verdict.ok) {
+      result.verified = { moves: verdict.moveCount, tps: verdict.tps };
+      updated = { ...match, replays: { ...match.replays, [replayKey(playerId, submission.solveIndex)]: submission.smart } };
+    } else if (match.settings.smartOnly) {
+      return rejected(`This solve couldn't be verified: ${verdict.reason}`);
+    }
+  } else if (match.settings.smartOnly && submission.penalty !== "DNF") {
+    return rejected("This room is for smart cubes only. Connect your smart cube to race here.");
+  }
+
+  return ok(finishSolveIfEveryoneDone(setResult(updated, playerId, submission.solveIndex, result), now));
 }
 
 /** A player changes OK/+2/DNF on one of their own solves, until the set result is shown. */

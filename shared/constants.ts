@@ -29,7 +29,11 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   maxPlayers: 50,
   solveTimeLimit: "off",
   scoring: "fastest",
+  smartOnly: false,
 };
+
+/** Events a smart cube can be used for (and the only ones for smart-cube rooms). */
+export const SMART_CUBE_EVENTS: readonly string[] = ["333", "333oh"];
 
 /** How long we keep a disconnected player's seat before removing them. */
 export const RECONNECT_GRACE_MS = 30_000;

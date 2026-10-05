@@ -5,7 +5,7 @@
 #
 # Free plan: it sleeps after ~15 minutes without visitors (the next visit waits
 # about a minute while it wakes up) and rooms are kept in memory, so they are
-# gone after it sleeps or restarts.
+# gone after it sleeps or restarts (unless DATABASE_URL is set).
 
 services:
   - type: web
@@ -21,8 +21,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Optional: a Postgres database for the daily scramble's leaderboard
-      # (see DEPLOY.md). Without it the leaderboard resets when the server sleeps.
+      # Optional: a Postgres database, e.g. Neon (see DEPLOY.md). Keeps rooms across
+      # restarts, the match history and the daily leaderboard.
       - key: DATABASE_URL
         sync: false
       # Render tells the app which port to use through PORT (the server reads it).

@@ -8,6 +8,9 @@ import { ServerEvents } from "@cube-racing/shared";
 import { DailyService } from "./daily/daily";
 import { MemoryDailyStore, type DailyStore } from "./daily/store";
 import type { MatchTiming } from "./match/types";
+import { RoomPersistence } from "./persistence/persistence";
+import type { HistoryReader, PersistenceStore, SavedRoom } from "./persistence/store";
+import type { WeeklySchedule } from "./weekly/schedule";
 import { generateScramble } from "./scrambles";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
@@ -30,6 +33,14 @@ export interface StartOptions {
   clientOrigins?: string[];
   /** Where daily scramble results are kept. Default: in memory (gone after a restart). */
   dailyStore?: DailyStore;
+  /** Where rooms and match history are kept. Default: nowhere (rooms are gone after a restart). */
+  store?: PersistenceStore | null;
+  /** Rooms saved before the last restart (from store.loadRooms()). */
+  restoredRooms?: SavedRoom[];
+  /** The history to read from (weekly results, leaderboard, replays). Default: none. */
+  reader?: HistoryReader | null;
+  /** When the weekly race is. Default: Saturday 12:00 UTC. */
+  weeklySchedule?: WeeklySchedule;
 }
 
 export interface RunningServer {
@@ -70,11 +81,20 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     log,
     makeScrambles: options.makeScrambles,
     daily: new DailyService(options.dailyStore ?? new MemoryDailyStore(), () => generateScramble("333")),
+    persistence: options.store ? new RoomPersistence(options.store, log) : null,
+    restoredRooms: options.restoredRooms,
+    reader: options.reader ?? null,
+    weeklySchedule: options.weeklySchedule ?? { day: 6, hourUtc: 12 },
   });
 
   // For uptime checks (Fly.io calls this to know the server is alive).
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, rooms: sockets.rooms.all().length, uptimeSeconds: Math.round(process.uptime()) });
+    res.json({
+      ok: true,
+      rooms: sockets.rooms.all().length,
+      database: Boolean(options.store),
+      uptimeSeconds: Math.round(process.uptime()),
+    });
   });
 
   if (options.clientDist) {
@@ -94,11 +114,13 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const port = (httpServer.address() as AddressInfo).port;
 
   async function close(): Promise<void> {
-    sockets.stop();
     const closed = new Promise<void>((resolve) => io.close(() => resolve()));
     // Don't wait for half-open or idle connections to time out: close them now.
     httpServer.closeAllConnections();
     await closed;
+    // Nobody is connected any more: save every room as it is now, then stop them.
+    await sockets.flush();
+    sockets.stop();
   }
 
   return {

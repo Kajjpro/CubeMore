@@ -24,6 +24,8 @@ import {
   type ClientRequests,
   type ClientToServerEvents,
   type ServerToClientEvents,
+  type WeeklyRow,
+  type WeeklyStatus,
 } from "@cube-racing/shared";
 import {
   changePenaltySchema,
@@ -39,6 +41,8 @@ import {
   dailyStartSchema,
   dailySubmitSchema,
   cubeMovesSchema,
+  leaderboardSchema,
+  replaySchema,
   restartSchema,
   submitSolveSchema,
   targetPlayerSchema,
@@ -46,8 +50,13 @@ import {
   updateSettingsSchema,
 } from "@cube-racing/shared/schemas";
 import type { MatchTiming } from "./match/types";
+import type { RoomPersistence } from "./persistence/persistence";
+import { restoreRoom } from "./persistence/restore";
+import type { HistoryReader, SavedRoom } from "./persistence/store";
+import { rankWeekly } from "./weekly/results";
+import { currentWeeklyRace, previousWeeklyRace, WEEKLY_SETTINGS, type WeeklySchedule } from "./weekly/schedule";
 import { RateLimiter } from "./rateLimit";
-import { LiveRoom } from "./rooms/liveRoom";
+import { LiveRoom, type RestoredChat } from "./rooms/liveRoom";
 import * as logic from "./rooms/roomLogic";
 import { RoomStore } from "./rooms/roomStore";
 import type { ServerRoom } from "./rooms/types";
@@ -80,6 +89,14 @@ export interface SocketOptions {
   makeScrambles?: typeof generateSetScrambles;
   /** The daily scramble (see daily/daily.ts). */
   daily: DailyService;
+  /** Keeps rooms and match history in the database, or null to keep everything in memory. */
+  persistence?: RoomPersistence | null;
+  /** Rooms saved before the last restart: they open again, waiting for their players. */
+  restoredRooms?: SavedRoom[];
+  /** When the weekly smart-cube race is. */
+  weeklySchedule: WeeklySchedule;
+  /** The history (weekly results, verified leaderboard, replays), or null without a database. */
+  reader?: HistoryReader | null;
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -93,9 +110,24 @@ const RATE_LIMIT_PER_SECOND = 15;
 const CHAT_BURST = 5;
 const CHAT_PER_SECOND = 0.5;
 
-export function registerSocketHandlers(io: IoServer, options: SocketOptions): { rooms: RoomStore; stop: () => void } {
+export function registerSocketHandlers(
+  io: IoServer,
+  options: SocketOptions,
+): { rooms: RoomStore; stop: () => void; flush: () => Promise<void> } {
   const rooms = new RoomStore();
   const { log } = options;
+  const persistence = options.persistence ?? null;
+  const reader = options.reader ?? null;
+  /** Weekly races we opened a room for, and finished weekly races' results. */
+  const openedWeekly = new Set<string>();
+  const weeklyResults = new Map<string, WeeklyRow[]>();
+
+  for (const saved of options.restoredRooms ?? []) {
+    const live = openRoom(restoreRoom(saved.room, saved.savedAt, Date.now()), { log: saved.chat, count: saved.chatCount });
+    // Save the restored copy soon: its version jumped, and a second restart must keep that.
+    persistence?.saveSoon(live);
+    log(live.code, `restored (${live.state.players.length} players, waiting for them to reconnect)`);
+  }
 
   io.on("connection", (socket) => {
     socket.data = {
@@ -110,9 +142,12 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
     // ---- Rooms ----
 
     on(socket, ClientEvents.CREATE_ROOM, createRoomSchema, async (input) => {
+      const settings = { ...DEFAULT_SETTINGS, ...input.settings };
+      const smartError = logic.smartEventError(settings);
+      if (smartError) return logic.fail(smartError);
       await leaveCurrentRoom(socket);
       const code = rooms.generateUniqueCode();
-      const room = logic.createRoom(code, { ...DEFAULT_SETTINGS, ...input.settings }, input, Date.now(), input.pin ?? null);
+      const room = logic.createRoom(code, settings, input, Date.now(), input.pin ?? null);
       const live = openRoom(room);
       log(code, `${room.settings.visibility} room "${room.settings.name}" created by ${input.nickname}`);
       live.addChat("system", `${input.nickname} created the room`);
@@ -235,6 +270,21 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
     on(socket, ClientEvents.DAILY_SUBMIT, dailySubmitSchema, (input) =>
       options.daily.submit(input.playerId, input.timeMs, input.penalty),
     );
+
+    // ---- Smart cubes: the weekly race, the verified leaderboard, replays ----
+
+    on(socket, ClientEvents.WEEKLY_STATUS, emptySchema, async () => ({ ok: true, weekly: await weeklyStatus() }));
+
+    on(socket, ClientEvents.LEADERBOARD, leaderboardSchema, async (input) => {
+      if (!reader) return { ok: true, rows: [], available: false };
+      const since = input.period === "week" ? Date.now() - 7 * 24 * 60 * 60_000 : 0;
+      return { ok: true, rows: await reader.leaderboard("333", since, 20), available: true };
+    });
+
+    on(socket, ClientEvents.REPLAY, replaySchema, async (input) => {
+      const replay = reader ? await reader.replay(input.id) : null;
+      return replay ? { ok: true, replay } : logic.fail("That solve isn't available.");
+    });
 
     /** "Race now": an open public room for this event, or null (the client then creates one). */
     on(socket, ClientEvents.QUICK_RACE, quickRaceSchema, (input) => ({
@@ -364,30 +414,112 @@ export function registerSocketHandlers(io: IoServer, options: SocketOptions): { 
     for (const live of rooms.all()) {
       void live.run(() => live.processDue());
     }
+    openWeeklyIfDue(Date.now());
+    keepWeeklyResults();
   }, 1000);
 
   return {
     rooms,
     stop: () => {
       clearInterval(sweep);
-      for (const live of rooms.all()) live.delete();
+      // stop(), not delete(): the saved copies must stay for the next start.
+      for (const live of rooms.all()) live.stop();
+    },
+    /** Saves every room now (on shutdown), after the actions already waiting in its queue. */
+    flush: async () => {
+      if (!persistence) return;
+      await Promise.all(rooms.all().map((live) => live.run(() => persistence.saveNow(live))));
     },
   };
+
+  // -------------------------------------------------------------------------
+  // The weekly race
+  // -------------------------------------------------------------------------
+
+  function weeklyRoom(weeklyId: string): LiveRoom | undefined {
+    return rooms.all().find((live) => !live.deleted && live.state.scheduled?.weeklyId === weeklyId);
+  }
+
+  /** 30 minutes before the start, the server opens the weekly race's room (once). */
+  function openWeeklyIfDue(now: number): void {
+    const race = currentWeeklyRace(now, options.weeklySchedule);
+    if (now < race.opensAt || now >= race.startsAt || openedWeekly.has(race.weeklyId) || weeklyRoom(race.weeklyId)) return;
+    openedWeekly.add(race.weeklyId);
+    const live = openRoom(
+      logic.createScheduledRoom(rooms.generateUniqueCode(), WEEKLY_SETTINGS, { weeklyId: race.weeklyId, startsAt: race.startsAt }),
+    );
+    live.addChat("system", "The weekly race opens: it starts on the minute for everyone here.");
+    log(live.code, `weekly race ${race.weeklyId} opened`);
+  }
+
+  /** Keeps each weekly race's results once its set is over (for the home page, even without a database). */
+  function keepWeeklyResults(): void {
+    for (const live of rooms.all()) {
+      const weeklyId = live.state.scheduled?.weeklyId;
+      const set = live.state.match?.finishedSets[0];
+      if (!weeklyId || !set || weeklyResults.has(weeklyId)) continue;
+      const names = Object.fromEntries(live.state.players.map((p) => [p.publicId, p.nickname]));
+      weeklyResults.set(weeklyId, rankWeekly(set.standings, names));
+    }
+  }
+
+  async function resultsOf(weeklyId: string): Promise<WeeklyRow[]> {
+    return weeklyResults.get(weeklyId) ?? (reader ? await reader.weeklyResults(weeklyId).catch(() => []) : []);
+  }
+
+  async function weeklyStatus(): Promise<WeeklyStatus> {
+    const now = Date.now();
+    const race = currentWeeklyRace(now, options.weeklySchedule);
+    const previous = previousWeeklyRace(race);
+    const live = weeklyRoom(race.weeklyId);
+    const results = await resultsOf(race.weeklyId);
+    const match = live?.state.match;
+    const phase: WeeklyStatus["phase"] =
+      results.length > 0 || (now >= race.startsAt && !live) || match?.phase === "match_over"
+        ? "over"
+        : match
+          ? "racing"
+          : live
+            ? "open"
+            : "upcoming";
+    const previousResults = await resultsOf(previous.weeklyId);
+    return {
+      weeklyId: race.weeklyId,
+      startsAt: race.startsAt,
+      opensAt: race.opensAt,
+      serverTime: now,
+      phase,
+      roomCode: live && phase !== "over" ? live.code : null,
+      results,
+      previous: previousResults.length > 0 ? { weeklyId: previous.weeklyId, results: previousResults } : null,
+    };
+  }
 
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
 
-  function openRoom(room: ServerRoom): LiveRoom {
-    const live = new LiveRoom(room, {
-      broadcast: (snapshot) => io.to(room.code).emit(ServerEvents.ROOM_STATE, snapshot),
-      sendChat: (message) => io.to(room.code).emit(ServerEvents.CHAT, message),
-      makeScrambles: options.makeScrambles ?? generateSetScrambles,
-      onDelete: (code) => rooms.remove(code),
-      log,
-      timing: options.timing,
-      broadcastIntervalMs: options.broadcastIntervalMs,
-    });
+  function openRoom(room: ServerRoom, chat?: RestoredChat): LiveRoom {
+    const live: LiveRoom = new LiveRoom(
+      room,
+      {
+        broadcast: (snapshot) => io.to(room.code).emit(ServerEvents.ROOM_STATE, snapshot),
+        sendChat: (message) => {
+          io.to(room.code).emit(ServerEvents.CHAT, message);
+          persistence?.saveSoon(live);
+        },
+        onCommit: (before, next) => persistence?.changed(live, before, next),
+        makeScrambles: options.makeScrambles ?? generateSetScrambles,
+        onDelete: (code) => {
+          rooms.remove(code);
+          persistence?.deleted(code);
+        },
+        log,
+        timing: options.timing,
+        broadcastIntervalMs: options.broadcastIntervalMs,
+      },
+      chat,
+    );
     rooms.add(live);
     return live;
   }

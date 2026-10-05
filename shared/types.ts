@@ -44,6 +44,8 @@ export interface RoomSettings {
   maxPlayers: number;
   solveTimeLimit: SolveTimeLimit;
   scoring: ScoringMode;
+  /** Smart cubes only: every solve must be a verified smart cube solve (3x3 events). */
+  smartOnly: boolean;
 }
 
 /** A scramble that every player in the room solves. Made by the server. */
@@ -76,6 +78,8 @@ export interface SolveResult {
   timeMs: number;
   penalty: Penalty;
   source: ResultSource;
+  /** A smart cube solve the server replayed and checked: its move count and turns per second. */
+  verified?: { moves: number; tps: number };
 }
 
 /**
@@ -176,6 +180,8 @@ export interface RoomSnapshot {
   autoStartAt: number | null;
   /** Best of can be changed until the first race starts, then it's fixed. */
   bestOfLocked: boolean;
+  /** The weekly race (opened by the server, no host, starts at autoStartAt). */
+  weekly: boolean;
 }
 
 /**
@@ -210,6 +216,8 @@ export interface PublicRoomInfo {
   racing: boolean;
   /** Private rooms are listed too, but joining one needs its PIN. */
   visibility: RoomVisibility;
+  /** Smart cubes only. */
+  smartOnly: boolean;
   hostName: string | null;
 }
 
@@ -248,4 +256,62 @@ export interface DailyStatus {
   leaderboard: DailyRow[];
   /** Your public id, to find your row. */
   youId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Smart cubes: the weekly race, the verified leaderboard, replays
+// ---------------------------------------------------------------------------
+
+/** One player's result in a weekly race (an ao5). */
+export interface WeeklyRow {
+  rank: number;
+  name: string;
+  /** Public id. */
+  playerId: string;
+  average: Mark;
+  best: Mark;
+}
+
+/** Everything the home page shows about the weekly race. */
+export interface WeeklyStatus {
+  /** "2026-10-10" (UTC). */
+  weeklyId: string;
+  startsAt: number;
+  /** The room opens this long before the start. */
+  opensAt: number;
+  serverTime: number;
+  /** upcoming: not open yet; open: join now; racing: started; over: results are in. */
+  phase: "upcoming" | "open" | "racing" | "over";
+  /** The room to join (open or racing). */
+  roomCode: string | null;
+  /** This race's results (once it's over). */
+  results: WeeklyRow[];
+  /** The race before, for "last week's results". */
+  previous: { weeklyId: string; results: WeeklyRow[] } | null;
+}
+
+/** One line of the verified leaderboard: a player's best verified single. */
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  playerId: string;
+  /** The single that counts (with +2), in ms. */
+  timeMs: number;
+  moves: number;
+  tps: number;
+  at: number;
+  /** For REPLAY. */
+  replayId: string;
+}
+
+/** Every move of one verified solve, to watch it again. */
+export interface Replay {
+  name: string;
+  scramble: string;
+  moves: string[];
+  /** When each move happened, ms from the start. */
+  times: number[];
+  timeMs: number;
+  penalty: Penalty;
+  tps: number;
 }

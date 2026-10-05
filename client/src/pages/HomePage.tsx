@@ -8,6 +8,7 @@ import {
   type PublicRoomInfo,
 } from "@cube-racing/shared";
 import { RoomList, useRooms } from "../components/RoomList";
+import { SmartHome } from "../components/SmartHome";
 import { EventPicker } from "../components/SettingsForm";
 import { Avatar, Brand, ThemeButton } from "../components/ui";
 import { EVENT_SHORT } from "../labels";
@@ -185,6 +186,8 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
         </div>
 
       </main>
+
+      <SmartHome />
 
       <footer className="home-foot">
         <span>

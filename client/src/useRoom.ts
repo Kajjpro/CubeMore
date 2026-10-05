@@ -79,6 +79,9 @@ export function useRoom(code: string, nickname: string, pin?: string): RoomConne
         setNeedsPin(false);
         setNotice(null);
         setYouId(response.youId);
+        // The join reply is always the room as it is now, even if its version is
+        // lower than one we saw (a room restored after a server restart).
+        latestVersion = -1;
         applySnapshot(response.room);
         setChat((old) => mergeChat(old, response.chat ?? []));
         // Back in the room: send any solves that didn't get through before.

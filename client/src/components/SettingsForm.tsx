@@ -6,6 +6,7 @@ import {
   PIN_LENGTH,
   ROOM_FORMATS,
   ROOM_NAME_MAX_LENGTH,
+  SMART_CUBE_EVENTS,
   SOLVE_TIME_LIMITS,
   WIN_CONDITIONS,
   type CubeEventId,
@@ -189,7 +190,33 @@ export function LobbySettings(props: {
   return (
     <div className="settings-form">
       <Group title="Puzzle">
-        <EventPicker label="Event" layout="grid" value={settings.cubeEvent} onChange={(cubeEvent) => onChange({ cubeEvent })} />
+        <EventPicker
+          label="Event"
+          layout="grid"
+          value={settings.cubeEvent}
+          // Another event than 3x3 turns "smart cubes only" off (smart cubes are 3x3).
+          onChange={(cubeEvent) => onChange(SMART_CUBE_EVENTS.includes(cubeEvent) ? { cubeEvent } : { cubeEvent, smartOnly: false })}
+        />
+        <Segmented
+          label="Timing"
+          value={settings.smartOnly ? "smart" : "any"}
+          options={[
+            { value: "any", label: "Any timer" },
+            { value: "smart", label: "Smart cubes only" },
+          ]}
+          onChange={(value) =>
+            onChange(
+              value === "smart"
+                ? { smartOnly: true, ...(SMART_CUBE_EVENTS.includes(settings.cubeEvent) ? {} : { cubeEvent: "333" }) }
+                : { smartOnly: false },
+            )
+          }
+        />
+        {settings.smartOnly && (
+          <p className="tiny muted">
+            Every solve is checked move by move: only verified smart cube solves count. 3x3 and 3x3 one-handed.
+          </p>
+        )}
       </Group>
 
       <Group title="Format">

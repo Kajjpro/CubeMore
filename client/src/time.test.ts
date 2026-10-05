@@ -20,10 +20,26 @@ describe("formatTime", () => {
 });
 
 describe("parseTypedTime", () => {
-  it("reads seconds with hundredths, tenths or nothing", () => {
+  it("reads just digits like csTimer: the last two are hundredths", () => {
+    expect(parseTypedTime("1235")).toEqual({ ok: true, timeMs: 12_350, penalty: "OK" });
+    expect(parseTypedTime("123")).toEqual({ ok: true, timeMs: 1_230, penalty: "OK" });
+    expect(parseTypedTime("12")).toEqual({ ok: true, timeMs: 120, penalty: "OK" });
+    expect(parseTypedTime("5")).toEqual({ ok: true, timeMs: 50, penalty: "OK" });
+    expect(parseTypedTime("10234")).toEqual({ ok: true, timeMs: 62_340, penalty: "OK" });
+    expect(parseTypedTime("123456")).toEqual({ ok: true, timeMs: 754_560, penalty: "OK" });
+    // Without minutes, seconds may go past 59 (7500 = 75.00 = 1:15.00).
+    expect(parseTypedTime("7500")).toEqual({ ok: true, timeMs: 75_000, penalty: "OK" });
+  });
+
+  it("reads seconds with a dot as written", () => {
     expect(parseTypedTime("12.34")).toEqual({ ok: true, timeMs: 12_340, penalty: "OK" });
     expect(parseTypedTime("12.3")).toEqual({ ok: true, timeMs: 12_300, penalty: "OK" });
-    expect(parseTypedTime("12")).toEqual({ ok: true, timeMs: 12_000, penalty: "OK" });
+    expect(parseTypedTime("12.")).toEqual({ ok: false, error: expect.any(String) });
+  });
+
+  it("reads a + at the end as +2", () => {
+    expect(parseTypedTime("1235+")).toEqual({ ok: true, timeMs: 12_350, penalty: "+2" });
+    expect(parseTypedTime("12.35 +")).toEqual({ ok: true, timeMs: 12_350, penalty: "+2" });
   });
 
   it("reads minutes", () => {
@@ -41,7 +57,7 @@ describe("parseTypedTime", () => {
   });
 
   it("refuses anything else", () => {
-    for (const bad of ["", "abc", "12.345", "1:75.00", "-5", "0", "0.00", "12,34", "1:2:3"]) {
+    for (const bad of ["", "abc", "12.345", "1:75.00", "17500", "1234567", "-5", "0", "0.00", "12,34", "1:2:3", "+", "DNF+"]) {
       expect(parseTypedTime(bad).ok, bad).toBe(false);
     }
   });

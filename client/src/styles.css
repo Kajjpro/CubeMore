@@ -2224,6 +2224,48 @@ p.banner {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+/* ---- Smart cube guide: done moves green, a wrong turn's undo in red ---- */
+
+.scramble-text .move.good {
+  color: var(--green);
+}
+
+/* A double move done halfway (R of R2). */
+.scramble-text .move.half {
+  color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 0 2px var(--green-soft);
+}
+
+.scramble-text .fix-moves {
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--red);
+  background: var(--red-soft);
+  font-weight: 800;
+}
+
+.guide-status {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.guide-status.good {
+  color: var(--green);
+}
+
+.guide-status.bad,
+.fix-hint {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.guide-status.warn {
+  color: var(--amber);
+}
+
 .scramble-text.size-1 {
   font-size: clamp(1.1rem, 5.4cqi, 1.85rem);
 }
@@ -3003,6 +3045,26 @@ p.banner {
   color: var(--muted);
 }
 
+/* A faint hint that a row opens the player's times: points down, up when open. */
+.row-more {
+  flex: none;
+  display: inline-flex;
+  margin-left: -2px;
+  color: var(--muted);
+  opacity: 0.45;
+  transform: rotate(180deg);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.standings.dense tr:hover .row-more,
+.standings.dense tr.open .row-more {
+  opacity: 0.9;
+}
+
+.standings.dense tr.open .row-more {
+  transform: none;
+}
+
 .pts-some,
 .pts-zero {
   font: 800 1em/1 var(--font-mono);
@@ -3584,6 +3646,10 @@ p.banner {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .row-more {
+    transition: none;
+  }
+
   .finish-row .bar,
   .finish-row .time,
   .finish-row .gap,
@@ -4685,4 +4751,209 @@ html.overlay-mode body {
   border-radius: 6px;
   opacity: 0.9;
   pointer-events: none;
+}
+
+/* ---- Smart cube: inspection, live turns, verified, "smart cubes only" ---- */
+
+.inspection-digits {
+  color: var(--amber);
+}
+
+.inspection-digits[data-urgent="true"] {
+  color: var(--red);
+}
+
+.turns-line {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.verified-mark {
+  color: var(--green);
+  font-weight: 750;
+}
+
+.smart-required {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 420px);
+  margin: auto;
+  text-align: center;
+}
+
+.smart-required-title {
+  margin: 0;
+  font-weight: 750;
+  font-size: 1.05rem;
+}
+
+.mac-form {
+  display: grid;
+  gap: 8px;
+}
+
+/* A verified smart cube time in the standings: a small green tick. */
+.verified-tick {
+  margin-left: 3px;
+  font-size: 0.72em;
+  font-weight: 800;
+  color: var(--green);
+  vertical-align: 0.15em;
+}
+
+.tag.tag-smart {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+/* ---------------------------------------------------------------------------
+   Home: smart cube racing (the weekly race, the verified leaderboard)
+   --------------------------------------------------------------------------- */
+
+.smart-home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.smart-home-head h2 {
+  font-size: 1.25rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.smart-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 760px) {
+  .smart-home-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.weekly-card,
+.verified-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.weekly-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weekly-head h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.weekly-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.weekly-timer .mono {
+  font-size: 1.5rem;
+  font-weight: 750;
+}
+
+.weekly-live {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.weekly-last {
+  margin-top: 4px;
+}
+
+/* A ranked list: rank, name, time, extra (best single or TPS). */
+.board {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board > li {
+  border-top: 1px solid var(--border);
+}
+
+.board > li:first-child {
+  border-top: 0;
+}
+
+.board > li:not(:has(.board-row)),
+.board-row {
+  display: grid;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto 5.5em;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 500;
+}
+
+.board-row:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.board-rank {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.board-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.board-time {
+  font-weight: 750;
+}
+
+.board-extra {
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.replay {
+  display: grid;
+  gap: 4px;
+  padding: 4px 0 12px;
+}
+
+.replay-cube {
+  height: 220px;
+}
+
+.replay-cube twisty-player {
+  width: 100%;
+  height: 100%;
+}
+
+.replay-scramble {
+  overflow-wrap: anywhere;
 }

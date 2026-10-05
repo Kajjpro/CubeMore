@@ -32,7 +32,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
   const alone = room.players.length === 1;
   const isPrivate = room.settings.visibility === "private";
   const copyLabel = copied ? "Copied" : isPrivate ? "Copy invite link" : "Copy link";
-  const secondsLeft = useSecondsLeft(room.autoStartAt);
+  const secondsLeft = useSecondsLeft(room.autoStartAt, !room.weekly);
 
   function share(): void {
     void navigator
@@ -151,7 +151,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
 }
 
 /** Whole seconds until `endsAt` (server time), updated a few times a second. */
-function useSecondsLeft(endsAt: number | null): number | null {
+function useSecondsLeft(endsAt: number | null, capped: boolean): number | null {
   const [now, setNow] = useState(serverNow);
   useEffect(() => {
     if (endsAt === null) return;
@@ -159,8 +159,9 @@ function useSecondsLeft(endsAt: number | null): number | null {
     return () => clearInterval(interval);
   }, [endsAt]);
   if (endsAt === null) return null;
-  // Capped, so a slightly-off clock never shows "4" for a 3-second countdown.
-  return Math.min(AUTO_START_DELAY_MS / 1000, Math.max(0, Math.ceil((endsAt - now) / 1000)));
+  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  // Capped, so a slightly-off clock never shows "4" for a 3-second countdown (not the weekly race's).
+  return capped ? Math.min(AUTO_START_DELAY_MS / 1000, left) : left;
 }
 
 /**
@@ -178,6 +179,21 @@ function StartBar(props: {
   secondsLeft: number | null;
 }) {
   const { secondsLeft } = props;
+  // The weekly race: no host, it starts on the minute for everyone here.
+  if (props.room.weekly) {
+    const clock = secondsLeft === null ? null : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`;
+    return (
+      <p className="grow countdown" role="status">
+        {clock ? (
+          <>
+            The weekly race starts in <span className="mono">{clock}</span>. Connect your smart cube.
+          </>
+        ) : (
+          "The weekly race is over."
+        )}
+      </p>
+    );
+  }
   const startButton = (label: string, primary: boolean) =>
     props.isHost && (
       <button type="button" className={primary ? "primary" : ""} onClick={props.onStart} disabled={props.starting}>

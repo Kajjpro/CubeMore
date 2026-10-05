@@ -49,24 +49,34 @@ is **Live**, open the address shown at the top of the service page, e.g.
 `https://cubits.onrender.com` (Render adds a few letters if the name is taken).
 `https://<address>/health` answers `{"ok":true,...}`.
 
-### Keeping the daily leaderboard (optional, free)
+### Adding a database (recommended, free)
 
-The daily scramble works without a database, but its leaderboard is kept in memory,
-and the free Render service forgets it when it sleeps. To keep it:
+Without a database everything lives in memory, and the free Render service forgets it
+when it sleeps or restarts. With one:
 
-1. Create a free Postgres database, e.g. on **neon.tech** (or Supabase, or Render
-   Postgres). Copy its connection string (`postgres://…?sslmode=require`).
+- **rooms survive restarts and deploys**: players see "The server is restarting…", and
+  their browsers rejoin the same room (same match, same points, same chat) a moment later,
+- **every match is kept**: each solve with its scramble, each set, the winners (for
+  player profiles and stats later),
+- the **daily leaderboard** is kept.
+
+1. Create a free Postgres database on **neon.tech** (or Supabase, or Render Postgres).
+   On Neon, pick the region closest to your server, then **Connect** → copy the
+   connection string (`postgresql://…?sslmode=require`).
 2. On Render: your service → **Environment** → add `DATABASE_URL` = that string → Save.
-3. After the restart the log says `Daily scramble results are saved in Postgres`.
+   (On Fly: `fly secrets set DATABASE_URL="postgresql://…"`.)
+3. After the restart the log says `Rooms, match history and daily results are saved in Postgres`.
    The tables are created by themselves.
 
-Rooms still live in memory (they're short-lived by design); only the daily results
-are stored.
+Live racing never waits for the database: rooms run in memory as before, and their
+copy in the database is refreshed in the background (at most twice a second, and once
+more on shutdown). If the database is unreachable, racing carries on and the log says
+`could not write to the database`.
 
 ### Updating
 
-Every `git push` to `main` deploys again automatically (and clears the rooms, so push
-when nobody is racing). The **Logs** tab shows the room logs.
+Every `git push` to `main` deploys again automatically. Without a database that clears
+the rooms, so push when nobody is racing; with one, rooms come back after the deploy. The **Logs** tab shows the room logs.
 
 ### Using Vercel for the website at the same time (optional)
 
@@ -93,7 +103,8 @@ come from the same address.
 
 ## Why EXACTLY one machine
 
-Rooms live in the server's **memory** (there's no database yet). If two machines ran:
+Live rooms run in the server's **memory** (the database only keeps a copy for restarts).
+If two machines ran:
 
 - a room created on machine A wouldn't exist on machine B,
 - two friends opening the same room link could land on different machines and never see each other.
@@ -101,10 +112,11 @@ Rooms live in the server's **memory** (there's no database yet). If two machines
 So `fly.toml` is set up for one machine that is never stopped automatically, and the steps
 below use `--ha=false` (Fly otherwise creates 2 machines for "high availability").
 
-Two side effects of keeping rooms in memory:
+Two side effects of running rooms in memory:
 
-- **A deploy or restart clears all rooms.** Players see "The server is restarting…" and then
-  create a new room. Deploy when nobody is racing.
+- **Without a database, a deploy or restart clears all rooms.** Players see "The server is
+  restarting…" and then create a new room. With `DATABASE_URL` set, rooms come back after
+  the restart (see "Adding a database" above).
 - **The machine is always on**, so it's billed all the time (it can't sleep, or rooms would
   vanish). Check Fly's current pricing page for the cost of a `shared-cpu-1x` machine with 512 MB.
 
