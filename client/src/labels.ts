@@ -54,6 +54,7 @@ export function timeLimitLabel(limit: SolveTimeLimit): string {
 export function settingsSummary(settings: RoomSettings): string {
   const parts = [EVENT_SHORT[settings.cubeEvent], FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
   if (settings.scoring === "handicap") parts.push("Handicap");
+  if (settings.smartOnly) parts.push("Smart cubes only");
   if (settings.solveTimeLimit !== "off") parts.push(`${settings.solveTimeLimit} min limit`);
   return parts.join(", ");
 }

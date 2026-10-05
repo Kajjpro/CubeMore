@@ -115,6 +115,9 @@ export const Standings = memo(function Standings(props: Props) {
                           <EventIcon id="333" />
                         </span>
                       )}
+                      <span className="row-more" aria-hidden title="Tap for all their times">
+                        <Icon name="chevronUp" size={12} />
+                      </span>
                     </button>
                     <Pops pops={props.pops[id]} />
                   </th>
@@ -178,6 +181,7 @@ function CurrentCell(props: {
       <span className={tone} title={formatResultLong(result)}>
         {formatResult(result)}
         {props.fastest && result.penalty !== "DNF" && <span className="sr-only"> fastest</span>}
+        <VerifiedMark result={result} />
       </span>
     );
   }
@@ -195,6 +199,17 @@ function CurrentCell(props: {
     );
   }
   return <span className="muted">–</span>;
+}
+
+/** A small ✓ after a smart cube time the server replayed and checked (moves and TPS on hover). */
+function VerifiedMark({ result }: { result: SolveResult }) {
+  if (!result.verified) return null;
+  const detail = `Verified smart cube solve: ${result.verified.moves} moves, ${result.verified.tps.toFixed(2)} TPS`;
+  return (
+    <span className="verified-tick" title={detail} aria-label={detail}>
+      ✓
+    </span>
+  );
 }
 
 /** "7.4", "1:02.4": whole tenths, so it reads as "still going" and not as a final time. */
@@ -264,10 +279,12 @@ function SetDetails(props: {
               {canEdit ? (
                 <button type="button" className={`chip-button ${tone}`} onClick={() => setEditing(editing === i ? null : i)} data-dense>
                   {shown}
+                  {result && <VerifiedMark result={result} />}
                 </button>
               ) : (
                 <span className={tone} title={result ? formatResultLong(result) : undefined}>
                   {shown}
+                  {result && <VerifiedMark result={result} />}
                 </span>
               )}
             </li>

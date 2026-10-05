@@ -84,6 +84,11 @@ export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[]
                     {isPrivate && (
                       <span className="tag tag-lock">PIN</span>
                     )}
+                    {room.smartOnly && (
+                      <span className="tag tag-smart" title="Smart cubes only: every solve is verified">
+                        Smart
+                      </span>
+                    )}
                   </span>
                   <span className="room-meta">
                     {isPrivate && <span className="mono room-code">{room.code}</span>}

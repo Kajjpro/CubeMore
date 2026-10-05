@@ -1,6 +1,27 @@
 import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { getCubeEvent, type CubeEventId, type Scramble } from "@cube-racing/shared";
 import type { PreviewPref } from "../prefs";
+import type { FlowView } from "../smart/flow";
+import { useSmartGuide } from "../timer/useSmartSolve";
+
+/**
+ * What the smart cube guide shows on the scramble: `done` moves are green (a
+ * double move done halfway is light green), and `fix` (the moves that undo a
+ * wrong turn) is shown in red where the next move would be.
+ */
+interface GuideMarks {
+  done: number;
+  half: boolean;
+  fix: string[];
+}
+
+function guideMarks(view: FlowView, total: number): GuideMarks | null {
+  const guide = view.guide;
+  if (view.phase !== "scrambling" || guide.kind === "scrambled") return { done: total, half: false, fix: [] };
+  if (guide.kind === "on-track") return { done: guide.done, half: guide.half, fix: [] };
+  if (guide.kind === "off-track") return { done: guide.done, half: guide.half, fix: guide.fix };
+  return null; // solve first / lost: nothing to mark
+}
 
 /** Splits a scramble into moves. Square-1 moves like "(0, 5)" stay in one piece. */
 function movesOf(line: string): string[] {
@@ -26,15 +47,24 @@ function moveCount(text: string): number {
  * One line of moves. `first` is the index of its first move in the whole
  * scramble; moves before `tracked` are checked off, the one after is next.
  */
-function Moves({ line, first, tracked }: { line: string; first: number; tracked: number }) {
+function Moves({ line, first, tracked, guide }: { line: string; first: number; tracked: number; guide: GuideMarks | null }) {
   return (
     <>
       {movesOf(line).map((move, i) => {
         const index = first + i;
-        const state = index < tracked ? "done" : index === tracked && tracked > 0 ? "next" : "";
+        let state = index < tracked ? "done" : index === tracked && tracked > 0 ? "next" : "";
+        if (guide) state = index < guide.done ? "good" : index === guide.done && guide.half ? "half" : index === guide.done ? "next" : "";
+        const fixHere = guide && guide.fix.length > 0 && index === guide.done;
         return (
           <Fragment key={i}>
             {i > 0 && " "}
+            {fixHere && (
+              <>
+                <span className="fix-moves" aria-label={`Wrong move. Undo with ${guide.fix.join(" ")}`}>
+                  {guide.fix.join(" ")}
+                </span>{" "}
+              </>
+            )}
             <span className={`move ${state}`} data-i={index}>
               {move}
             </span>
@@ -50,7 +80,18 @@ function Moves({ line, first, tracked }: { line: string; first: number; tracked:
  * Tap a move to tick off everything up to it (to keep your place while you
  * scramble); tap the last ticked move to untick it.
  */
-export function ScrambleText({ scramble, tracked = 0, onTrack }: { scramble: Scramble; tracked?: number; onTrack?: (count: number) => void }) {
+export function ScrambleText({
+  scramble,
+  tracked = 0,
+  onTrack,
+  guide = null,
+}: {
+  scramble: Scramble;
+  tracked?: number;
+  onTrack?: (count: number) => void;
+  /** A smart cube is following the scramble: it marks the moves instead of taps. */
+  guide?: GuideMarks | null;
+}) {
   const size = sizeClass(scramble.text, scramble.cubeEvent);
   const lines = scramble.text.split("\n");
   let first = 0;
@@ -71,11 +112,11 @@ export function ScrambleText({ scramble, tracked = 0, onTrack }: { scramble: Scr
             first += movesOf(line).length;
             return (
               <span className="line" key={i}>
-                <Moves line={line} first={start} tracked={tracked} />
+                <Moves line={line} first={start} tracked={tracked} guide={guide} />
               </span>
             );
           })
-        : <Moves line={scramble.text} first={0} tracked={tracked} />}
+        : <Moves line={scramble.text} first={0} tracked={tracked} guide={guide} />}
     </p>
   );
 }
@@ -102,15 +143,19 @@ export const ScrambleBlock = memo(function ScrambleBlock(props: {
   const [track, setTrack] = useState({ text: props.scramble.text, count: 0 });
   const tracked = track.text === props.scramble.text ? track.count : 0;
   const total = moveCount(props.scramble.text);
+  const smart = useSmartGuide(props.scramble.text);
+  const guide = smart && guideMarks(smart, total);
 
   return (
     <div className="scramble-wrap">
       <div className="scramble-head">
         <span className="scramble-label">Scramble</span>
         <span className="scramble-count mono" aria-live="polite">
-          {tracked > 0 ? `${tracked}/${total}` : `${total} moves`}
+          {guide ? `${Math.min(guide.done, total)}/${total}` : tracked > 0 ? `${tracked}/${total}` : `${total} moves`}
         </span>
-        {tracked > 0 ? (
+        {smart ? (
+          <GuideStatus view={smart} />
+        ) : tracked > 0 ? (
           <button type="button" className="mini-button" onClick={() => setTrack({ text: props.scramble.text, count: 0 })} data-dense>
             Reset
           </button>
@@ -121,7 +166,12 @@ export const ScrambleBlock = memo(function ScrambleBlock(props: {
         {props.round}
       </div>
       <div className={`scramble-block ${layout}`}>
-        <ScrambleText scramble={props.scramble} tracked={tracked} onTrack={(count) => setTrack({ text: props.scramble.text, count })} />
+        <ScrambleText
+          scramble={props.scramble}
+          tracked={tracked}
+          onTrack={smart ? undefined : (count) => setTrack({ text: props.scramble.text, count })}
+          guide={guide}
+        />
         {showPreview && (
           <div className="preview-slot">
             <ScramblePreview scramble={props.scramble} mode={props.preview as "2d" | "3d"} onToggle={props.onTogglePreview} />
@@ -131,6 +181,16 @@ export const ScrambleBlock = memo(function ScrambleBlock(props: {
     </div>
   );
 });
+
+/** The guide's state in one short line, in the scramble header. */
+function GuideStatus({ view }: { view: FlowView }) {
+  const guide = view.guide;
+  if (view.phase !== "scrambling" || guide.kind === "scrambled") return <span className="guide-status good">Scrambled ✓</span>;
+  if (guide.kind === "off-track") return <span className="guide-status bad">Wrong move: do {guide.fix.join(" ")}</span>;
+  if (guide.kind === "solve-first") return <span className="guide-status warn">Solve your cube first</span>;
+  if (guide.kind === "lost") return <span className="guide-status bad">Lost track: solve your cube</span>;
+  return <span className="guide-status">Follow it on your cube</span>;
+}
 
 /**
  * Downloads the drawing code and the puzzle's data ahead of time (called in the

@@ -252,6 +252,7 @@ export function RoomView(props: RoomViewProps) {
                     youId={youId}
                     inputMode={demo?.inputMode ?? prefs.inputMode}
                     runningDisplay={demo?.runningDisplay ?? prefs.runningDisplay}
+                    smartOnly={room.settings.smartOnly}
                     waiting={waitingText(waitingNames(props.room, live, youId))}
                     onPhaseChange={onPhaseChange}
                     demo={demo?.timer}

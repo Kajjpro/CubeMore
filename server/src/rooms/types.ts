@@ -41,4 +41,9 @@ export interface ServerRoom {
   autoStartAt: number | null;
   /** True once the first race has started. From then on Best of is fixed. */
   hasRaced: boolean;
+  /**
+   * The weekly race: opened by the server, no host, starts at `startsAt` for
+   * whoever is there, and isn't deleted while it waits. null for normal rooms.
+   */
+  scheduled: { weeklyId: string; startsAt: number } | null;
 }

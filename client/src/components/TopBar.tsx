@@ -2,14 +2,9 @@ import { memo, useEffect, useRef, useState } from "react";
 import { getCubeEvent, type RoomSettings } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS, WIN_CONDITION_LABELS } from "../labels";
 import { setPref, usePrefs, type Prefs } from "../prefs";
-import {
-  bluetoothSupported,
-  connectSmartCube,
-  disconnectSmartCube,
-  keyboardCubeAllowed,
-  markSmartCubeSolved,
-  useSmartCube,
-} from "../smartCube";
+import { connectBtTimer, disconnectBtTimer, useBtTimer } from "../btTimer";
+import { bluetoothSupported } from "../smartCube";
+import { SmartCubeControls } from "./SmartCube";
 import { EventIcon, Icon, LogoMark, Segmented } from "./ui";
 
 /**
@@ -189,6 +184,7 @@ function Menu(props: {
         </button>
       </div>
       <SmartCubeSection />
+      <BtTimerSection />
       <OverlaySection code={props.code} pin={props.pin} />
       <div className="section">
         <h3>Preferences</h3>
@@ -261,53 +257,43 @@ function OverlaySection({ code, pin }: { code: string; pin: string | null }) {
   );
 }
 
-/** Smart cube (beta): connect a Bluetooth cube; it then times 3x3 solves by itself. */
-function SmartCubeSection() {
-  const cube = useSmartCube();
-  if (!bluetoothSupported && !keyboardCubeAllowed) {
-    return (
-      <div className="section">
-        <h3>Smart cube <span className="tag">beta</span></h3>
-        <p className="tiny muted">Needs Chrome or Edge with Bluetooth (not on iPhone).</p>
-      </div>
-    );
-  }
+/** Bluetooth timer: a GAN Smart Timer or Halo times your solves, like at a competition. */
+function BtTimerSection() {
+  const timer = useBtTimer();
   return (
     <div className="section">
-      <h3>Smart cube <span className="tag">beta</span></h3>
-      {cube.status === "on" ? (
+      <h3>Bluetooth timer <span className="tag">beta</span></h3>
+      {!bluetoothSupported ? (
+        <p className="tiny muted">Needs Chrome or Edge with Bluetooth (not on iPhone).</p>
+      ) : timer.status === "on" ? (
         <>
           <p className="tiny muted">
-            {cube.name} connected. On 3x3: turn it to match the scramble, then your first
-            turn starts the timer and solving stops it. Others can watch your cube live.
+            {timer.name} connected. Hands on to get ready, lift to start, stop it like at a competition: the time is the
+            timer's own.
           </p>
-          <div className="row">
-            <button type="button" className="grow" onClick={markSmartCubeSolved}>
-              My cube is solved
-            </button>
-            <button type="button" className="grow" onClick={disconnectSmartCube}>
-              Disconnect
-            </button>
-          </div>
+          <button type="button" onClick={disconnectBtTimer}>
+            Disconnect
+          </button>
         </>
       ) : (
         <>
-          <p className="tiny muted">GAN, GoCube, Giiker and other Bluetooth cubes. Solve it before connecting.</p>
-          {cube.error && <p className="error-text">{cube.error}</p>}
-          <div className="row">
-            {bluetoothSupported && (
-              <button type="button" className="grow" disabled={cube.status === "connecting"} onClick={() => void connectSmartCube("bluetooth")}>
-                {cube.status === "connecting" ? "Connecting…" : "Connect smart cube"}
-              </button>
-            )}
-            {keyboardCubeAllowed && (
-              <button type="button" className="grow" disabled={cube.status === "connecting"} onClick={() => void connectSmartCube("keyboard")}>
-                Keyboard cube (test)
-              </button>
-            )}
-          </div>
+          <p className="tiny muted">GAN Smart Timer and GAN Halo Smart Timer.</p>
+          {timer.error && <p className="error-text">{timer.error}</p>}
+          <button type="button" disabled={timer.status === "connecting"} onClick={() => void connectBtTimer()}>
+            {timer.status === "connecting" ? "Connecting…" : "Connect timer"}
+          </button>
         </>
       )}
+    </div>
+  );
+}
+
+/** Smart cube (beta): connect a Bluetooth cube; it then times 3x3 solves by itself. */
+function SmartCubeSection() {
+  return (
+    <div className="section">
+      <h3>Smart cube <span className="tag">beta</span></h3>
+      <SmartCubeControls />
     </div>
   );
 }

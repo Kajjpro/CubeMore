@@ -20,11 +20,11 @@ import { AO5_FULL, AO5_TIMES, LONG_NAMES, NAMES, SCRAMBLES, ao12Times, mockChat,
 const noop = () => {};
 
 const ROOMS: PublicRoomInfo[] = [
-  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public" },
-  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private" },
-  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public" },
-  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public" },
-  { code: "T2CKW7", name: "Team practice", cubeEvent: "444", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "private" },
+  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public", smartOnly: false },
+  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private", smartOnly: false },
+  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public", smartOnly: false },
+  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public", smartOnly: false },
+  { code: "T2CKW7", name: "Verified 3x3", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "public", smartOnly: true },
 ];
 const actions: RoomActions = {
   leave: noop,

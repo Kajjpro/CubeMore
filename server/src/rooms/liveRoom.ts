@@ -66,6 +66,14 @@ export interface LiveRoomDeps {
   broadcastIntervalMs: number;
   /** Sends one new chat line to everyone in the room (right away, not batched). */
   sendChat?: (message: ChatMessage) => void;
+  /** Called after every saved change (used to keep the database up to date). */
+  onCommit?: (before: ServerRoom, next: ServerRoom) => void;
+}
+
+/** The chat of a room restored after a restart. */
+export interface RestoredChat {
+  log: ChatMessage[];
+  count: number;
 }
 
 /** If making scrambles failed, wait this long before trying again. */
@@ -102,9 +110,14 @@ export class LiveRoom {
   constructor(
     initial: ServerRoom,
     private readonly deps: LiveRoomDeps,
+    chat?: RestoredChat,
   ) {
     this.code = initial.code;
     this.current = initial;
+    if (chat) {
+      this.chatLog = chat.log.slice(-CHAT_HISTORY_LENGTH);
+      this.chatCount = chat.count;
+    }
     this.prepareScrambles();
     this.scheduleBroadcast();
   }
@@ -124,6 +137,11 @@ export class LiveRoom {
 
   snapshot(): RoomSnapshot {
     return toSnapshot(this.current, Date.now());
+  }
+
+  /** Everything needed to restore this room after a restart. */
+  saveable(): { room: ServerRoom; chat: ChatMessage[]; chatCount: number } {
+    return { room: this.current, chat: [...this.chatLog], chatCount: this.chatCount };
   }
 
   /**
@@ -156,6 +174,7 @@ export class LiveRoom {
     const before = this.current;
     this.current = next;
     this.scheduleBroadcast();
+    this.deps.onCommit?.(before, next);
 
     if (next.match?.phase === "match_over" && before.match?.phase !== "match_over") {
       const winners = next.match.winnerIds.map((id) => next.players.find((p) => p.publicId === id)?.nickname ?? id);
@@ -268,16 +287,24 @@ export class LiveRoom {
     return scrambles;
   }
 
-  /** Deletes the room: stops all its timers. Anything still queued sees `deleted`. */
+  /** Deletes the room: stops it for good, and tells the server (which forgets its saved copy). */
   delete(): void {
     if (this.isDeleted) return;
+    this.stop();
+    this.deps.onDelete(this.code);
+  }
+
+  /**
+   * Stops all its timers (server shutdown). Anything still queued sees `deleted`.
+   * Unlike delete(), the room's saved copy stays, so it comes back after the restart.
+   */
+  stop(): void {
     this.isDeleted = true;
     if (this.wakeUpTimer) clearTimeout(this.wakeUpTimer);
     if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
     this.wakeUpTimer = null;
     this.broadcastTimer = null;
     this.upcoming = null;
-    this.deps.onDelete(this.code);
   }
 
   // -------------------------------------------------------------------------

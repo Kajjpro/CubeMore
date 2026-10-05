@@ -26,9 +26,9 @@ Then open **http://localhost:5173** in your browser.
 - `npm install` downloads the libraries for all three folders (`shared`, `server`, `client`).
   The root `package.json` lists them as **workspaces**, so a single install covers all of them.
 - `npm run dev` starts two programs at the same time (using `concurrently`):
-  - **server** on port **3001**: Node.js + Express + Socket.IO. It holds all the rooms in memory.
+  - **server** on port **3001**: Node.js + Express + Socket.IO. It runs all the rooms in memory.
     `tsx watch` restarts it automatically whenever you save a server file.
-    Restarting clears all rooms.
+    Restarting clears all rooms, unless `DATABASE_URL` is set (see below).
   - **client** on port **5173**: the Vite dev server for the React website. It reloads the page
     when you save a client file. It also **forwards** every `/socket.io` request to port 3001
     (see `client/vite.config.ts`), so the browser only needs one address.
@@ -120,11 +120,31 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
 - **Daily scramble** (`/daily`): the same 3x3 scramble for everyone each day (UTC), one
   attempt: the scramble shows when you start, then you have 10 minutes. A global
   leaderboard; your rank. Needs `DATABASE_URL` to survive restarts (see DEPLOY.md).
-- **Smart cube (beta)**: Menu → "Connect smart cube" (Chrome / Edge with Bluetooth: GAN,
-  GoCube, Giiker…). On 3x3: turn it to match the scramble; your first turn starts the
-  timer and solving it stops it. Others can tap your row and watch your cube turn live.
-  For testing without a cube, add `?simcube=1` to the address: the Menu then offers a
-  keyboard cube (i/k = R/R', j/f = U/U', h/g = F/F', d/e = L/L', s/l = D/D', w/o = B/B').
+- **Database (optional)**: with `DATABASE_URL` (e.g. a free Neon database), rooms survive
+  restarts and deploys (browsers rejoin the same match by themselves), and every match is
+  kept: each solve with its scramble, each set, the winners.
+- **Smart cubes (beta)**: Menu → "GAN cube" (GAN 356 i3, i Carry 2, 12 ui, 14 ui… through
+  gan-web-bluetooth) or "Other smart cube" (GoCube, Giiker, QiYi… through cubing.js). Chrome / Edge.
+  - **Guided scramble**: the scramble follows your cube. Done moves turn green; a wrong turn
+    shows its undo in red ("L'") right where it happened.
+  - **Inspection**: the moment the cube matches the scramble, 15 s of inspection start. Your
+    first turn starts the timer; if the 15 s run out, it starts by itself. Solving stops it.
+  - **Exact times**: GAN cubes stamp each move with their own clock, so Bluetooth delays don't
+    change the time; the cube's clock drift is corrected over the session, and moves Bluetooth
+    lost are recovered. When the cube stops without being solved, the app asks it for its full
+    state, so a lost move never leaves the timer running (no extra U U').
+  - **Verified**: every move is sent with the time; the server replays it on the scramble
+    (solved at the last move, humanly possible, not the scramble undone). Verified times get a
+    ✓ with their moves and TPS.
+  - **Smart-cube rooms** (lobby → Timing → "Smart cubes only"): only verified solves count.
+  - **Weekly race**: every Saturday 12:00 UTC (`WEEKLY_RACE_DAY`, `WEEKLY_RACE_HOUR_UTC`), a
+    smart-cube 3x3 ao5 for everyone. The room opens 30 minutes before and starts on the minute.
+  - **Verified leaderboard** on the home page (this week / all time), with a replay of each
+    solve. Needs `DATABASE_URL`.
+  - Without a cube: add `?simcube=1` to the address, and the Menu offers a keyboard cube
+    (i/k = R/R', j/f = U/U', h/g = F/F', d/e = L/L', s/l = D/D', w/o = B/B').
+- **Bluetooth timer (beta)**: Menu → "Connect timer" (GAN Smart Timer, GAN Halo). Hands on,
+  lift to start, stop like at a competition; the time is the timer's own.
 
 ## How a match works
 
@@ -151,6 +171,8 @@ shared/          Used by BOTH server and client
   types.ts         RoomSnapshot, MatchSnapshot, SolveResult, settings...
   constants.ts     timings (30 s reconnect, 3 s review, 6 s set result...), limits
   cubeEvents.ts    the 17 WCA events
+  cube3.ts         a 3x3 model in GAN's facelets format (smart cube guide + verification)
+  smartSolve.ts    verifying a smart cube solve (shared, so both sides use the same rules)
 
 server/src/
   index.ts              starts the server; graceful shutdown
@@ -165,6 +187,11 @@ server/src/
   rooms/chatNotices.ts  the chat's system lines ("Anu joined the room"...)
   daily/daily.ts        the daily scramble: one attempt per player per day, ranks
   daily/store.ts        where daily results live: memory, or Postgres (DATABASE_URL)
+  persistence/store.ts        Postgres tables: saved rooms + match history
+  persistence/persistence.ts  keeps them up to date in the background (never blocks racing)
+  persistence/history.ts      what's worth keeping when a room changes (set finished...)
+  persistence/restore.ts      reopening a saved room after a restart
+  weekly/                     the weekly smart-cube race: schedule, results
   scrambles.ts          random-state WCA scrambles with cubing.js
   rateLimit.ts          token bucket per connection
   **/*.test.ts          unit tests
@@ -176,7 +203,9 @@ client/src/
   outbox.ts             solves waiting to be acknowledged (survives refreshes)
   timer/useSpeedTimer.ts  the space bar / touch timer
   timer/useSmartSolve.ts  a solve timed by a smart cube
-  smartCube.ts          the Bluetooth cube connection (cubing.js) + solve tracking
+  smartCube.ts          the smart cube connection (gan-web-bluetooth, cubing.js)
+  smart/                the scramble guide, the solve flow (inspection...), exact timing
+  btTimer.ts            the Bluetooth timer connection (GAN)
   shareCard.ts          draws the result card image
   time.ts               formatting and typing times
   clock.ts              the server's clock (for countdowns)

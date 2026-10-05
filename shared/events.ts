@@ -38,13 +38,15 @@ import type {
   reactSchema,
   createRoomSchema,
   joinRoomSchema,
+  leaderboardSchema,
+  replaySchema,
   restartSchema,
   submitSolveSchema,
   targetPlayerSchema,
   timerStatusSchema,
   updateSettingsSchema,
 } from "./schemas";
-import type { ChatMessage, DailyStatus, PublicRoomInfo, RoomSnapshot } from "./types";
+import type { ChatMessage, DailyStatus, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -81,6 +83,12 @@ export const ClientEvents = {
   WATCH_ROOM: "room:watch",
   /** "Race now": the code of an open public room for this event, or null (then create one). */
   QUICK_RACE: "rooms:quick_race",
+  /** The weekly smart-cube race: when, its room, its results. */
+  WEEKLY_STATUS: "weekly:status",
+  /** The best verified smart cube singles (this week or all time). */
+  LEADERBOARD: "leaderboard:get",
+  /** Every move of one verified solve, to watch it again. */
+  REPLAY: "replay:get",
 
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
@@ -106,8 +114,9 @@ export const ServerEvents = {
  *  RATE_LIMITED - too many requests: try again a bit later.
  *  INVALID      - the payload didn't pass the checks.
  *  PIN_REQUIRED - a private room: ask for the PIN (missing or wrong) and try again.
+ *  REJECTED     - this solve will never count (a smart cube solve that failed the check): don't send it again.
  */
-export type ErrorCode = "NOT_CURRENT" | "RATE_LIMITED" | "INVALID" | "PIN_REQUIRED";
+export type ErrorCode = "NOT_CURRENT" | "RATE_LIMITED" | "INVALID" | "PIN_REQUIRED" | "REJECTED";
 
 /** What the server sends back through the ack callback. */
 export type AckResponse<Data extends object = object> =
@@ -132,6 +141,8 @@ export type DailyPayload = z.input<typeof dailySchema>;
 export type CubeMovesPayload = z.input<typeof cubeMovesSchema>;
 export type DailyStartPayload = z.input<typeof dailyStartSchema>;
 export type DailySubmitPayload = z.input<typeof dailySubmitSchema>;
+export type LeaderboardPayload = z.input<typeof leaderboardSchema>;
+export type ReplayPayload = z.input<typeof replaySchema>;
 export type EmptyPayload = Record<string, never>;
 
 // ---- Response data ----
@@ -172,6 +183,10 @@ export interface ClientRequests {
   [ClientEvents.DAILY_STATUS]: { payload: DailyPayload; response: { daily: DailyStatus } };
   [ClientEvents.DAILY_START]: { payload: DailyStartPayload; response: { daily: DailyStatus } };
   [ClientEvents.DAILY_SUBMIT]: { payload: DailySubmitPayload; response: { daily: DailyStatus } };
+  [ClientEvents.WEEKLY_STATUS]: { payload: EmptyPayload; response: { weekly: WeeklyStatus } };
+  /** available: false = no database, so no history to rank. */
+  [ClientEvents.LEADERBOARD]: { payload: LeaderboardPayload; response: { rows: LeaderboardRow[]; available: boolean } };
+  [ClientEvents.REPLAY]: { payload: ReplayPayload; response: { replay: Replay } };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 

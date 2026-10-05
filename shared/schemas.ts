@@ -26,6 +26,7 @@ import {
   ROOM_CODE_LENGTH,
 } from "./constants";
 import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
+import { SMART_SOLVE_LIMITS } from "./smartSolve";
 import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SCORING_MODES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,6 +85,7 @@ export const settingsChangesSchema = z.object({
   maxPlayers: z.number().int().min(MIN_PLAYERS_LIMIT).max(MAX_PLAYERS_LIMIT).optional(),
   solveTimeLimit: z.literal(SOLVE_TIME_LIMITS).optional(),
   scoring: z.enum(SCORING_MODES).optional(),
+  smartOnly: z.boolean().optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */
@@ -160,6 +162,13 @@ export const submitSolveSchema = z
     /** Whole milliseconds, never decimals. */
     timeMs: z.number().int().min(0).max(MAX_SOLVE_TIME_MS),
     penalty: z.enum(PENALTIES),
+    /** A smart cube solve: every move and when it happened (ms from the start). The server verifies it. */
+    smart: z
+      .object({
+        moves: z.array(z.string().max(3)).max(SMART_SOLVE_LIMITS.maxMoves),
+        times: z.array(z.number().int().min(0).max(MAX_SOLVE_TIME_MS)).max(SMART_SOLVE_LIMITS.maxMoves),
+      })
+      .optional(),
   })
   .refine((solve) => solve.penalty === "DNF" || solve.timeMs > 0, {
     message: "A time must be longer than 0.",
@@ -177,6 +186,16 @@ export const watchRoomSchema = z.object({
 });
 
 /** The daily scramble: who's asking (the secret player id, so one attempt per player). */
+/** The verified leaderboard: this week's or all time. */
+export const leaderboardSchema = z.object({
+  period: z.enum(["week", "all"]),
+});
+
+/** One verified solve to watch again: "matchId/setIndex/solveIndex/publicId" (from a leaderboard row). */
+export const replaySchema = z.object({
+  id: z.string().max(200).regex(/^[\w-]+\/\d+\/\d+\/[\w-]+$/, "Invalid replay id."),
+});
+
 export const dailySchema = z.object({
   playerId: playerIdSchema,
 });

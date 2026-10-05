@@ -33,10 +33,15 @@ export const config = {
     .map((origin) => origin.trim().replace(/\/$/, ""))
     .filter(Boolean),
   /**
-   * A Postgres database for the daily scramble's leaderboard, e.g. from Neon,
-   * Supabase or Render. Empty = kept in memory (reset on every restart).
+   * A Postgres database, e.g. from Neon, Supabase or Render: saved rooms, match
+   * history, the daily leaderboard. Empty = kept in memory (reset on every restart).
    */
   databaseUrl: process.env.DATABASE_URL ?? "",
+  /** The weekly smart-cube race: day (0 = Sunday ... 6 = Saturday) and hour, in UTC. */
+  weeklySchedule: {
+    day: Math.min(6, numberFromEnv("WEEKLY_RACE_DAY", 6)),
+    hourUtc: Math.min(23, numberFromEnv("WEEKLY_RACE_HOUR_UTC", 12)),
+  },
   timing: {
     solveReviewMs: numberFromEnv("SOLVE_REVIEW_MS", SOLVE_REVIEW_MS),
     setResultMs: numberFromEnv("SET_RESULT_MS", SET_RESULT_MS),

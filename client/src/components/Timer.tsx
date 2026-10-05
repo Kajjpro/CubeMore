@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { AUTO_CONFIRM_MS, ClientEvents, type MatchSnapshot, type Penalty } from "@cube-racing/shared";
-import { addSolve, confirmSolve, solveKey, useOutbox } from "../outbox";
+import { AUTO_CONFIRM_MS, ClientEvents, SMART_CUBE_EVENTS, type MatchSnapshot, type Penalty, type SolveResult } from "@cube-racing/shared";
+import { turnsPerSecond, type SmartSolveData } from "@cube-racing/shared/smartSolve";
+import { addSolve, confirmSolve, solveKey, useOutbox, useRejection } from "../outbox";
 import type { InputMode, RunningDisplay } from "../prefs";
 import { request } from "../socket";
 import { formatResult, formatRunning, formatSolve, parseTypedTime } from "../time";
-import { useSmartCube, type SmartState } from "../smartCube";
+import { useBtTimer } from "../btTimer";
+import { useSmartCube } from "../smartCube";
+import type { FlowView } from "../smart/flow";
+import { useBtTimerSolve } from "../timer/useBtTimerSolve";
 import { useSmartSolve } from "../timer/useSmartSolve";
 import { HOLD_MS, useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
-
-/** Events a smart cube can time: the 3x3 ones. */
-const SMART_EVENTS = new Set(["333", "333oh"]);
+import { SmartCubeControls } from "./SmartCube";
 
 /** Only for /dev/states: shows a timer state without real input. */
 export interface TimerDemo {
   phase?: TimerPhase;
   elapsedMs?: number;
-  pending?: { timeMs: number; penalty: Penalty; confirmed: boolean };
+  pending?: { timeMs: number; penalty: Penalty; confirmed: boolean; smart?: SmartSolveData };
 }
 
 interface Props {
@@ -25,6 +27,8 @@ interface Props {
   youId: string;
   inputMode: InputMode;
   runningDisplay: RunningDisplay;
+  /** A smart-cube room: only verified smart cube solves count. */
+  smartOnly: boolean;
   /** "Waiting for Bat, Nomin and 3 others", shown once your time is in. */
   waiting: string | null;
   onPhaseChange: (phase: TimerPhase) => void;
@@ -36,7 +40,7 @@ function sendTimerStatus(status: "solving" | "idle"): void {
   void request(ClientEvents.TIMER_STATUS, { status });
 }
 
-export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiting, onPhaseChange, demo }: Props) {
+export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smartOnly, waiting, onPhaseChange, demo }: Props) {
   const [touchArea, setTouchArea] = useState<HTMLDivElement | null>(null);
   const outbox = useOutbox();
 
@@ -46,15 +50,18 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
   const myResult = match.results[youId]?.[match.solveIndex] ?? null;
   const canStart = match.phase === "solving" && !myResult && !pending;
 
-  const stopSolve = (timeMs: number) => {
+  const stopSolve = (timeMs: number, smart?: SmartSolveData) => {
     // Saved in the outbox the very moment the timer stops.
-    addSolve({ ...solveId, timeMs, penalty: "OK" });
+    addSolve({ ...solveId, timeMs, penalty: "OK", ...(smart ? { smart } : {}) });
     sendTimerStatus("idle");
   };
 
-  // A connected smart cube times 3x3 solves by itself (no spacebar).
+  // A connected smart cube times 3x3 solves by itself (no spacebar). In a
+  // smart-cube room it's the only way to time a solve.
   const smartCube = useSmartCube();
-  const smartUsable = !demo && smartCube.status === "on" && inputMode === "timer" && SMART_EVENTS.has(match.scramble?.cubeEvent ?? "");
+  const smartEvent = SMART_CUBE_EVENTS.includes(match.scramble?.cubeEvent ?? "");
+  const smartUsable = !demo && smartCube.status === "on" && smartEvent && (inputMode === "timer" || smartOnly);
+  const needsCube = !demo && smartOnly && smartCube.status !== "on" && canStart;
   const smart = useSmartSolve({
     active: smartUsable && canStart,
     scramble: match.scramble?.text ?? "",
@@ -62,15 +69,26 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
     onStop: stopSolve,
   });
 
-  const timer = useSpeedTimer({
-    canStart: !demo && canStart && inputMode === "timer" && !smartUsable,
+  // A Bluetooth timer (GAN) times solves like at a competition, with its own exact time.
+  const btTimer = useBtTimer();
+  const btUsable = !demo && btTimer.status === "on" && inputMode === "timer" && !smartUsable && !smartOnly;
+  const bt = useBtTimerSolve({
+    active: btUsable && canStart,
     onStart: () => sendTimerStatus("solving"),
-    onStop: stopSolve,
+    onStop: (timeMs) => stopSolve(timeMs),
+  });
+
+  const timer = useSpeedTimer({
+    canStart: !demo && canStart && inputMode === "timer" && !smartUsable && !smartOnly && !btUsable,
+    onStart: () => sendTimerStatus("solving"),
+    onStop: (timeMs) => stopSolve(timeMs),
     touchArea,
   });
-  const smartPhase: TimerPhase | null = smart && (smart.state === "running" ? "running" : smart.state === "solved" ? "stopped" : "idle");
-  const phase = demo?.phase ?? smartPhase ?? timer.phase;
-  const startedAt = smart ? smart.startedAt : timer.startedAt;
+  const smartPhase: TimerPhase | null =
+    smart && (smart.phase === "running" ? "running" : smart.phase === "solved" ? "stopped" : "idle");
+  const phase = demo?.phase ?? smartPhase ?? bt?.phase ?? timer.phase;
+  const startedAt = smart?.startedAt ?? bt?.startedAt ?? timer.startedAt;
+  const rejection = useRejection();
 
   // A new scramble: the timer starts fresh.
   const { reset } = timer;
@@ -78,7 +96,7 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
 
   useEffect(() => onPhaseChange(phase), [phase, onPhaseChange]);
 
-  const typing = inputMode === "typing" && canStart && phase === "idle";
+  const typing = inputMode === "typing" && canStart && phase === "idle" && !smartOnly;
   // Just stopped: the time and OK / +2 / DNF float over the blurred room.
   const choosing = !!pending && !pending.confirmed;
 
@@ -88,7 +106,13 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
 
   return (
     <div className="timer-zone" data-phase={phase} data-choosing={choosing}>
-      {typing ? (
+      {needsCube ? (
+        <div className="smart-required">
+          <p className="smart-required-title">This room is for smart cubes</p>
+          <p className="tiny muted">Every solve is checked move by move. Connect your cube to race.</p>
+          <SmartCubeControls />
+        </div>
+      ) : typing ? (
         <TypeIn onSubmit={(timeMs, penalty) => addSolve({ ...solveId, timeMs, penalty })} />
       ) : (
         <div
@@ -98,7 +122,9 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
           tabIndex={-1}
           aria-label="Timer. Hold, then let go to start. Tap or press any key to stop."
         >
-          {phase === "running" ? (
+          {smart?.phase === "inspecting" && smart.inspectionEndsAt !== null ? (
+            <InspectionDigits endsAt={smart.inspectionEndsAt} />
+          ) : phase === "running" ? (
             demo ? (
               <div className={`timer-digits mono ${runningDisplay === "hidden" ? "as-text" : ""}`}>
                 {formatRunning(demo.elapsedMs ?? 0, runningDisplay)}
@@ -112,7 +138,8 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
             </div>
           )}
           <HoldMeter />
-          <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart?.state)}</p>
+          {smart?.phase === "running" && <LiveTurns view={smart} />}
+          <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart, !!bt)}</p>
         </div>
       )}
 
@@ -130,8 +157,10 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, waiti
         )}
 
       <div className="timer-below">
+        <SmartSummary pending={pending?.smart ? { timeMs: pending.timeMs, smart: pending.smart } : null} result={myResult} />
         {pending?.confirmed && <p className="status-line">Sending…</p>}
         {!pending && myResult && <p className="status-line done-line">{waiting ?? "Time in"}</p>}
+        {!pending && !myResult && rejection?.key === key && <p className="status-line error-text">{rejection.message}</p>}
       </div>
     </div>
   );
@@ -146,9 +175,23 @@ export function HoldMeter() {
   );
 }
 
-function hintFor(phase: TimerPhase, canStart: boolean, done: boolean, smart?: SmartState): React.ReactNode {
-  if (smart === "scrambling" && canStart) return "Scramble your smart cube to match";
-  if (smart === "armed" && canStart) return "Scrambled. Your first turn starts the timer";
+function hintFor(phase: TimerPhase, canStart: boolean, done: boolean, smart: FlowView | null, btTimer: boolean): React.ReactNode {
+  if (smart && canStart && smart.phase === "scrambling") {
+    switch (smart.guide.kind) {
+      case "solve-first":
+        return "Solve your cube first, then follow the scramble";
+      case "lost":
+        return "Lost track of your cube: solve it, then follow the scramble again";
+      case "off-track":
+        return <span className="fix-hint">Wrong move: do {smart.guide.fix.join(" ")} to go back</span>;
+      default:
+        return "Follow the scramble on your cube";
+    }
+  }
+  if (smart && canStart && smart.phase === "inspecting") return "Inspection: your first turn starts the timer";
+  if (btTimer && canStart && phase === "idle") return "Put your hands on the timer";
+  if (btTimer && phase === "holding") return "Hold…";
+  if (btTimer && phase === "ready") return "Lift to start";
   if (phase === "holding") return "Hold…";
   if (phase === "ready") return "Release to start";
   if (phase === "running" || phase === "stopped") return "";
@@ -165,6 +208,53 @@ export function IdleHint() {
       </span>
       <span className="hint-touch">Hold the timer to get ready</span>
     </>
+  );
+}
+
+/** The 15 s inspection counting down (written every frame, like the running time). */
+function InspectionDigits({ endsAt }: { endsAt: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const draw = () => {
+      const left = Math.max(0, Math.ceil((endsAt - performance.now()) / 1000));
+      if (ref.current) {
+        ref.current.textContent = String(left);
+        ref.current.dataset.urgent = String(left <= 3);
+      }
+      frame = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [endsAt]);
+  return <div ref={ref} className="timer-digits mono inspection-digits" aria-label="Inspection seconds left" />;
+}
+
+/** While solving with a smart cube: moves so far and turns per second, small. */
+function LiveTurns({ view }: { view: FlowView }) {
+  const elapsed = view.startedAt === null ? 0 : performance.now() - view.startedAt;
+  return (
+    <p className="turns-line mono" aria-hidden>
+      {view.moveCount} moves · {turnsPerSecond(view.moveCount, elapsed).toFixed(1)} TPS
+    </p>
+  );
+}
+
+/** After a smart cube solve: its moves and TPS, and ✓ once the server verified it. */
+function SmartSummary({ pending, result }: { pending: { timeMs: number; smart: SmartSolveData } | null; result: SolveResult | null }) {
+  if (result?.verified) {
+    return (
+      <p className="turns-line mono">
+        <span className="verified-mark">✓ Verified</span> · {result.verified.moves} moves · {result.verified.tps.toFixed(2)} TPS
+      </p>
+    );
+  }
+  if (!pending) return null;
+  const moves = pending.smart.moves.length;
+  return (
+    <p className="turns-line mono">
+      {moves} moves · {turnsPerSecond(moves, pending.timeMs).toFixed(2)} TPS
+    </p>
   );
 }
 
@@ -276,7 +366,7 @@ export function PenaltyChoices(props: {
   );
 }
 
-/** For stackmat users: type the time. Accepts 12.34, 1:02.34 and DNF. */
+/** For stackmat users: type the time, like csTimer (1235 = 12.35). See parseTypedTime. */
 export function TypeIn({ onSubmit }: { onSubmit: (timeMs: number, penalty: Penalty) => void }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -308,7 +398,7 @@ export function TypeIn({ onSubmit }: { onSubmit: (timeMs: number, penalty: Penal
         />
       </label>
       <p id="type-in-help" className="tiny muted">
-        12.34, 1:02.34 or DNF
+        1235 = 12.35 · 10234 = 1:02.34 · + for +2 · DNF
       </p>
       {error && <p className="error-text">{error}</p>}
       <button className="primary xl" type="submit">

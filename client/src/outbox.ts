@@ -16,6 +16,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ClientEvents, type Penalty } from "@cube-racing/shared";
+import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import { request } from "./socket";
 import { profileKey } from "./storage";
 
@@ -29,6 +30,8 @@ export interface OutboxEntry {
   /** false while the player can still pick OK / +2 / DNF. */
   confirmed: boolean;
   createdAt: number;
+  /** A smart cube solve: every move and its time, for the server to verify. */
+  smart?: SmartSolveData;
 }
 
 const STORAGE_KEY = profileKey("outbox");
@@ -84,6 +87,25 @@ export function outboxSize(): number {
   return entries.length;
 }
 
+/** The last solve the server refused for good (shown under the timer), or null. */
+let rejection: { key: string; message: string } | null = null;
+const rejectionListeners = new Set<() => void>();
+
+function setRejection(next: typeof rejection): void {
+  rejection = next;
+  rejectionListeners.forEach((listener) => listener());
+}
+
+export function useRejection(): typeof rejection {
+  return useSyncExternalStore(
+    (listener) => {
+      rejectionListeners.add(listener);
+      return () => rejectionListeners.delete(listener);
+    },
+    () => rejection,
+  );
+}
+
 /** The outbox as React state: re-renders when it changes. */
 export function useOutbox(): OutboxEntry[] {
   return useSyncExternalStore(
@@ -121,10 +143,12 @@ export async function flushOutbox(roomCode: string): Promise<void> {
           solveIndex: entry.solveIndex,
           timeMs: entry.timeMs,
           penalty: entry.penalty,
+          ...(entry.smart ? { smart: entry.smart } : {}),
         });
-        if (response.ok || response.code === "NOT_CURRENT") {
+        if (response.ok || response.code === "NOT_CURRENT" || response.code === "REJECTED") {
           const key = solveKey(entry);
           update(entries.filter((e) => solveKey(e) !== key));
+          if (!response.ok && response.code === "REJECTED") setRejection({ key, message: response.error });
         }
       }
     } while (sendAgain);

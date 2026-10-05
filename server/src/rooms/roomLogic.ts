@@ -23,6 +23,7 @@ import {
   formatResult,
   PIN_LENGTH,
   RECONNECT_GRACE_MS,
+  SMART_CUBE_EVENTS,
   type CubeEventId,
   type ErrorCode,
   type PublicRoomInfo,
@@ -94,6 +95,29 @@ export function createRoom(
     emptySince: null,
     autoStartAt: null,
     hasRaced: false,
+    scheduled: null,
+  };
+}
+
+/** The weekly race's room: nobody in it yet, no host, and the race starts at `startsAt`. */
+export function createScheduledRoom(
+  code: string,
+  settings: RoomSettings,
+  scheduled: { weeklyId: string; startsAt: number },
+): ServerRoom {
+  return {
+    code,
+    version: 1,
+    settings,
+    match: null,
+    hostId: null,
+    players: [],
+    kickedPlayerIds: [],
+    pin: null,
+    emptySince: null,
+    autoStartAt: scheduled.startsAt,
+    hasRaced: false,
+    scheduled,
   };
 }
 
@@ -143,13 +167,14 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
   const joined = newPlayer(player, now);
   const players = [...room.players, joined];
   // In the lobby, a second player joining starts the countdown to the race.
-  const countDown = !room.match && players.length >= 2 && room.autoStartAt === null;
+  const countDown = !room.match && players.length >= 2 && room.autoStartAt === null && !room.scheduled;
   return {
     ok: true,
     room: changeRoom(room, {
       players,
       // If the room was empty, there's no host yet, so the new player becomes host.
-      hostId: room.hostId ?? joined.publicId,
+      // The weekly race never has a host.
+      hostId: room.scheduled ? null : (room.hostId ?? joined.publicId),
       emptySince: null,
       autoStartAt: countDown ? now + AUTO_START_DELAY_MS : room.autoStartAt,
     }),
@@ -253,6 +278,8 @@ export function updateSettings(
   }
 
   const settings: RoomSettings = { ...room.settings, ...changes };
+  const smartError = smartEventError(settings);
+  if (smartError) return fail(smartError);
   // An empty name goes back to "<host>'s room".
   if (!settings.name) settings.name = `${hostName(room) ?? "Cube"}'s room`;
   if (settings.maxPlayers < room.players.length) {
@@ -272,6 +299,13 @@ export function updateSettings(
   }
 
   return { ok: true, room: changeRoom(room, { settings, pin: nextPin }) };
+}
+
+/** Smart-cube rooms only work for the events a smart cube can do (3x3, 3x3 one-handed). */
+export function smartEventError(settings: RoomSettings): string | null {
+  return settings.smartOnly && !SMART_CUBE_EVENTS.includes(settings.cubeEvent)
+    ? "Smart-cube rooms are for 3x3 and 3x3 one-handed."
+    : null;
 }
 
 /**
@@ -327,7 +361,7 @@ export function rematch(
   now: number,
   changes: RestartChanges = {},
 ): LogicResult {
-  const error = rematchError(room, requesterId);
+  const error = rematchError(room, requesterId) ?? smartEventError(settingsAfterRestart(room, changes));
   if (error) {
     return fail(error);
   }
@@ -361,6 +395,7 @@ export function roomList(rooms: ServerRoom[]): PublicRoomInfo[] {
       maxPlayers: room.settings.maxPlayers,
       racing: room.match !== null && room.match.phase !== "match_over",
       visibility: room.settings.visibility,
+      smartOnly: room.settings.smartOnly,
       hostName: hostName(room),
     }))
     .sort((a, b) => b.players - a.players || a.name.localeCompare(b.name))
@@ -379,6 +414,8 @@ export function quickRaceCode(rooms: ServerRoom[], cubeEvent: CubeEventId, excep
       room.code !== exceptCode &&
       room.pin === null &&
       room.settings.cubeEvent === cubeEvent &&
+      // Smart-cube rooms are joined on purpose, never by "Race now".
+      !room.settings.smartOnly &&
       // Someone must really be there (not only players whose connection dropped).
       room.players.some((p) => p.status === "connected") &&
       room.players.length < room.settings.maxPlayers &&
@@ -428,7 +465,11 @@ export function autoStartDue(room: ServerRoom, now: number): boolean {
  */
 export function autoStart(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
   if (!autoStartDue(room, now)) return { ok: true, room };
-  if (room.players.length < 2) return { ok: true, room: changeRoom(room, { autoStartAt: null }) };
+  // The weekly race starts for whoever is there (even one); nobody there: it's over.
+  const enough = room.scheduled ? room.players.length >= 1 : room.players.length >= 2;
+  if (!enough) {
+    return { ok: true, room: changeRoom(room, { autoStartAt: null, emptySince: room.players.length === 0 ? now : room.emptySince }) };
+  }
   return beginMatch(room, start, now);
 }
 
@@ -619,6 +660,7 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
     },
     autoStartAt: match ? null : room.autoStartAt,
     bestOfLocked: room.hasRaced,
+    weekly: room.scheduled !== null,
   };
 }
 
@@ -704,7 +746,7 @@ function removePlayers(room: ServerRoom, playerIds: string[], now: number): Serv
 
   let hostId = room.hostId;
   const hostStillHere = players.some((p) => p.publicId === hostId);
-  if (!hostStillHere) {
+  if (!hostStillHere && !room.scheduled) {
     // `players` is in join order, so find() picks the longest-present player.
     const newHost = players.find((p) => p.status === "connected") ?? players[0];
     hostId = newHost ? newHost.publicId : null;
@@ -715,12 +757,14 @@ function removePlayers(room: ServerRoom, playerIds: string[], now: number): Serv
     if (match) match = matchLogic.removeFromMatch(match, p.publicId, now);
   }
 
+  // The weekly race waits for its start time even when nobody is there yet.
+  const waitingForStart = room.scheduled !== null && !room.hasRaced;
   const changed = changeRoom(room, {
     players,
     hostId,
-    emptySince: players.length === 0 ? now : null,
+    emptySince: players.length === 0 && !waitingForStart ? now : null,
     // Nobody left to race against: the lobby countdown stops.
-    autoStartAt: players.length < 2 ? null : room.autoStartAt,
+    autoStartAt: waitingForStart ? room.autoStartAt : players.length < 2 ? null : room.autoStartAt,
   });
   // (No second version bump: this is still one change.)
   return match === room.match ? changed : { ...changed, ...matchChanges(changed, match) };

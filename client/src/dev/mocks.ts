@@ -133,6 +133,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     hostId: ids[o.hostIndex ?? 0],
     players,
     bestOfLocked: o.bestOfLocked ?? o.phase !== "lobby",
+    weekly: false,
   };
   if (!o.phase || o.phase === "lobby") {
     const autoStartAt = o.autoStartIn === undefined ? null : Date.now() + o.autoStartIn;

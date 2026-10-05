@@ -1,3 +1,4 @@
+import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import type {
   MatchPhase,
   RoomSettings,
@@ -50,6 +51,16 @@ export interface Match {
   /** When the current solve's time limit runs out (server time), or null. */
   solveDeadline: number | null;
   winnerIds: string[];
+  /**
+   * Verified smart cube solves of the CURRENT set (every move, for replays and
+   * the history), by replayKey(). Never sent in snapshots.
+   */
+  replays: Record<string, SmartSolveData>;
+}
+
+/** "publicId/solveIndex": where a solve's replay is kept in Match.replays. */
+export function replayKey(publicId: string, solveIndex: number): string {
+  return `${publicId}/${solveIndex}`;
 }
 
 /** Submitting one solve. (matchId, setIndex, solveIndex) says exactly which solve it is. */
@@ -59,6 +70,8 @@ export interface SolveSubmission {
   solveIndex: number;
   timeMs: number;
   penalty: SolveResult["penalty"];
+  /** A smart cube solve's moves and their times (verified before it counts as one). */
+  smart?: SmartSolveData;
 }
 
 export interface PenaltyChange {
