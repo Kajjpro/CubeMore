@@ -38,6 +38,13 @@ export function ContactPage({ demoSent }: { demoSent?: Sent }) {
               <h1 id="contact-title">Contact</h1>
               <p className="intro">Questions, ideas, a bug, or an event you'd like to run on {SITE.name}? Write to us.</p>
               <ContactForm onSent={setSent} />
+              <p className="tiny muted">
+                We keep your message and email only to reply. See{" "}
+                <Link to="/privacy" className="inline-link">
+                  Privacy
+                </Link>
+                .
+              </p>
             </>
           )}
         </section>

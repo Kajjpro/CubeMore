@@ -38,6 +38,7 @@ const server = await startServer({
   accounts,
   contactStore,
   adminUserIds: config.adminUserIds,
+  siteUrl: config.siteUrl,
   weeklySchedule: config.weeklySchedule,
   port: config.port,
   timing: config.timing,

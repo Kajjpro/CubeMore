@@ -121,7 +121,7 @@ function checkPage() {
   }
 
   // Overlapping controls / key elements (overlays like an open sheet or the menu are expected).
-  const overlay = document.querySelector(".sheet[data-open='true'], .menu, .pick-event-overlay");
+  const overlay = document.querySelector(".sheet[data-open='true'], .menu, .pick-event-overlay, .choose-overlay");
   // Tiles scrolled out of the sideways event strip aren't drawn, so they can't overlap anything.
   const outOfStrip = (el) => {
     const strip = el.closest(".event-strip");

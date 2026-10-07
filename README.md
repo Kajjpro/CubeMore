@@ -1,4 +1,4 @@
-# Cubist
+# CubeMore
 
 Real-time speedcubing races with friends: rooms, all 17 WCA events, shared random-state
 scrambles with a picture, a stackmat-style timer (or type your times), OK / +2 / DNF,
@@ -96,6 +96,8 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   pick another event for a rematch, or restart in the middle of a match with another event
   (points go back to 0).
 - You can join a room whose match has already started: you watch that set and race from the next one.
+- **Event pages**: `/race/3x3`, `/race/pyraminx`, `/race/skewb`... one page per WCA event with
+  its open rooms and a Create button, made to be found by searches like "pyraminx race online".
 - **Creating a room**: a private setup first (event, format, Best of, public or private, name):
   nobody can see or join it yet. **Open room**, then wait on the timer with warm-up solves (they
   don't count). When someone joins, the race starts 3 seconds later, but not in the middle of

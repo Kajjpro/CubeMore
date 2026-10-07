@@ -20,26 +20,19 @@ export default defineConfig(({ mode }) => {
 });
 
 /**
- * The site's public address (VITE_SITE_URL, e.g. https://cubist.app): link
- * previews need full addresses for the page and its image, and search engines
- * read robots.txt and the sitemap. Without it, the links stay relative.
+ * The site's public address (VITE_SITE_URL, e.g. https://cubemore.com): link
+ * previews need full addresses for the page and its image, and robots.txt
+ * points search engines to the sitemap. Without it, the links stay relative.
  */
 function siteAddress(raw: string): Plugin {
   const siteUrl = raw.trim().replace(/\/$/, "");
-  const pages = ["/", "/daily", "/contact"];
   return {
-    name: "cubist-site-address",
+    name: "cubemore-site-address",
     transformIndexHtml: (html) => html.replaceAll("__SITE_URL__", siteUrl),
     generateBundle() {
       const sitemapLine = siteUrl ? `\nSitemap: ${siteUrl}/sitemap.xml\n` : "";
       this.emitFile({ type: "asset", fileName: "robots.txt", source: `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dev\n${sitemapLine}` });
-      if (!siteUrl) return;
-      const urls = pages.map((page) => `  <url><loc>${siteUrl}${page}</loc></url>`).join("\n");
-      this.emitFile({
-        type: "asset",
-        fileName: "sitemap.xml",
-        source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
-      });
+      // The sitemap itself is made by the server (server/src/seo.ts), from the same page list as the site.
     },
   };
 }

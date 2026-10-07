@@ -1,0 +1,101 @@
+/*
+ * SEARCH ENGINES AND LINK PREVIEWS (pure).
+ *
+ * The website is one page (index.html) that JavaScript fills in. Crawlers and
+ * link previews (Facebook, WhatsApp, Discord...) often read only the HTML the
+ * server sends, so before sending it, the server writes in the page's own
+ * title, description, canonical address and preview tags (from shared/seo.ts),
+ * marks pages that shouldn't be in search results (rooms, admin), and adds
+ * structured data that tells search engines what CubeMore is.
+ */
+
+import { indexablePaths, pageMeta, eventPageBySlug, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
+
+/** For HTML attributes and text: & < > " ' as entities. */
+function escape(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Replaces the content="..." of the meta tag with this name or property (if the page has it). */
+function setMeta(html: string, key: string, value: string): string {
+  const pattern = new RegExp(`(<meta (?:name|property)="${key}" content=")[^"]*(")`);
+  return html.replace(pattern, `$1${escape(value)}$2`);
+}
+
+/** Structured data: what this page is, in the form search engines read (schema.org JSON-LD). */
+function structuredData(meta: PageMeta, siteUrl: string): object[] {
+  const url = `${siteUrl}${meta.path}`;
+  if (meta.path === "/") {
+    return [
+      // The site's name as Google shows it in results (and how else people spell it).
+      { "@context": "https://schema.org", "@type": "WebSite", name: SITE_NAME, alternateName: SITE_ALIASES, url: `${siteUrl}/`, inLanguage: ["en", "mn"] },
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: SITE_NAME,
+        alternateName: SITE_ALIASES,
+        url: `${siteUrl}/`,
+        logo: `${siteUrl}/icon-512.png`,
+        // CubeMore's own social profiles (shared/site.ts): "this Instagram is CubeMore".
+        ...(socialLinks().length ? { sameAs: socialLinks().map((link) => link.url) } : {}),
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: SITE_NAME,
+        alternateName: SITE_ALIASES,
+        url: `${siteUrl}/`,
+        description: HOME_META.description,
+        applicationCategory: "GameApplication",
+        operatingSystem: "Any (in a web browser)",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        keywords: "CubeMore, Cube More, speedcubing, Rubik's cube timer, online cube race, cubing competition, csTimer alternative, WCA, Рубик шоо, кубик",
+      },
+    ];
+  }
+  const event = meta.path.startsWith("/race/") ? eventPageBySlug(meta.path.slice("/race/".length)) : undefined;
+  if (event) {
+    return [
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: SITE_NAME, item: `${siteUrl}/` },
+          { "@type": "ListItem", position: 2, name: `${event.name} race`, item: url },
+        ],
+      },
+    ];
+  }
+  return [];
+}
+
+/**
+ * The page HTML for one address: index.html with this page's tags.
+ * `siteUrl` is the public address ("https://cubemore.com"), or "" (then links stay relative).
+ */
+export function renderPage(indexHtml: string, path: string, siteUrl: string, room?: { name: string; summary: string } | null): string {
+  const meta = pageMeta(path, room);
+  const url = `${siteUrl}${meta.path}`;
+  let html = indexHtml.replace(/<title>[^<]*<\/title>/, `<title>${escape(meta.title)}</title>`);
+  html = setMeta(html, "description", meta.description);
+  html = setMeta(html, "og:title", meta.title);
+  html = setMeta(html, "og:description", meta.description);
+  html = setMeta(html, "og:url", url);
+  html = setMeta(html, "twitter:title", meta.title);
+  html = setMeta(html, "twitter:description", meta.description);
+  html = html.replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${escape(url)}$2`);
+
+  const extra: string[] = [];
+  if (meta.noindex) extra.push('<meta name="robots" content="noindex" />');
+  for (const data of structuredData(meta, siteUrl)) {
+    // "<" escaped so the JSON can never close the script tag.
+    extra.push(`<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`);
+  }
+  return extra.length ? html.replace("</head>", `    ${extra.join("\n    ")}\n  </head>`) : html;
+}
+
+/** The sitemap: every page search engines should know about. */
+export function sitemap(siteUrl: string): string {
+  const urls = indexablePaths().map((path) => `  <url><loc>${escape(siteUrl + path)}</loc></url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
+}

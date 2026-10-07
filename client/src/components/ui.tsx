@@ -244,7 +244,7 @@ export function LogoMark({ size = 28 }: { size?: number }) {
   );
 }
 
-/** "Cubist" with the logo. */
+/** "CubeMore" with the logo. */
 export function Brand({ onClick }: { onClick?: () => void }) {
   const content = (
     <>

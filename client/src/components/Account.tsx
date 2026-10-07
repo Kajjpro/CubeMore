@@ -4,7 +4,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useClerk, useUser, UserButton } from "@clerk/react";
 import { isClerkAPIResponseError } from "@clerk/react/errors";
-import { AUTH_ENABLED, useAccount } from "../auth";
+import { AUTH_ENABLED, markUsernamesOff, useAccount } from "../auth";
 import { reconnectAsCurrentUser } from "../socket";
 import { suggestUsername, USERNAME_MAX_LENGTH, usernameProblem } from "../username";
 import { Brand } from "./ui";
@@ -85,11 +85,24 @@ function ChooseUsername() {
       reconnectAsCurrentUser();
       return null;
     } catch (error) {
+      // Usernames are switched off in the Clerk dashboard: nobody can fix that
+      // here, so don't keep them stuck. They race under their first name.
+      if (usernamesSwitchedOff(error)) {
+        markUsernamesOff();
+        window.location.reload();
+        return null;
+      }
       return usernameError(error);
     }
   }
 
   return <UsernameForm suggestion={suggestion} onSave={save} onSignOut={() => void clerk.signOut()} />;
+}
+
+function usernamesSwitchedOff(error: unknown): boolean {
+  if (!isClerkAPIResponseError(error)) return false;
+  const first = error.errors[0];
+  return first?.code === "form_param_unknown" || /username is not a valid parameter/i.test(first?.message ?? "");
 }
 
 /** Clerk's reason in words people understand ("That username is taken…"). */
@@ -99,10 +112,7 @@ function usernameError(error: unknown): string {
     if (first?.code === "form_identifier_exists" || first?.code === "username_exists_code") {
       return "That username is taken. Try another one.";
     }
-    // Usernames are switched off in the Clerk dashboard: nobody can fix that here.
-    if (first?.code === "form_param_unknown" || /username is not a valid parameter/i.test(first?.message ?? "")) {
-      return "Usernames aren't switched on for this site yet. Please tell the site owner (Clerk: turn on Username).";
-    }
+
     return first?.longMessage ?? first?.message ?? "That username can't be used. Try another one.";
   }
   return "Couldn't save it. Check your connection and try again.";

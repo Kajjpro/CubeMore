@@ -51,6 +51,11 @@ export const config = {
     .map((origin) => origin.trim().replace(/\/$/, ""))
     .filter(Boolean),
   /**
+   * The site's public address, e.g. "https://cubemore.com" (the same VITE_SITE_URL
+   * the website is built with): canonical links, link previews, the sitemap.
+   */
+  siteUrl: (process.env.VITE_SITE_URL ?? "").trim().replace(/\/$/, ""),
+  /**
    * Who may read the contact form's messages on /admin: Clerk user ids
    * ("user_2Rf..."), separated by commas. Find yours in the Clerk dashboard → Users.
    */
