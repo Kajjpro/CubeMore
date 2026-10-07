@@ -1,5 +1,6 @@
 import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import type {
+  CubeEventId,
   MatchPhase,
   RoomSettings,
   Scramble,
@@ -40,8 +41,16 @@ export interface Match {
   solveIndex: number;
   /** Players in the current set. Anyone else is a spectator until the next set. */
   roster: string[];
-  /** All scrambles of the current set. Only scrambles[solveIndex] is ever shown. */
-  scrambles: Scramble[];
+  /**
+   * All scrambles of the current set, per event being raced (one event unless
+   * the room is mixed). Only scrambles[event][solveIndex] is ever shown.
+   */
+  scrambles: SetScrambles;
+  /**
+   * The event of everyone who has raced in this match (by public id). A player's
+   * event is fixed from their first set until the match ends.
+   */
+  events: Record<string, CubeEventId>;
   /** Current set: one slot per solve for each roster player. null = no result yet. */
   results: Record<string, (SolveResult | null)[]>;
   points: Record<string, number>;
@@ -57,6 +66,9 @@ export interface Match {
    */
   replays: Record<string, SmartSolveData>;
 }
+
+/** A set's scrambles: one per solve, for each event being raced. */
+export type SetScrambles = Partial<Record<CubeEventId, Scramble[]>>;
 
 /** "publicId/solveIndex": where a solve's replay is kept in Match.replays. */
 export function replayKey(publicId: string, solveIndex: number): string {

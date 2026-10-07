@@ -20,7 +20,11 @@ import { createHash } from "node:crypto";
 import {
   AUTO_START_DELAY_MS,
   EMPTY_ROOM_TTL_MS,
+  WARMUP_MAX_MS,
+  PICK_EVENT_MAX_MS,
   formatResult,
+  getCubeEvent,
+  MIXED_EVENTS,
   PIN_LENGTH,
   RECONNECT_GRACE_MS,
   SMART_CUBE_EVENTS,
@@ -34,7 +38,7 @@ import {
 } from "@cube-racing/shared";
 import * as matchLogic from "../match/matchLogic";
 import { solvesPerSet, targetPoints } from "../match/scoring";
-import type { Match, MatchTiming, PenaltyChange, SolveSubmission } from "../match/types";
+import type { Match, MatchTiming, PenaltyChange, SetScrambles, SolveSubmission } from "../match/types";
 import type { ServerPlayer, ServerRoom } from "./types";
 
 export type LogicResult =
@@ -44,12 +48,16 @@ export type LogicResult =
 export interface PlayerInfo {
   playerId: string;
   nickname: string;
+  /** The event they'd race in a mixed room (their last pick), if any. */
+  cubeEvent?: CubeEventId;
+  /** False for a signed-in account. Default: a guest. */
+  guest?: boolean;
 }
 
 /** What the server prepares for a new match: the id, the first set's scrambles, and the timings. */
 export interface MatchStartInfo {
   matchId: string;
-  scrambles: Scramble[];
+  scrambles: SetScrambles;
   timing: MatchTiming;
 }
 
@@ -73,7 +81,9 @@ export function publicIdFor(playerId: string): string {
 /**
  * A new room with its creator as host. A room without a name is called
  * "<host>'s room". A private room needs a PIN (checked by the schema).
- * The room waits in the lobby; the race starts by itself when someone joins.
+ * It starts in SETUP: only the host is in it, adjusting the settings; it isn't
+ * listed and nobody can join until the host opens it (openRoom). Then the host
+ * warms up alone, and the race starts by itself when someone joins.
  */
 export function createRoom(
   code: string,
@@ -96,6 +106,7 @@ export function createRoom(
     autoStartAt: null,
     hasRaced: false,
     scheduled: null,
+    setup: true,
   };
 }
 
@@ -118,6 +129,7 @@ export function createScheduledRoom(
     autoStartAt: scheduled.startsAt,
     hasRaced: false,
     scheduled,
+    setup: false,
   };
 }
 
@@ -158,16 +170,24 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
     };
   }
 
+  if (room.setup) {
+    return fail("This room is still being set up. Try again in a moment.");
+  }
   if (room.players.length >= room.settings.maxPlayers) {
     return fail("This room is full.");
   }
 
   // Joining during a match is allowed: the new player watches (spectator)
   // until the next set starts, because they aren't in this set's roster.
-  const joined = newPlayer(player, now);
+  // Mixed rooms: someone joining the lobby picks their event before the race starts.
+  const picking = room.settings.mixedEvents && !room.match && !room.scheduled;
+  const joined = { ...newPlayer(player, now), pickingEvent: picking };
   const players = [...room.players, joined];
-  // In the lobby, a second player joining starts the countdown to the race.
-  const countDown = !room.match && players.length >= 2 && room.autoStartAt === null && !room.scheduled;
+  // Someone joins the host who was waiting alone in the lobby: the countdown to
+  // the race starts. (A lobby where people are already together, e.g. after
+  // "Back to lobby", waits for the host to press Start.)
+  const waitingAlone = racing(room.players).length === 1 && !joined.watching;
+  const countDown = !room.match && waitingAlone && room.autoStartAt === null && !room.scheduled;
   return {
     ok: true,
     room: changeRoom(room, {
@@ -266,6 +286,7 @@ export function updateSettings(
   requesterId: string,
   changes: SettingsChanges,
   pin?: string,
+  now = Date.now(),
 ): LogicResult {
   if (!isHost(room, requesterId)) {
     return fail("Only the host can change settings.");
@@ -278,8 +299,8 @@ export function updateSettings(
   }
 
   const settings: RoomSettings = { ...room.settings, ...changes };
-  const smartError = smartEventError(settings);
-  if (smartError) return fail(smartError);
+  const settingsProblem = settingsError(settings);
+  if (settingsProblem) return fail(settingsProblem);
   // An empty name goes back to "<host>'s room".
   if (!settings.name) settings.name = `${hostName(room) ?? "Cube"}'s room`;
   if (settings.maxPlayers < room.players.length) {
@@ -298,14 +319,97 @@ export function updateSettings(
     return { ok: true, room };
   }
 
-  return { ok: true, room: changeRoom(room, { settings, pin: nextPin }) };
+  // Changed while the countdown runs: everyone gets the full 3 seconds to see the new settings.
+  const autoStartAt = room.autoStartAt !== null && !room.scheduled ? Math.max(room.autoStartAt, now + AUTO_START_DELAY_MS) : room.autoStartAt;
+  return { ok: true, room: changeRoom(room, { settings, pin: nextPin, autoStartAt }) };
 }
 
-/** Smart-cube rooms only work for the events a smart cube can do (3x3, 3x3 one-handed). */
-export function smartEventError(settings: RoomSettings): string | null {
+/** Host: setup is done. The room is listed (public) and others can join. */
+export function openRoom(room: ServerRoom, requesterId: string): LogicResult {
+  if (!isHost(room, requesterId)) return fail("Only the host can open the room.");
+  if (!room.setup) return { ok: true, room };
+  return { ok: true, room: changeRoom(room, { setup: false }) };
+}
+
+/**
+ * Settings that don't go together. Smart-cube rooms only work for the events a
+ * smart cube can do (3x3, 3x3 one-handed). A mixed room's own event (what a
+ * player races until they pick) must be one of the mixed events.
+ */
+export function settingsError(settings: RoomSettings): string | null {
+  if (settings.mixedEvents && settings.smartOnly) return "Mixed rooms can't be smart-cube only.";
+  if (settings.mixedEvents && !MIXED_EVENTS.includes(settings.cubeEvent)) {
+    return `Mixed rooms are for ${MIXED_EVENTS.map((id) => getCubeEvent(id).name).join(", ")}.`;
+  }
   return settings.smartOnly && !SMART_CUBE_EVENTS.includes(settings.cubeEvent)
     ? "Smart-cube rooms are for 3x3 and 3x3 one-handed."
     : null;
+}
+
+/**
+ * Mixed rooms: a player picks the event they race. It counts from the next
+ * match, or from their first set if they haven't raced in this match yet.
+ * Someone who just joined (pickingEvent) is ready with it: if the race was
+ * waiting for them, its countdown starts again from the top.
+ */
+export function chooseEvent(room: ServerRoom, playerId: string, cubeEvent: CubeEventId, now = Date.now()): LogicResult {
+  const player = findPlayer(room, playerId);
+  if (!player) return fail("You are not in this room.");
+  if (!room.settings.mixedEvents) return fail("Everyone races the same event in this room. The host picks it.");
+  if (!MIXED_EVENTS.includes(cubeEvent)) {
+    return fail(`Pick one of ${MIXED_EVENTS.map((id) => getCubeEvent(id).name).join(", ")}.`);
+  }
+  const match = room.match;
+  if (match && match.phase !== "match_over" && match.events[player.publicId] && match.events[player.publicId] !== cubeEvent) {
+    return fail("You can change your event once this match is over.");
+  }
+  if (player.cubeEvent === cubeEvent && !player.pickingEvent) return { ok: true, room };
+  const players = updatePlayer(room, playerId, { cubeEvent, pickingEvent: false });
+  const restart = player.pickingEvent && room.autoStartAt !== null && !room.match && !room.scheduled;
+  const autoStartAt = restart ? Math.max(room.autoStartAt!, now + AUTO_START_DELAY_MS) : room.autoStartAt;
+  return { ok: true, room: changeRoom(room, { players, autoStartAt }) };
+}
+
+/**
+ * A player steps away to only watch (watching = true), or comes back to race.
+ *  - Stepping away during a set: their solves still to do in it become DNFs
+ *    (like leaving), so nobody waits for them. Their points stay.
+ *  - Coming back: they race from the next set (or the next race, in the lobby).
+ *  - In the lobby, the countdown stops if fewer than 2 racers are left.
+ */
+export function setWatching(room: ServerRoom, playerId: string, watching: boolean, now: number): LogicResult {
+  const player = findPlayer(room, playerId);
+  if (!player) return fail("You are not in this room.");
+  if (player.watching === watching) return { ok: true, room };
+
+  const players = updatePlayer(room, playerId, { watching, timerStatus: "idle", solvingSince: null });
+  const match = watching && room.match ? matchLogic.removeFromMatch(room.match, player.publicId, now, "away") : room.match;
+  const tooFew = !room.match && room.autoStartAt !== null && !room.scheduled && racing(players).length < 2;
+  const changed = changeRoom(room, { players, autoStartAt: tooFew ? null : room.autoStartAt });
+  return { ok: true, room: match === room.match ? changed : { ...changed, ...matchChanges(changed, match) } };
+}
+
+/** The event a player races next: their pick in a mixed room, otherwise the room's event. */
+export function eventOf(settings: RoomSettings, player: Pick<ServerPlayer, "cubeEvent">): CubeEventId {
+  return settings.mixedEvents && player.cubeEvent && MIXED_EVENTS.includes(player.cubeEvent)
+    ? player.cubeEvent
+    : settings.cubeEvent;
+}
+
+/** The event each player in the room races next (by public id). */
+export function eventPicks(room: ServerRoom, settings: RoomSettings = room.settings): Record<string, CubeEventId> {
+  return Object.fromEntries(room.players.map((p) => [p.publicId, eventOf(settings, p)]));
+}
+
+/** The events a new match with these settings needs scrambles for. */
+export function newMatchEvents(room: ServerRoom, settings: RoomSettings = room.settings): CubeEventId[] {
+  return matchLogic.eventsNeeded(matchLogic.setEvents(null, racingPlayerIds(room), eventPicks(room, settings)));
+}
+
+/** The events the next set of the running match needs scrambles for. */
+export function nextSetEvents(room: ServerRoom): CubeEventId[] {
+  if (!room.match) return newMatchEvents(room);
+  return matchLogic.eventsNeeded(matchLogic.setEvents(room.match, racingPlayerIds(room), eventPicks(room)));
 }
 
 /**
@@ -318,6 +422,9 @@ export function startMatchError(room: ServerRoom, requesterId: string): string |
   }
   if (room.match) {
     return "The match has already started.";
+  }
+  if (racingPlayerIds(room).length === 0) {
+    return "Everyone is watching. Tap \"Race\" to race.";
   }
   return null;
 }
@@ -361,7 +468,7 @@ export function rematch(
   now: number,
   changes: RestartChanges = {},
 ): LogicResult {
-  const error = rematchError(room, requesterId) ?? smartEventError(settingsAfterRestart(room, changes));
+  const error = rematchError(room, requesterId) ?? settingsError(settingsAfterRestart(room, changes));
   if (error) {
     return fail(error);
   }
@@ -384,11 +491,12 @@ export function rematchError(room: ServerRoom, requesterId: string): string | nu
  */
 export function roomList(rooms: ServerRoom[]): PublicRoomInfo[] {
   return rooms
-    .filter((room) => room.players.length > 0)
+    .filter((room) => room.players.length > 0 && !room.setup)
     .map((room) => ({
       code: room.code,
       name: room.settings.name,
       cubeEvent: room.settings.cubeEvent,
+      mixedEvents: room.settings.mixedEvents,
       format: room.settings.format,
       winCondition: room.settings.winCondition,
       players: room.players.length,
@@ -404,7 +512,8 @@ export function roomList(rooms: ServerRoom[]): PublicRoomInfo[] {
 
 /**
  * "Race now": the best open room for this event, or null (the player then
- * creates one). Only public rooms with a free seat. Rooms waiting in the lobby
+ * creates one). A mixed room fits any of its events (the player joins with
+ * this one as their pick). Only public rooms with a free seat. Rooms waiting in the lobby
  * come first (the race starts 3 s after you join), fullest first; then rooms
  * that are racing (you watch the current set and race from the next one).
  */
@@ -413,7 +522,8 @@ export function quickRaceCode(rooms: ServerRoom[], cubeEvent: CubeEventId, excep
     (room) =>
       room.code !== exceptCode &&
       room.pin === null &&
-      room.settings.cubeEvent === cubeEvent &&
+      !room.setup &&
+      (room.settings.mixedEvents ? MIXED_EVENTS.includes(cubeEvent) : room.settings.cubeEvent === cubeEvent) &&
       // Smart-cube rooms are joined on purpose, never by "Race now".
       !room.settings.smartOnly &&
       // Someone must really be there (not only players whose connection dropped).
@@ -439,7 +549,9 @@ export function reactionText(room: ServerRoom, targetPublicId: string, emoji: st
 }
 
 function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
-  if (!matchLogic.scramblesFit(room.settings, start.scrambles)) {
+  const roster = racingPlayerIds(room);
+  const picks = eventPicks(room);
+  if (!matchLogic.scramblesFit(room.settings, matchLogic.setEvents(null, roster, picks), start.scrambles)) {
     // e.g. the event was changed while the scrambles were being made.
     return fail("The scrambles weren't ready. Please try again.");
   }
@@ -447,7 +559,8 @@ function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): Logic
     matchId: start.matchId,
     settings: room.settings,
     timing: start.timing,
-    roster: presentPlayerIds(room),
+    roster,
+    picks,
     scrambles: start.scrambles,
     now,
   });
@@ -456,7 +569,33 @@ function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): Logic
 
 /** True when the lobby countdown is over and the race should start (with new scrambles). */
 export function autoStartDue(room: ServerRoom, now: number): boolean {
-  return room.match === null && room.autoStartAt !== null && now >= room.autoStartAt;
+  return room.match === null && room.autoStartAt !== null && now >= room.autoStartAt && holdingStart(room, now).length === 0;
+}
+
+/**
+ * Lobby players the race start waits for, and until when at most: a warm-up
+ * solve in progress, or (mixed rooms) someone who just joined picking their event.
+ */
+function holdingStart(room: ServerRoom, now: number): { player: ServerPlayer; until: number }[] {
+  const pickers = room.settings.mixedEvents
+    ? room.players
+        .filter((p) => p.pickingEvent && !p.watching && now - p.joinedAt < PICK_EVENT_MAX_MS)
+        .map((player) => ({ player, until: player.joinedAt + PICK_EVENT_MAX_MS }))
+    : [];
+  const warming = warmingUp(room, now).map((player) => ({ player, until: player.solvingSince! + WARMUP_MAX_MS }));
+  return room.match ? [] : [...warming, ...pickers];
+}
+
+/**
+ * Lobby players in the middle of a warm-up solve (their timer runs). The race
+ * doesn't start under them; a solve older than WARMUP_MAX_MS doesn't count
+ * (they walked away).
+ */
+function warmingUp(room: ServerRoom, now: number): ServerPlayer[] {
+  if (room.match) return [];
+  return room.players.filter(
+    (p) => !p.watching && p.timerStatus === "solving" && p.solvingSince !== null && now - p.solvingSince < WARMUP_MAX_MS,
+  );
 }
 
 /**
@@ -466,7 +605,8 @@ export function autoStartDue(room: ServerRoom, now: number): boolean {
 export function autoStart(room: ServerRoom, start: MatchStartInfo, now: number): LogicResult {
   if (!autoStartDue(room, now)) return { ok: true, room };
   // The weekly race starts for whoever is there (even one); nobody there: it's over.
-  const enough = room.scheduled ? room.players.length >= 1 : room.players.length >= 2;
+  const racers = racingPlayerIds(room).length;
+  const enough = room.scheduled ? racers >= 1 : racers >= 2;
   if (!enough) {
     return { ok: true, room: changeRoom(room, { autoStartAt: null, emptySince: room.players.length === 0 ? now : room.emptySince }) };
   }
@@ -550,6 +690,16 @@ export function setTimerStatus(room: ServerRoom, playerId: string, status: Timer
   const player = findPlayer(room, playerId);
   if (!player) return room;
   const match = room.match;
+  // In the lobby, "solving" is a warm-up solve: it holds back the race start.
+  // When it stops, the countdown gets its full 3 seconds again.
+  if (!match) {
+    const updated = setPlayerTimerStatus(room, playerId, player.watching ? "idle" : status, now);
+    if (status === "idle" && updated.autoStartAt !== null && !updated.scheduled) {
+      const autoStartAt = Math.max(updated.autoStartAt, now + AUTO_START_DELAY_MS);
+      return autoStartAt === updated.autoStartAt ? updated : changeRoom(updated, { autoStartAt });
+    }
+    return updated;
+  }
   const stillToSolve =
     match !== null &&
     match.phase === "solving" &&
@@ -574,31 +724,42 @@ export function tickRoom(room: ServerRoom, now: number): ServerRoom {
 
 /** True when the set result is over and the next set should start (with new scrambles). */
 export function needsNextSet(room: ServerRoom, now: number): boolean {
-  return room.match !== null && matchLogic.needsNextSet(room.match, now) && room.players.length > 0;
+  // Everyone stepped away: the match waits on the set result until someone is back.
+  return room.match !== null && matchLogic.needsNextSet(room.match, now) && racingPlayerIds(room).length > 0;
 }
 
-/** Starts the next set. Everyone in the room right now is in it. */
-export function startNextSet(room: ServerRoom, scrambles: Scramble[], now: number): LogicResult {
+/** Starts the next set. Everyone in the room right now who isn't just watching is in it. */
+export function startNextSet(room: ServerRoom, scrambles: SetScrambles, now: number): LogicResult {
   if (!room.match) {
     return fail("There is no match running.");
   }
-  if (!matchLogic.scramblesFit(room.match.settings, scrambles)) {
+  const roster = racingPlayerIds(room);
+  const picks = eventPicks(room);
+  if (!matchLogic.scramblesFit(room.match.settings, matchLogic.setEvents(room.match, roster, picks), scrambles)) {
     return fail("The scrambles don't fit this match.");
   }
-  const update = matchLogic.startNextSet(room.match, presentPlayerIds(room), scrambles, now);
+  const update = matchLogic.startNextSet(room.match, roster, picks, scrambles, now);
   return update.ok ? { ok: true, room: withMatch(room, update.match) } : update;
 }
 
 /** The next moment something in this room becomes due, or null if nothing is waiting. */
-export function nextDeadline(room: ServerRoom): number | null {
+export function nextDeadline(room: ServerRoom, now = Date.now()): number | null {
   const times: number[] = [];
   for (const p of room.players) {
     if (p.disconnectedAt !== null) times.push(p.disconnectedAt + RECONNECT_GRACE_MS);
   }
   if (room.emptySince !== null) times.push(room.emptySince + EMPTY_ROOM_TTL_MS);
   const matchDeadline = room.match ? matchLogic.nextMatchDeadline(room.match) : null;
-  if (matchDeadline !== null) times.push(matchDeadline);
-  if (!room.match && room.autoStartAt !== null) times.push(room.autoStartAt);
+  // Waiting for someone to come back from watching isn't a deadline (the
+  // next set starts when they do), so don't wake up for it over and over.
+  const waitingForRacers = room.match?.phase === "set_result" && racingPlayerIds(room).length === 0;
+  if (matchDeadline !== null && !waitingForRacers) times.push(matchDeadline);
+  if (!room.match && room.autoStartAt !== null) {
+    // Held back (a warm-up solve, someone picking their event): check again when that would stop counting.
+    const holding = holdingStart(room, now);
+    if (holding.length === 0) times.push(room.autoStartAt);
+    else times.push(Math.min(...holding.map((h) => h.until)));
+  }
   return times.length > 0 ? Math.min(...times) : null;
 }
 
@@ -631,6 +792,10 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       timerStatus: p.timerStatus,
       solvingSince: p.timerStatus === "solving" ? p.solvingSince : null,
       spectator: match !== null && !match.roster.includes(p.publicId),
+      guest: p.guest,
+      watching: p.watching,
+      pickingEvent: p.pickingEvent && room.settings.mixedEvents && !match,
+      cubeEvent: eventOf(room.settings, p),
     })),
     match: match && {
       matchId: match.matchId,
@@ -639,9 +804,9 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       solveIndex: match.solveIndex,
       solvesPerSet: solvesPerSet(match.settings.format),
       targetPoints: targetPoints(match.settings.winCondition),
-      // ONLY the current scramble, and only while it's being solved or reviewed.
-      scramble:
-        match.phase === "solving" || match.phase === "solve_review" ? match.scrambles[match.solveIndex] : null,
+      // ONLY the current scramble of each event, and only while it's being solved or reviewed.
+      scrambles: match.phase === "solving" || match.phase === "solve_review" ? currentScrambles(match) : {},
+      events: match.events,
       solveDeadline: match.solveDeadline,
       phaseEndsAt: match.phaseEndsAt,
       roster: match.roster,
@@ -661,12 +826,23 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
     autoStartAt: match ? null : room.autoStartAt,
     bestOfLocked: room.hasRaced,
     weekly: room.scheduled !== null,
+    setup: room.setup,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** The scramble of the current solve, for each event in the set. */
+function currentScrambles(match: Match): Partial<Record<CubeEventId, Scramble>> {
+  const current: Partial<Record<CubeEventId, Scramble>> = {};
+  for (const event of Object.keys(match.scrambles) as CubeEventId[]) {
+    const scramble = match.scrambles[event]?.[match.solveIndex];
+    if (scramble) current[event] = scramble;
+  }
+  return current;
+}
 
 export function findPlayer(room: ServerRoom, playerId: string): ServerPlayer | undefined {
   return room.players.find((p) => p.playerId === playerId);
@@ -686,6 +862,15 @@ export function presentPlayerIds(room: ServerRoom): string[] {
   return room.players.map((p) => p.publicId);
 }
 
+/** Public ids of everyone in the room who races (not just watching): the next set's roster. */
+export function racingPlayerIds(room: ServerRoom): string[] {
+  return racing(room.players).map((p) => p.publicId);
+}
+
+function racing(players: ServerPlayer[]): ServerPlayer[] {
+  return players.filter((p) => !p.watching);
+}
+
 function newPlayer(info: PlayerInfo, now: number): ServerPlayer {
   return {
     playerId: info.playerId,
@@ -696,6 +881,10 @@ function newPlayer(info: PlayerInfo, now: number): ServerPlayer {
     solvingSince: null,
     joinedAt: now,
     disconnectedAt: null,
+    guest: info.guest ?? true,
+    watching: false,
+    pickingEvent: false,
+    cubeEvent: info.cubeEvent && MIXED_EVENTS.includes(info.cubeEvent) ? info.cubeEvent : null,
   };
 }
 
@@ -764,7 +953,7 @@ function removePlayers(room: ServerRoom, playerIds: string[], now: number): Serv
     hostId,
     emptySince: players.length === 0 && !waitingForStart ? now : null,
     // Nobody left to race against: the lobby countdown stops.
-    autoStartAt: waitingForStart ? room.autoStartAt : players.length < 2 ? null : room.autoStartAt,
+    autoStartAt: waitingForStart ? room.autoStartAt : racing(players).length < 2 ? null : room.autoStartAt,
   });
   // (No second version bump: this is still one change.)
   return match === room.match ? changed : { ...changed, ...matchChanges(changed, match) };

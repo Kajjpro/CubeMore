@@ -9,9 +9,9 @@
 import { useEffect, useState } from "react";
 import { ClientEvents, ServerEvents, type RoomSnapshot } from "@cube-racing/shared";
 import { updateServerOffset } from "../clock";
-import { EventIcon } from "../components/ui";
+import { RoomEventIcon } from "../components/ui";
 import { LiveClock, ranks, rowOrder } from "../components/Standings";
-import { EVENT_SHORT, FORMAT_LABELS, nameList } from "../labels";
+import { FORMAT_LABELS, nameList, roomEventShort } from "../labels";
 import { applyTheme } from "../prefs";
 import { request, socket } from "../socket";
 import { formatMark, formatResult } from "../time";
@@ -75,9 +75,9 @@ export function OverlayView({ room }: { room: RoomSnapshot }) {
   return (
     <main className="overlay-panel">
       <header className="overlay-head">
-        <EventIcon id={settings.cubeEvent} />
+        <RoomEventIcon settings={settings} />
         <span className="overlay-title">
-          {EVENT_SHORT[settings.cubeEvent]}, {FORMAT_LABELS[settings.format]}, {bestOf}
+          {roomEventShort(settings)}, {FORMAT_LABELS[settings.format]}, {bestOf}
           {settings.scoring === "handicap" ? ", Handicap" : ""}
         </span>
         <span className="overlay-where">

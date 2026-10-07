@@ -3,15 +3,17 @@
 
 import { memo, useState, type CSSProperties, type ReactNode } from "react";
 import type { CubeEventId, MatchSnapshot, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
-import { EVENT_SHORT, FORMAT_LABELS, nameList, paceDelta } from "../labels";
+import { EVENT_SHORT, FORMAT_LABELS, nameList, paceDelta, roomEventShort } from "../labels";
 import type { SessionStats } from "../stats";
 import { formatMark, formatResultLong, formatTime } from "../time";
 import { scoredMs } from "../stats";
 import { ConfirmButton } from "./ConfirmButton";
 import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
 import { shareResultCard } from "../shareCard";
-import { EventSelect } from "./SettingsForm";
-import { Avatar, playerColor, ProgressBar } from "./ui";
+import { EventSelect, MixedEventPicker } from "./SettingsForm";
+import { AUTH_ENABLED } from "../auth";
+import { isMixed } from "../mixed";
+import { Avatar, EventTag, playerColor, ProgressBar } from "./ui";
 
 type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
 
@@ -40,6 +42,10 @@ export const PlayerList = memo(function PlayerList(props: {
   onKick?: (player: PlayerSnapshot) => void;
   /** The lobby: a card per player, and an empty seat while you're alone. */
   seats?: boolean;
+  /** Mixed rooms: each player's event. */
+  showEvents?: boolean;
+  /** Your own card gets "Just watch" / "Race". */
+  onSetWatching?: (watching: boolean) => void;
 }) {
   return (
     <ul className={props.seats ? "seats" : "list player-list"}>
@@ -55,9 +61,27 @@ export const PlayerList = memo(function PlayerList(props: {
             <span className="seat-tags">
               {player.id === props.hostId && <span className="tag tag-host">host</span>}
               {player.id === props.youId && <span className="tag tag-you">you</span>}
+              {/* With accounts on, a guest's name isn't reserved: anyone could use it. */}
+              {AUTH_ENABLED && player.guest && (
+                <span className="tag tag-guest" title="Playing without an account">
+                  guest
+                </span>
+              )}
+              {props.showEvents && <EventTag id={player.cubeEvent} />}
+              {player.watching && <span className="tag tag-watching">watching</span>}
               {player.status === "reconnecting" && <span className="tiny muted">reconnecting</span>}
             </span>
           </span>
+          {props.onSetWatching && player.id === props.youId && (
+            <button
+              type="button"
+              className={`quiet watch-toggle ${player.watching ? "" : "muted-button"}`}
+              onClick={() => props.onSetWatching!(!player.watching)}
+              aria-label={player.watching ? "Race in the next race" : "Just watch the next race"}
+            >
+              {player.watching ? "Race" : "Just watch"}
+            </button>
+          )}
           {props.onKick && player.id !== props.youId && (
             <ConfirmButton
               className="quiet danger kick-button"
@@ -126,7 +150,8 @@ export const HostPanel = memo(function HostPanel(props: {
       </details>
       {match.phase !== "match_over" && (
         <>
-          <RestartControl current={room.settings.cubeEvent} onRestart={props.onRestart} />
+          {/* A mixed room has no one event to switch to: everyone picks their own. */}
+          {!room.settings.mixedEvents && <RestartControl current={room.settings.cubeEvent} onRestart={props.onRestart} />}
           <ConfirmButton className="danger" label="End match" confirmLabel="Tap again to end the match" onConfirm={props.onEndMatch} />
         </>
       )}
@@ -209,6 +234,7 @@ export function FinishLine(props: {
   onReact: (targetId: string, emoji: Reaction) => void;
 }) {
   const { match, names, youId } = props;
+  const mixed = isMixed(match);
   const rows = match.roster
     .map((id) => ({ id, result: match.results[id]?.[match.solveIndex] ?? null }))
     .filter((row): row is { id: string; result: NonNullable<typeof row.result> } => row.result !== null)
@@ -248,6 +274,7 @@ export function FinishLine(props: {
                 <span className="who">
                   <Avatar id={row.id} name={nameOf(row.id, names)} size="xs" />
                   <span className="who-name">{isMe ? "You" : nameOf(row.id, names)}</span>
+                  {mixed && match.events[row.id] && <EventTag id={match.events[row.id]} />}
                   <Pops pops={props.pops[row.id]} />
                 </span>
                 <span className="track" aria-hidden>
@@ -339,6 +366,7 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
     : `No point in set ${set.setIndex + 1}: every result is DNF`;
   const label = resultLabel(match);
   const youWon = !!youId && set.winnerIds.includes(youId);
+  const eventFor = (id: string) => (isMixed(match) ? match.events[id] : undefined);
 
   return (
     <div className="result-screen">
@@ -373,7 +401,7 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
               <tr key={id} className={`${won ? "winner" : ""} ${id === youId ? "me" : ""}`}>
                 <td className="rank">{index + 1}</td>
                 <td className="who">
-                  <PlayerCell id={id} names={names} />
+                  <PlayerCell id={id} names={names} event={eventFor(id)} />
                 </td>
                 <td className={`num ${standing.result === "DNF" ? "dnf" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num">{formatMark(standing.best)}</td>
@@ -396,12 +424,13 @@ export function SetResult({ match, names, youId }: { match: MatchSnapshot; names
   );
 }
 
-/** A name with its avatar, in the result tables. */
-function PlayerCell({ id, names }: { id: string; names: Names }) {
+/** A name with its avatar (and, in a mixed race, their event), in the result tables. */
+function PlayerCell({ id, names, event }: { id: string; names: Names; event?: CubeEventId }) {
   return (
     <span className="player-cell">
       <Avatar id={id} name={nameOf(id, names)} size="xs" />
       <span className="player-cell-name">{nameOf(id, names)}</span>
+      {event && <EventTag id={event} />}
     </span>
   );
 }
@@ -468,7 +497,7 @@ function HandicapSetResult(props: {
               <tr key={id} className={`${won ? "winner" : ""} ${id === youId ? "me" : ""}`}>
                 <td className="rank">{index + 1}</td>
                 <td className="who">
-                  <PlayerCell id={id} names={names} />
+                  <PlayerCell id={id} names={names} event={isMixed(match) ? match.events[id] : undefined} />
                 </td>
                 <td className={`num ${standing.result === "DNF" ? "dnf" : ""}`}>{formatMark(standing.result)}</td>
                 <td className="num muted">{paces[id] == null ? "–" : formatMark(paces[id]!)}</td>
@@ -501,10 +530,14 @@ export function MatchOver(props: {
   busy: boolean;
   /** The match's settings (the event may change for the rematch; the card shows these). */
   settings: RoomSettings;
+  /** Mixed rooms: the event you race next, and picking another one. */
+  nextEvent: CubeEventId;
+  onChooseEvent: (cubeEvent: CubeEventId) => void;
   onRematch: (changes: RestartChanges) => void;
   onBackToLobby: () => void;
 }) {
   const { match, names } = props;
+  const mixed = props.settings.mixedEvents;
   const [nextEvent, setNextEvent] = useState<CubeEventId>(props.settings.cubeEvent);
   const [shared, setShared] = useState<string | null>(null);
 
@@ -530,7 +563,7 @@ export function MatchOver(props: {
               : "Match over. No winner"}
         </h2>
         <p className="small muted">
-          {EVENT_SHORT[props.settings.cubeEvent]}, {FORMAT_LABELS[props.settings.format]}, {match.finishedSets.length} set
+          {roomEventShort(props.settings)}, {FORMAT_LABELS[props.settings.format]}, {match.finishedSets.length} set
           {match.finishedSets.length === 1 ? "" : "s"} played
         </p>
       </div>
@@ -547,9 +580,10 @@ export function MatchOver(props: {
         <button type="button" onClick={share}>
           {shared ?? "Share result card"}
         </button>
+        {mixed && <MixedEventPicker label="Your event next match" value={props.nextEvent} onChange={props.onChooseEvent} />}
         {props.isHost ? (
           <>
-            <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />
+            {!mixed && <EventSelect label="Next event" value={nextEvent} onChange={setNextEvent} />}
             <div className="row">
               <button type="button" className="grow" onClick={props.onBackToLobby} disabled={props.busy}>
                 Back to lobby
@@ -557,10 +591,14 @@ export function MatchOver(props: {
               <button
                 type="button"
                 className="primary grow"
-                onClick={() => props.onRematch({ cubeEvent: nextEvent })}
+                onClick={() => props.onRematch(mixed ? {} : { cubeEvent: nextEvent })}
                 disabled={props.busy}
               >
-                {props.busy ? "Starting…" : nextEvent === props.settings.cubeEvent ? "Rematch" : `Rematch with ${EVENT_SHORT[nextEvent]}`}
+                {props.busy
+                  ? "Starting…"
+                  : mixed || nextEvent === props.settings.cubeEvent
+                    ? "Rematch"
+                    : `Rematch with ${EVENT_SHORT[nextEvent]}`}
               </button>
             </div>
           </>
@@ -586,7 +624,7 @@ export function MatchOver(props: {
               <tr key={id} className={id === props.youId ? "me" : ""}>
                 <td className="rank">{index + 4}</td>
                 <td className="who">
-                  <PlayerCell id={id} names={names} />
+                  <PlayerCell id={id} names={names} event={isMixed(match) ? match.events[id] : undefined} />
                 </td>
                 <td className="num">{points}</td>
                 <td className="num">{setsWon(id)}</td>

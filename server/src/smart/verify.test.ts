@@ -47,13 +47,14 @@ describe("verifying a smart cube solve", () => {
 
 describe("smart solves in a match", () => {
   const timing: MatchTiming = { solveReviewMs: 0, setResultMs: 6_000, submitGraceMs: 6_000 };
-  const scrambles: Scramble[] = [{ cubeEvent: "333", text: SCRAMBLE }];
+  const scrambles = { "333": [{ cubeEvent: "333", text: SCRAMBLE } satisfies Scramble] };
   const match = (smartOnly: boolean) =>
     createMatch({
       matchId: "m1",
       settings: { ...DEFAULT_SETTINGS, format: "single", smartOnly },
       timing,
       roster: ["alice", "bob"],
+      picks: { alice: "333", bob: "333" },
       scrambles,
       now: 0,
     });

@@ -1,5 +1,5 @@
 /*
- * Cube Racing. Tokens and layouts are described in DESIGN.md.
+ * Cubist. Tokens and layouts are described in DESIGN.md.
  *
  * The palette is the cube: every status colour is one of the six faces.
  *   blue   = you, primary actions, links      green  = ready, fastest, connected
@@ -328,7 +328,8 @@ strong {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -449,7 +450,8 @@ button[data-armed="true"]:hover:not(:disabled) {
 }
 
 input,
-select {
+select,
+textarea {
   min-height: 44px;
   width: 100%;
   padding: 0 14px;
@@ -464,19 +466,22 @@ select {
 }
 
 input:hover,
-select:hover {
+select:hover,
+textarea:hover {
   border-color: var(--border-strong);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--accent);
   background: var(--surface);
   box-shadow: 0 0 0 4px var(--accent-ring);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--muted);
 }
 
@@ -600,6 +605,11 @@ kbd,
   color: var(--gold-ink);
   background: var(--gold);
   border-color: transparent;
+}
+
+.tag-guest {
+  color: var(--muted);
+  background: transparent;
 }
 
 .tag-you {
@@ -983,98 +993,6 @@ p.banner {
   align-content: start;
 }
 
-/* What this is, in one look: a headline, one sentence and three steps. */
-.hero {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px 2px 0;
-}
-
-.hero h1 {
-  font-size: clamp(28px, 6vw, 44px);
-  font-weight: 750;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-}
-
-.hero-sub {
-  max-width: 34em;
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--text-2);
-}
-
-.how {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.how li {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.how-no {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  font: 700 12px/1 var(--font-mono);
-  color: var(--text);
-}
-
-/* The card that gets you into a race. */
-.race-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  position: relative;
-  overflow: hidden;
-}
-
-/* A thin six-colour stripe along the top. */
-.you-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.you-row .avatar {
-  margin-bottom: 0;
-}
-
-.race-button {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-}
-
-.race-hint {
-  margin-top: -8px;
-}
-
-.race-alt {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--border);
-}
-
 .create-button {
   display: inline-flex;
   align-items: center;
@@ -1099,13 +1017,6 @@ p.banner {
   letter-spacing: 0.3em;
 }
 
-.home-side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
 /* ---- The daily card ---- */
 
 .daily-card {
@@ -1123,14 +1034,6 @@ p.banner {
 }
 
 /* ---- Open rooms ---- */
-
-.room-list-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  min-height: 0;
-}
 
 .room-list {
   margin: 0 -6px;
@@ -1266,44 +1169,378 @@ p.banner {
   color: var(--muted);
 }
 
-@media (min-width: 560px) {
-  .race-alt {
+/* ---- The open rooms: the heart of the home page ---- */
+
+.rooms-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.rooms-hero-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rooms-hero-title h1 {
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.rooms-hero-title p {
+  margin-top: 4px;
+}
+
+.rooms-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.join-form .code-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Who you race as: one slim line (a nickname box for guests). */
+.you-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.you-bar-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.you-bar-label,
+.you-bar-name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.you-bar-name b {
+  color: var(--text);
+}
+
+.you-bar input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  background: var(--surface);
+}
+
+.room-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.room-tabs .tabs {
+  margin: 0;
+}
+
+.room-tabs .tabs button {
+  min-height: 44px;
+}
+
+.tab-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font: 700 11.5px/20px var(--font-mono);
+  color: var(--text-2);
+}
+
+.tabs button[aria-selected="true"] .tab-count {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.room-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+}
+
+.private-note {
+  margin: 0;
+}
+
+.room-tab-panel .room-list {
+  overflow: visible;
+}
+
+/* Daily scramble and Contact, side by side on wide screens. */
+.home-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* A link that looks like a button (Contact's "Write", "Back to the races"). */
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: var(--hairline);
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.button-link:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+
+.button-link.primary {
+  border-color: transparent;
+  background: var(--accent-bg);
+  color: #fff;
+}
+
+.home-tip {
+  margin: 0;
+  text-align: center;
+}
+
+/* Small phones: the header keeps the logo, theme and sign-in (each room card says "Racing"). */
+@media (max-width: 400px) {
+  .site-head .live-pill {
+    display: none;
+  }
+}
+
+/* The footer: links on the left, the small print on the right. */
+.foot-links,
+.foot-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.foot-links a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+@media (min-width: 640px) {
+  .rooms-actions {
+    grid-template-columns: auto minmax(0, 260px);
+  }
+
+  .home-cards {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
 @media (min-width: 960px) {
-  /* Left: what this is, then the race card. Right: the daily card and the rooms. */
-  .home-main {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "hero side"
-      "race side";
-    column-gap: clamp(24px, 4vw, 48px);
-    padding-top: 8px;
+  .rooms-hero {
+    padding: 24px;
+    gap: 16px;
   }
 
-  .hero {
-    grid-area: hero;
+  .rooms-hero-head {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
   }
 
-  .race-card {
-    grid-area: race;
-    align-self: start;
-    padding: 22px;
+  .rooms-actions {
+    flex: none;
   }
 
-  .home-side {
-    grid-area: side;
-    align-self: stretch;
-    min-height: 0;
+  /* Two columns of room cards on a wide screen. */
+  .room-tab-panel .room-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .room-list-panel {
-    flex: 1;
-    min-height: 360px;
-    max-height: 640px;
+  .room-tab-panel .private-note {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Contact (/contact) and the messages (/admin)
+   --------------------------------------------------------------------------- */
+
+.contact-main {
+  flex: 1;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-content: start;
+}
+
+.contact-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.contact-panel h1 {
+  font-size: clamp(26px, 5vw, 32px);
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.contact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.contact-form textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+  font: inherit;
+}
+
+.contact-form .counter {
+  align-self: flex-end;
+}
+
+/* The bot trap: off screen, never seen or tabbed to by people. */
+.contact-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.contact-form .primary {
+  align-self: flex-start;
+  min-width: 180px;
+}
+
+.contact-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contact-other {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.contact-other a {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.social-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.message-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.message-head a {
+  color: var(--accent);
+}
+
+.message-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+@media (min-width: 640px) {
+  .contact-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.admin-page .contact-main {
+  max-width: 920px;
+}
+
+@media (min-width: 960px) {
+  /* With the email / social links filled in (site.ts): the form, and them beside it. */
+  .contact-main:has(.contact-other) {
+    max-width: 980px;
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .contact-panel {
+    padding: 28px;
   }
 }
 
@@ -1898,9 +2135,13 @@ p.banner {
     font-size: 15px;
   }
 
-  .side .standings.dense td.time-cell,
   .side .standings.dense .num {
     font-size: 15.5px;
+  }
+
+  /* Five solve columns share the row: a little smaller than the average. */
+  .side .standings.dense td.time-cell {
+    font-size: 13px;
   }
 
   .side .standings.dense thead th {
@@ -1908,8 +2149,8 @@ p.banner {
     font-size: 11px;
   }
 
-  .side .standings.dense .name-col {
-    max-width: 220px;
+  .side .standings.dense .row-name {
+    max-width: 130px;
   }
 }
 
@@ -2039,7 +2280,11 @@ p.banner {
 .room[data-focus="true"] .scrim,
 .room[data-focus="true"] .timer-below,
 .room[data-focus="true"] .session-strip,
-.room[data-focus="true"] .stage-standings {
+.room[data-focus="true"] .stage-standings,
+.room[data-focus="true"] .timer-tools,
+.room[data-focus="true"] .warmup-invite,
+.room[data-focus="true"] .warmup-chat,
+.room[data-focus="true"] .warmup-times {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -2687,6 +2932,47 @@ p.banner {
   }
 }
 
+/* Phones: typing a time is one row (the box and Submit), so the standings keep
+   their room. The label and the "1235 = 12.35" help stay for screen readers;
+   the box's placeholder shows the example. */
+@media (max-width: 480px), (orientation: landscape) and (max-height: 500px) {
+  .type-in {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .type-in .field {
+    flex: 1 1 150px;
+    min-width: 0;
+  }
+
+  .type-in .field-label,
+  .type-in #type-in-help {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .type-in input {
+    min-height: 56px;
+    font-size: 26px;
+  }
+
+  .type-in button.xl {
+    flex: none;
+    min-height: 56px;
+  }
+
+  .type-in .error-text {
+    flex-basis: 100%;
+  }
+}
+
 /* ---- Your session, under the timer ---- */
 
 .session-strip {
@@ -2779,7 +3065,7 @@ p.banner {
 /* Phones: the standings sit right under the timer, always in sight. When
    space is short (long scrambles, small phones) they shrink and scroll before
    the timer does. */
-.room.in-match .stage-main:has(+ .stage-standings) {
+.room.in-match .stage-main:has(~ .stage-standings) {
   min-height: 160px;
 }
 
@@ -3072,6 +3358,137 @@ p.banner {
 
 .pts-zero {
   color: var(--muted);
+}
+
+/* One column per solve (1 2 3 4 5): compact, so five fit next to the names.
+   If they still don't (long names, 1:02.34 times), the table scrolls sideways
+   and the names stay in place. */
+.standings.dense th.solve-col,
+.standings.dense td.time-cell {
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.standings.dense td.time-cell {
+  font-size: 12.5px;
+}
+
+.standings.dense th.solve-col {
+  min-width: 30px;
+  letter-spacing: 0;
+}
+
+/* Names give way to the times: long ones are cut short (the full name is on hover). */
+.standings.dense .row-name {
+  max-width: 96px;
+}
+
+/* With a column per solve, the times get the room: no crown or "more" chevron
+   (the host is in the player list; a row still opens on tap). */
+.standings.dense.with-solves .host-mark,
+.standings.dense.with-solves .row-more {
+  display: none;
+}
+
+.standings.dense.with-solves th.solve-col,
+.standings.dense.with-solves td.time-cell {
+  padding: 0 3px;
+}
+
+/* Phones (standings under the timer, or the narrow sidebar in landscape):
+   every pixel goes to the solves. The rank column goes too (the rows are in
+   rank order, and the points are there). Your row keeps its accent bar on the name. */
+.stage-standings .standings.dense.with-solves .rank {
+  display: none;
+}
+
+.stage-standings .standings.dense.with-solves .name-col {
+  padding-left: 10px;
+}
+
+.stage-standings .standings.dense.with-solves tr.me .name-col {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.stage-standings .standings.dense.with-solves .row-toggle {
+  gap: 5px;
+}
+
+.stage-standings .standings.dense.with-solves th.solve-col,
+.stage-standings .standings.dense.with-solves td.time-cell {
+  min-width: 26px;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+.stage-standings .standings.dense.with-solves td.avg {
+  padding: 0 3px;
+  font-size: 12.5px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .side .standings.dense.with-solves .rank {
+    display: none;
+  }
+
+  .side .standings.dense.with-solves .name-col {
+    padding-left: 10px;
+  }
+
+  .side .standings.dense.with-solves tr.me .name-col {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .side .standings.dense.with-solves .row-toggle {
+    gap: 5px;
+  }
+
+  .side .standings.dense.with-solves th.solve-col,
+  .side .standings.dense.with-solves td.time-cell {
+    min-width: 26px;
+    padding: 0 2px;
+    font-size: 12px;
+  }
+
+  .side .standings.dense.with-solves td.avg {
+    padding: 0 3px;
+    font-size: 12.5px;
+  }
+}
+
+/* The solve being raced: its number in full text colour, its cells faintly tinted. */
+.standings.dense th.solve-col.current {
+  color: var(--text);
+}
+
+.standings.dense tbody tr:not(.details):not(.me) > td.time-cell.current {
+  background: var(--surface-2);
+}
+
+/* Mixed races: the player's event icon after their name. */
+.row-event {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-2);
+}
+
+.row-event .cubing-icon {
+  font-size: 15px;
+}
+
+/* An event as a small tag ("Pyra"): lobby seats and result tables in mixed races. */
+.event-tag {
+  gap: 4px;
+  padding: 0 7px 0 5px;
+}
+
+.event-tag .cubing-icon {
+  font-size: 13px;
+}
+
+.event-badge .mixed-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* An opponent's running time: grey and in tenths, so it never looks final. */
@@ -3612,9 +4029,16 @@ p.banner {
   transform: scale(0.9);
 }
 
-/* Emoji floating up from a row for a moment. */
+/* Emoji floating up from a row for a moment. The name also stays in view
+   while the solve columns scroll sideways. */
 .standings.dense .name-col {
-  position: relative;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.standings.dense thead th.name-col {
+  z-index: 3;
 }
 
 .reaction-pops {
@@ -4200,6 +4624,46 @@ details[open] > summary::after {
 .kick-button {
   flex: none;
   font-size: 13px;
+}
+
+/* Your own card: "Just watch" / "Race" for the next race. */
+.watch-toggle {
+  flex: none;
+  font-size: 13px;
+}
+
+/* Someone who stepped away: a plain grey tag, like "guest". */
+.tag-watching {
+  color: var(--muted);
+  background: transparent;
+}
+
+.seat:has(.tag-watching) .seat-avatar {
+  opacity: 0.55;
+}
+
+/* Landscape phones: the sidebar already says who we're waiting for. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .spectating-waiting {
+    display: none;
+  }
+}
+
+/* In a race while you're watching: one line on top of the stage, with the way back. */
+.watching-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.watching-bar b {
+  color: var(--text);
 }
 
 /* ---- 3, 2, 1, GO ---- */
@@ -4956,4 +5420,279 @@ html.overlay-mode body {
 
 .replay-scramble {
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+   Accounts: sign in, the guest hint, your username
+   --------------------------------------------------------------------------- */
+
+.sign-in-button {
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 14px;
+  font-weight: 650;
+}
+
+/* A button that reads as a link inside a sentence ("Create an account"). */
+.link-button {
+  display: inline;
+  min-height: 0;
+  min-width: 0;
+  /* A 44 px tall tap area without moving the line: padding, cancelled by margin. */
+  padding: 13px 4px;
+  margin: -13px -4px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  font-weight: 650;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover:not(:disabled) {
+  background: none;
+}
+
+.guest-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 16px;
+  font-size: 13px;
+}
+
+.guest-hint p {
+  margin: 0;
+}
+
+.guest-hint-actions {
+  display: flex;
+  gap: 18px;
+}
+
+/* Signed in: your username where the nickname box would be, the same height. */
+.account-name {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------------------
+   A new room: setup (host only), then warming up alone
+   --------------------------------------------------------------------------- */
+
+.room-setup {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
+}
+
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setup-head h1 {
+  font-size: clamp(24px, 5vw, 30px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.setup-head p {
+  margin-top: 6px;
+  max-width: 36em;
+}
+
+.warmup {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "invite" "stage" "chat";
+  gap: 12px;
+  align-items: start;
+}
+
+.warmup-invite {
+  grid-area: invite;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.warmup-invite h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.warmup-invite .share-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Someone joined while you finish a warm-up solve. */
+.joined-line {
+  background: var(--accent-soft);
+}
+
+.warmup-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.warmup-settings > button {
+  align-self: flex-start;
+}
+
+.icon.flip {
+  transform: rotate(180deg);
+}
+
+.warmup-stage {
+  grid-area: stage;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.warmup-loading {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+}
+
+.warmup-timer .timer-touch {
+  min-height: 240px;
+}
+
+/* Your warm-up times, newest first, and the averages so far. */
+.warmup-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 0 4px;
+}
+
+.warmup-times ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.warmup-times ol li:first-child {
+  color: var(--text);
+}
+
+.warmup-chat {
+  grid-area: chat;
+}
+
+@media (min-width: 960px) {
+  /* Left: the warm-up. Right: the invite, then the chat. */
+  .warmup {
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-areas:
+      "stage invite"
+      "stage chat";
+    gap: 16px;
+    padding-top: 20px;
+  }
+
+  .warmup-timer .timer-touch {
+    min-height: 360px;
+  }
+}
+
+/* ---- Under the timer in a race: Timer | Type in, and Watch (one slim row) ---- */
+
+.timer-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-toggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.mini-toggle button {
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.mini-toggle button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.watch-button {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+/* ---- Mixed rooms: just joined, pick your event (over the lobby) ---- */
+
+.pick-event-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.pick-event-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: var(--shadow-lg, 0 20px 60px rgb(0 0 0 / 0.35));
+}
+
+.pick-event-card .card-title {
+  font-size: 20px;
+}
+
+.pick-event-card p {
+  margin-top: 4px;
 }

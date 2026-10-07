@@ -9,8 +9,12 @@ import {
 } from "@cube-racing/shared";
 import type { MatchTiming } from "../match/types";
 import { LiveRoom } from "./liveRoom";
-import { createRoom, joinRoom, markDisconnected, startMatch, submitSolve, type LogicResult } from "./roomLogic";
+import { createRoom as createSetupRoom, joinRoom, markDisconnected, newMatchEvents, startMatch, submitSolve, type LogicResult } from "./roomLogic";
 import type { ServerRoom } from "./types";
+
+/** A room its host has already set up and opened (most tests start there; setup has its own tests). */
+const createRoom = (...args: Parameters<typeof createSetupRoom>) => ({ ...createSetupRoom(...args), setup: false });
+
 
 const timing: MatchTiming = { solveReviewMs: 3_000, setResultMs: 6_000, submitGraceMs: 6_000 };
 const alice = { playerId: "alice-id", nickname: "Alice" };
@@ -45,7 +49,7 @@ function setup(options: { settings?: Partial<RoomSettings>; makeScrambles?: type
 /** Starts a match the same way the socket handler does. */
 function start(live: LiveRoom): Promise<void> {
   return live.run(async () => {
-    const scrambles = await live.takeScrambles(live.state.settings);
+    const scrambles = await live.takeScrambles(newMatchEvents(live.state), live.state.settings.format);
     live.commit(ok(startMatch(live.state, alice.playerId, { matchId: "m1", scrambles, timing }, Date.now())));
   });
 }
@@ -229,6 +233,6 @@ describe("scrambles", () => {
     expect(live.state.match?.phase).toBe("set_result");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(live.state.match).toMatchObject({ phase: "solving", setIndex: 1 });
-    expect(live.state.match?.scrambles).toHaveLength(1);
+    expect(live.state.match?.scrambles["333"]).toHaveLength(1);
   });
 });

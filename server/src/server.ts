@@ -12,6 +12,8 @@ import { RoomPersistence } from "./persistence/persistence";
 import type { HistoryReader, PersistenceStore, SavedRoom } from "./persistence/store";
 import type { WeeklySchedule } from "./weekly/schedule";
 import { generateScramble } from "./scrambles";
+import type { AccountVerifier } from "./accounts";
+import { MemoryContactStore, type ContactStore } from "./contact";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
 export interface StartOptions {
@@ -41,6 +43,12 @@ export interface StartOptions {
   reader?: HistoryReader | null;
   /** When the weekly race is. Default: Saturday 12:00 UTC. */
   weeklySchedule?: WeeklySchedule;
+  /** Checks sign-in tokens (Clerk). Default: none, everyone is a guest. */
+  accounts?: AccountVerifier | null;
+  /** Where contact form messages go. Default: in memory. */
+  contactStore?: ContactStore;
+  /** Clerk user ids allowed to read the contact messages. */
+  adminUserIds?: string[];
 }
 
 export interface RunningServer {
@@ -85,6 +93,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     restoredRooms: options.restoredRooms,
     reader: options.reader ?? null,
     weeklySchedule: options.weeklySchedule ?? { day: 6, hourUtc: 12 },
+    accounts: options.accounts ?? null,
+    contact: options.contactStore ?? new MemoryContactStore(),
+    adminUserIds: options.adminUserIds ?? [],
   });
 
   // For uptime checks (Fly.io calls this to know the server is alive).
@@ -101,8 +112,11 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     if (!existsSync(path.join(options.clientDist, "index.html"))) {
       throw new Error(`No built website in ${options.clientDist}. Run "npm run build" first.`);
     }
-    // The built files (JS, CSS...). Their names contain a hash, so browsers may cache them for long.
-    app.use(express.static(options.clientDist, { index: false, maxAge: "1y", immutable: true }));
+    // The built JS and CSS: their names contain a hash, so browsers may keep them for good.
+    app.use("/assets", express.static(path.join(options.clientDist, "assets"), { maxAge: "1y", immutable: true }));
+    // Icons, the link-preview image, the manifest, robots.txt: same names after a
+    // change, so browsers check again after an hour.
+    app.use(express.static(options.clientDist, { index: false, maxAge: "1h" }));
     // Every other page (/, /room/ABC234...) is the single-page app; React shows the right screen.
     app.get(/.*/, (_req, res) => {
       res.setHeader("Cache-Control", "no-cache");

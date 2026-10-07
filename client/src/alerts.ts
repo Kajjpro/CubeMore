@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { getPrefs } from "./prefs";
+import { SITE } from "./site";
 
 let audio: AudioContext | null = null;
 
@@ -36,7 +37,7 @@ export function playNewScrambleSound(): void {
   });
 }
 
-const BASE_TITLE = "Cube Racing";
+const BASE_TITLE = SITE.name;
 
 /**
  * When a new scramble appears (a new `scrambleKey`) that you have to solve:

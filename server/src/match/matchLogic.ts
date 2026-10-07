@@ -21,7 +21,7 @@
  * too late or twice is harmless: it can never skip a solve.
  */
 
-import type { ErrorCode, RoomSettings, Scramble, SetStanding, SolveResult } from "@cube-racing/shared";
+import type { CubeEventId, ErrorCode, RoomSettings, SetStanding, SolveResult } from "@cube-racing/shared";
 import {
   findMatchWinner,
   handicapWinners,
@@ -33,7 +33,7 @@ import {
   targetPoints,
 } from "./scoring";
 import { verifySmartSolve } from "@cube-racing/shared/smartSolve";
-import { replayKey, type Match, type MatchTiming, type PenaltyChange, type SolveSubmission } from "./types";
+import { replayKey, type Match, type MatchTiming, type PenaltyChange, type SetScrambles, type SolveSubmission } from "./types";
 
 export type MatchUpdate =
   | { ok: true; match: Match }
@@ -66,11 +66,13 @@ export interface NewMatch {
   settings: RoomSettings;
   timing: MatchTiming;
   roster: string[];
-  scrambles: Scramble[];
+  /** The event each roster player picked (see setEvents). */
+  picks: Record<string, CubeEventId>;
+  scrambles: SetScrambles;
   now: number;
 }
 
-export function createMatch({ matchId, settings, timing, roster, scrambles, now }: NewMatch): Match {
+export function createMatch({ matchId, settings, timing, roster, picks, scrambles, now }: NewMatch): Match {
   const empty: Match = {
     matchId,
     phase: "solving",
@@ -79,7 +81,8 @@ export function createMatch({ matchId, settings, timing, roster, scrambles, now 
     setIndex: 0,
     solveIndex: 0,
     roster: [],
-    scrambles: [],
+    scrambles: {},
+    events: {},
     results: {},
     points: {},
     finishedSets: [],
@@ -88,27 +91,68 @@ export function createMatch({ matchId, settings, timing, roster, scrambles, now 
     winnerIds: [],
     replays: {},
   };
-  return beginSet(empty, 0, roster, scrambles, now);
+  return beginSet(empty, 0, roster, picks, scrambles, now);
 }
 
 /** Starts the next set (after set_result). The roster is whoever is in the room right now. */
-export function startNextSet(match: Match, roster: string[], scrambles: Scramble[], now: number): MatchUpdate {
+export function startNextSet(
+  match: Match,
+  roster: string[],
+  picks: Record<string, CubeEventId>,
+  scrambles: SetScrambles,
+  now: number,
+): MatchUpdate {
   if (match.phase !== "set_result") {
     return fail("The next set can only start after a set result.");
   }
-  return ok(beginSet(match, match.setIndex + 1, roster, scrambles, now));
+  return ok(beginSet(match, match.setIndex + 1, roster, picks, scrambles, now));
 }
 
-/** Checks the scrambles fit this match. We never start solving without a proper scramble. */
-export function scramblesFit(settings: RoomSettings, scrambles: Scramble[]): boolean {
-  return (
-    scrambles.length === solvesPerSet(settings.format) &&
-    scrambles.every((s) => s.cubeEvent === settings.cubeEvent && s.text.length > 0)
-  );
+/**
+ * Who races which event in a set. Players keep their event for the whole
+ * match; someone new in the match brings their pick. (`picks` = the event each
+ * player in the room picked; the room's event unless the room is mixed.)
+ */
+export function setEvents(
+  match: Pick<Match, "events"> | null,
+  roster: string[],
+  picks: Record<string, CubeEventId>,
+): Record<string, CubeEventId> {
+  const events: Record<string, CubeEventId> = {};
+  for (const id of roster) {
+    const event = match?.events[id] ?? picks[id];
+    if (event) events[id] = event;
+  }
+  return events;
 }
 
-function beginSet(match: Match, setIndex: number, roster: string[], scrambles: Scramble[], now: number): Match {
-  if (!scramblesFit(match.settings, scrambles)) {
+/** The events a set needs scrambles for, each once. */
+export function eventsNeeded(events: Record<string, CubeEventId>): CubeEventId[] {
+  return [...new Set(Object.values(events))].sort();
+}
+
+/**
+ * Checks the scrambles fit this set: one per solve for every event someone
+ * races, each made for that event. We never start solving without a proper scramble.
+ */
+export function scramblesFit(settings: RoomSettings, events: Record<string, CubeEventId>, scrambles: SetScrambles): boolean {
+  const count = solvesPerSet(settings.format);
+  return eventsNeeded(events).every((event) => {
+    const list = scrambles[event];
+    return list !== undefined && list.length === count && list.every((s) => s.cubeEvent === event && s.text.length > 0);
+  });
+}
+
+function beginSet(
+  match: Match,
+  setIndex: number,
+  roster: string[],
+  picks: Record<string, CubeEventId>,
+  scrambles: SetScrambles,
+  now: number,
+): Match {
+  const thisSet = setEvents(match, roster, picks);
+  if (roster.some((id) => !thisSet[id]) || !scramblesFit(match.settings, thisSet, scrambles)) {
     throw new Error("A set can't start without one scramble per solve for the right event.");
   }
   const count = solvesPerSet(match.settings.format);
@@ -123,7 +167,8 @@ function beginSet(match: Match, setIndex: number, roster: string[], scrambles: S
     results[id] = new Array<SolveResult | null>(count).fill(null);
   }
 
-  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, results, points, replays: {} }, 0, now);
+  const events = { ...match.events, ...thisSet };
+  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, events, results, points, replays: {} }, 0, now);
 }
 
 function startSolve(match: Match, solveIndex: number, now: number): Match {
@@ -177,7 +222,7 @@ export function submitSolve(match: Match, playerId: string, submission: SolveSub
 
   // A smart cube solve: replay it on the scramble. Verified ones get a mark and keep their moves.
   if (submission.smart) {
-    const scramble = match.scrambles[submission.solveIndex]?.text ?? "";
+    const scramble = match.scrambles[match.events[playerId]]?.[submission.solveIndex]?.text ?? "";
     const verdict = verifySmartSolve(scramble, submission.timeMs, submission.smart);
     if (verdict.ok) {
       result.verified = { moves: verdict.moveCount, tps: verdict.tps };
@@ -227,10 +272,11 @@ export function skipPlayer(match: Match, targetId: string, now: number): MatchUp
 }
 
 /**
- * A player left for good. Their times so far still count; every solve they
- * haven't done in this set becomes a DNF, so they never block the others.
+ * A player left for good (or switched to watching: source "away"). Their times
+ * so far still count; every solve they haven't done in this set becomes a DNF,
+ * so they never block the others.
  */
-export function removeFromMatch(match: Match, playerId: string, now: number): Match {
+export function removeFromMatch(match: Match, playerId: string, now: number, source: "removed" | "away" = "removed"): Match {
   const row = match.results[playerId];
   if (!row || (match.phase !== "solving" && match.phase !== "solve_review")) {
     return match;
@@ -238,7 +284,7 @@ export function removeFromMatch(match: Match, playerId: string, now: number): Ma
   if (row.every((result) => result !== null)) {
     return match;
   }
-  const filled = row.map((result) => result ?? { timeMs: 0, penalty: "DNF" as const, source: "removed" as const });
+  const filled = row.map((result) => result ?? { timeMs: 0, penalty: "DNF" as const, source });
   const updated: Match = { ...match, results: { ...match.results, [playerId]: filled } };
   return finishSolveIfEveryoneDone(updated, now);
 }

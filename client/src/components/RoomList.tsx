@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ClientEvents, type PublicRoomInfo } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS } from "../labels";
 import { request, socket, useIsConnected } from "../socket";
-import { EventIcon } from "./ui";
+import { RoomEventIcon } from "./ui";
 
 const REFRESH_MS = 5000;
 
@@ -36,90 +36,134 @@ export function useRooms(demoRooms?: PublicRoomInfo[]): { rooms: PublicRoomInfo[
   return { rooms, connected: demoRooms ? true : connected };
 }
 
-/**
- * Every open room as a card. Anyone can see all rooms; a private one asks for
- * its PIN when you open it (the room page does that).
- */
-export function RoomList({ rooms, connected, onJoin }: { rooms: PublicRoomInfo[] | null; connected: boolean; onJoin: (code: string) => void }) {
-  const racing = rooms?.filter((room) => room.racing).length ?? 0;
-  return (
-    <section className="panel room-list-panel" aria-labelledby="rooms-title">
-      <div className="card-head">
-        <h2 id="rooms-title">Open rooms</h2>
-        {rooms && rooms.length > 0 && (
-          <span className="card-head-meta">
-            {racing > 0 && (
-              <span className="live-count">{racing} racing</span>
-            )}
-            <span className="muted">{rooms.length} open</span>
-          </span>
-        )}
-      </div>
+type RoomTab = "public" | "private";
 
-      {rooms === null ? (
-        <div className="empty-state">
-          <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
-        </div>
-      ) : rooms.length === 0 ? (
-        <div className="empty-state">
-          <p className="small">No rooms right now.</p>
-          <p className="tiny muted">Create one: the race starts as soon as someone joins.</p>
-        </div>
-      ) : (
-        <ul className="room-list">
-          {rooms.map((room) => {
-            const full = room.players >= room.maxPlayers;
-            const isPrivate = room.visibility === "private";
-            const bestOf = room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`;
-            return (
-              <li key={room.code} className="room-card" data-racing={room.racing}>
-                <span className="event-chip">
-                  <EventIcon id={room.cubeEvent} />
+const EMPTY: Record<RoomTab, { title: string; hint: string }> = {
+  public: {
+    title: "No public rooms right now.",
+    hint: "Create one: it shows up here for everyone, and the race starts as soon as someone joins.",
+  },
+  private: {
+    title: "No private rooms right now.",
+    hint: "Private rooms need a PIN to join. Create one for your friends and send them the invite link.",
+  },
+};
+
+/**
+ * The open rooms in two tabs: Public (anyone joins) and Private (joining needs
+ * the PIN; the room page asks for it). Each tab says how many there are.
+ */
+export function RoomTabs(props: {
+  rooms: PublicRoomInfo[] | null;
+  connected: boolean;
+  onJoin: (code: string) => void;
+  initialTab?: RoomTab;
+}) {
+  const { rooms, connected, onJoin } = props;
+  const [tab, setTab] = useState<RoomTab>(props.initialTab ?? "public");
+  const of = (kind: RoomTab) => rooms?.filter((room) => room.visibility === kind) ?? null;
+  const tabs: { id: RoomTab; label: string; rooms: PublicRoomInfo[] | null }[] = [
+    { id: "public", label: "Public", rooms: of("public") },
+    { id: "private", label: "Private", rooms: of("private") },
+  ];
+  const shown = tabs.find((t) => t.id === tab)!;
+
+  return (
+    <div className="room-tabs">
+      <div className="tabs" role="tablist" aria-label="Open rooms">
+        {tabs.map(({ id, label, rooms: list }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`rooms-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls="rooms-panel"
+            onClick={() => setTab(id)}
+          >
+            {label}
+            {list !== null && <span className="tab-count">{list.length}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="room-tab-panel" role="tabpanel" id="rooms-panel" aria-labelledby={`rooms-tab-${tab}`}>
+        {tab === "private" && !!shown.rooms?.length && <p className="tiny muted private-note">Joining a private room needs its PIN.</p>}
+        <RoomCards rooms={shown.rooms} connected={connected} onJoin={onJoin} empty={EMPTY[tab]} />
+      </div>
+    </div>
+  );
+}
+
+/** Rooms as cards with a Join button (a private one asks for its PIN on the room page). */
+function RoomCards(props: {
+  rooms: PublicRoomInfo[] | null;
+  connected: boolean;
+  onJoin: (code: string) => void;
+  empty: { title: string; hint: string };
+}) {
+  const { rooms, connected, onJoin } = props;
+  if (rooms === null) {
+    return (
+      <div className="empty-state">
+        <p className="small muted">{connected ? "Looking for rooms…" : "Connecting…"}</p>
+      </div>
+    );
+  }
+  if (rooms.length === 0) {
+    return (
+      <div className="empty-state">
+        <p className="small">{props.empty.title}</p>
+        <p className="tiny muted">{props.empty.hint}</p>
+      </div>
+    );
+  }
+  return (
+    <ul className="room-list">
+      {rooms.map((room) => {
+        const full = room.players >= room.maxPlayers;
+        const isPrivate = room.visibility === "private";
+        const bestOf = room.winCondition === "unlimited" ? "Unlimited" : `Bo${room.winCondition.slice(2)}`;
+        return (
+          <li key={room.code} className="room-card" data-racing={room.racing}>
+            <span className="event-chip">
+              <RoomEventIcon settings={room} />
+            </span>
+            <div className="room-info">
+              <span className="room-title">
+                <span className="name" title={room.name}>
+                  {room.name}
                 </span>
-                <div className="room-info">
-                  <span className="room-title">
-                    <span className="name" title={room.name}>
-                      {room.name}
-                    </span>
-                    {isPrivate && (
-                      <span className="tag tag-lock">PIN</span>
-                    )}
-                    {room.smartOnly && (
-                      <span className="tag tag-smart" title="Smart cubes only: every solve is verified">
-                        Smart
-                      </span>
-                    )}
+                {isPrivate && <span className="tag tag-lock">PIN</span>}
+                {room.smartOnly && (
+                  <span className="tag tag-smart" title="Smart cubes only: every solve is verified">
+                    Smart
                   </span>
-                  <span className="room-meta">
-                    {isPrivate && <span className="mono room-code">{room.code}</span>}
-                    <span>
-                      {EVENT_SHORT[room.cubeEvent]}, {FORMAT_LABELS[room.format]}, {bestOf}
-                    </span>
-                  </span>
-                  <span className="room-stats">
-                    <span>
-                      {room.players}/{room.maxPlayers} players
-                    </span>
-                    {room.racing ? (
-                      <span className="state-racing">Racing</span>
-                    ) : (
-                      <span className="state-open">In lobby</span>
-                    )}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onJoin(room.code)}
-                  disabled={full}
-                  aria-label={`${isPrivate ? "Join with PIN" : "Join"}: ${room.name}`}
-                >
-                  {full ? "Full" : "Join"}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+                )}
+              </span>
+              <span className="room-meta">
+                {isPrivate && <span className="mono room-code">{room.code}</span>}
+                <span>
+                  {room.mixedEvents ? "Mixed events" : EVENT_SHORT[room.cubeEvent]}, {FORMAT_LABELS[room.format]}, {bestOf}
+                </span>
+              </span>
+              <span className="room-stats">
+                <span>
+                  {room.players}/{room.maxPlayers} players
+                </span>
+                {room.racing ? <span className="state-racing">Racing</span> : <span className="state-open">In lobby</span>}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onJoin(room.code)}
+              disabled={full}
+              aria-label={`${isPrivate ? "Join with PIN" : "Join"}: ${room.name}`}
+            >
+              {full ? "Full" : "Join"}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

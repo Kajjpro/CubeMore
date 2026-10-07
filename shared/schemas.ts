@@ -77,15 +77,18 @@ export const roomCodeSchema = z
 
 const publicIdSchema = z.string().min(1).max(64);
 
+const cubeEventSchema = z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]);
+
 /** Every field optional: { format: "ao12" } changes just the format. */
 export const settingsChangesSchema = z.object({
-  cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]).optional(),
+  cubeEvent: cubeEventSchema.optional(),
   format: z.enum(ROOM_FORMATS).optional(),
   winCondition: z.enum(WIN_CONDITIONS).optional(),
   maxPlayers: z.number().int().min(MIN_PLAYERS_LIMIT).max(MAX_PLAYERS_LIMIT).optional(),
   solveTimeLimit: z.literal(SOLVE_TIME_LIMITS).optional(),
   scoring: z.enum(SCORING_MODES).optional(),
   smartOnly: z.boolean().optional(),
+  mixedEvents: z.boolean().optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */
@@ -111,6 +114,8 @@ export const createRoomSchema = z
       .default({}),
     /** Required for a private room. */
     pin: pinSchema.optional(),
+    /** The event you race if the room is mixed (your last pick). */
+    cubeEvent: cubeEventSchema.optional(),
   })
   .refine((input) => input.settings.visibility !== "private" || input.pin !== undefined, {
     message: `A private room needs a ${PIN_LENGTH}-digit PIN.`,
@@ -122,6 +127,18 @@ export const joinRoomSchema = z.object({
   code: roomCodeSchema,
   /** Only needed for private rooms (and not when coming back to your own seat). */
   pin: z.string().max(10).optional(),
+  /** The event you race if the room is mixed (your last pick). Ignored when coming back to your seat. */
+  cubeEvent: cubeEventSchema.optional(),
+});
+
+/** Step away and only watch (true), or race again from the next set (false). */
+export const watchSchema = z.object({
+  watching: z.boolean(),
+});
+
+/** Mixed rooms: the event you race (from the next match, or the next set if you're new). */
+export const chooseEventSchema = z.object({
+  cubeEvent: cubeEventSchema,
 });
 
 /**
@@ -131,7 +148,7 @@ export const joinRoomSchema = z.object({
 export const restartSchema = z.object({
   settings: z
     .object({
-      cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]).optional(),
+      cubeEvent: cubeEventSchema.optional(),
       format: z.enum(ROOM_FORMATS).optional(),
       solveTimeLimit: z.literal(SOLVE_TIME_LIMITS).optional(),
     })
@@ -223,7 +240,7 @@ export const cubeMovesSchema = z.object({
 
 /** "Race now": the event you want to race. */
 export const quickRaceSchema = z.object({
-  cubeEvent: z.enum(CUBE_EVENT_IDS as [CubeEventId, ...CubeEventId[]]),
+  cubeEvent: cubeEventSchema,
 });
 
 /** A reaction to another player's latest time. */
@@ -245,6 +262,36 @@ export const chatSchema = z.object({
 
 export const timerStatusSchema = z.object({
   status: z.enum(["solving", "idle"]),
+});
+
+/** Cleans a line of text: no control characters, single spaces, trimmed. */
+const oneLine = (max: number) =>
+  z
+    .string()
+    .max(max * 4)
+    .transform((text) => text.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim());
+
+/** The contact form. `website` is a trap for bots: people never see that field, so it stays empty. */
+export const contactSchema = z.object({
+  name: oneLine(60).refine((name) => [...name].length >= 1 && [...name].length <= 60, {
+    message: "Please write your name (up to 60 characters).",
+  }),
+  email: oneLine(200).refine((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 200, {
+    message: "Please check your email address, so we can write back.",
+  }),
+  message: z
+    .string()
+    .max(8000)
+    .transform((text) => text.replace(/[^\P{Cc}\n]/gu, "").trim())
+    .refine((text) => [...text].length >= 10 && [...text].length <= 2000, {
+      message: "Messages can be 10 to 2000 characters.",
+    }),
+  website: z.string().max(200).optional(),
+});
+
+/** The site owner deletes a contact message. */
+export const contactIdSchema = z.object({
+  id: z.string().min(1).max(64),
 });
 
 /** Turns zod's list of problems into one short message for the user. */

@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { ClientEvents, ServerEvents, type ChatMessage, type RoomSnapshot } from "@cube-racing/shared";
 import { updateServerOffset } from "./clock";
 import { clearRoom, flushOutbox } from "./outbox";
+import { getPrefs } from "./prefs";
 import { request, socket } from "./socket";
 import { loadIdentity } from "./storage";
 
@@ -72,7 +73,9 @@ export function useRoom(code: string, nickname: string, pin?: string): RoomConne
 
     async function join(): Promise<void> {
       const { playerId } = loadIdentity();
-      const response = await request(ClientEvents.JOIN_ROOM, { code, playerId, nickname, ...(pin ? { pin } : {}) });
+      // Your last mixed-room event: a mixed room puts you on it right away.
+      const cubeEvent = getPrefs().mixedEvent;
+      const response = await request(ClientEvents.JOIN_ROOM, { code, playerId, nickname, cubeEvent, ...(pin ? { pin } : {}) });
       if (stopped) return;
       if (response.ok) {
         setJoinError(null);

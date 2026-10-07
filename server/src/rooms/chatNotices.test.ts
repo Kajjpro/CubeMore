@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { CHAT_HISTORY_LENGTH, DEFAULT_SETTINGS, type ChatMessage } from "@cube-racing/shared";
 import { chatNotices } from "./chatNotices";
 import { LiveRoom } from "./liveRoom";
-import { createRoom, joinRoom, leaveRoom, startMatch, submitSolve, tickRoom, type LogicResult } from "./roomLogic";
+import { createRoom as createSetupRoom, joinRoom, leaveRoom, startMatch, submitSolve, tickRoom, type LogicResult } from "./roomLogic";
 import type { ServerRoom } from "./types";
+
+/** A room its host has already set up and opened (most tests start there; setup has its own tests). */
+const createRoom = (...args: Parameters<typeof createSetupRoom>) => ({ ...createSetupRoom(...args), setup: false });
+
 
 const alice = { playerId: "alice-id", nickname: "Alice" };
 const bob = { playerId: "bob-id", nickname: "Bob" };
@@ -18,7 +22,7 @@ function ok(result: LogicResult): ServerRoom {
 function started(): ServerRoom {
   let room = createRoom("ABC234", { ...DEFAULT_SETTINGS, format: "single", winCondition: "bo1" }, alice, 0);
   room = ok(joinRoom(room, bob, 1));
-  const scrambles = [{ cubeEvent: "333" as const, text: "R U R' U'" }];
+  const scrambles = { "333": [{ cubeEvent: "333" as const, text: "R U R' U'" }] };
   return ok(startMatch(room, alice.playerId, { matchId: "m1", scrambles, timing }, 2));
 }
 

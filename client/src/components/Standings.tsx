@@ -1,13 +1,14 @@
-import { Fragment, memo, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { serverNow } from "../clock";
-import type { MatchSnapshot, Penalty, PlayerSnapshot, RoomSnapshot, SolveResult } from "@cube-racing/shared";
+import { getCubeEvent, type MatchSnapshot, type Penalty, type PlayerSnapshot, type RoomSnapshot, type SolveResult } from "@cube-racing/shared";
 import { FORMAT_LABELS } from "../labels";
 import { solveKey, useOutbox } from "../outbox";
-import { droppedIndexes, fastestInColumn } from "../stats";
+import { droppedIndexes, fastestInColumn, SOLVE_COLUMNS, solveColumns } from "../stats";
 import { formatMark, formatResult, formatResultLong, formatSolve } from "../time";
 import type { CubeMoves } from "../useRoom";
 import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reactions";
 import { LiveCube } from "./Scramble";
+import { isMixed } from "../mixed";
 import { Avatar, EventIcon, Icon } from "./ui";
 
 interface Props {
@@ -50,7 +51,11 @@ export function ranks(ids: string[], points: Record<string, number>): Map<string
   return result;
 }
 
-/** Dense live standings: #, player, this solve, average, points. Tap a row for the whole set. */
+/**
+ * Dense live standings: #, player, every solve of the set (1 2 3 4 5, dropped
+ * ones in brackets once the set is complete), the average and points. Tap a
+ * row for the whole set (and to change your penalties).
+ */
 export const Standings = memo(function Standings(props: Props) {
   const { room, match, youId, names } = props;
   const outbox = useOutbox();
@@ -59,10 +64,14 @@ export const Standings = memo(function Standings(props: Props) {
   const players = new Map(room.players.map((p) => [p.id, p]));
   const rows = rowOrder(room, match, youId, props.pinMe);
   const rankOf = ranks(rows, match.points);
-  const fastest = fastestInColumn(match.results, match.solveIndex);
   const hasAverage = match.solvesPerSet > 1;
-  const columns = hasAverage ? 5 : 4;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const fit = useFittingColumns(wrapRef, `${match.matchId}/${match.setIndex}/${match.solveIndex}/${rows.length}`);
+  const solves = hasAverage ? solveColumns(match.solvesPerSet, match.solveIndex, fit) : [match.solveIndex];
+  const fastest = new Map(solves.map((i) => [i, fastestInColumn(match.results, i)]));
+  const columns = 3 + solves.length + (hasAverage ? 1 : 0);
   const averageLabel = FORMAT_LABELS[match.solvesPerSet === 5 ? "ao5" : "ao12"];
+  const mixed = isMixed(match);
 
   const solveKeyNow = `${match.matchId}/${match.setIndex}/${match.solveIndex}`;
   const liveMovesOf = (id: string) => {
@@ -76,13 +85,27 @@ export const Standings = memo(function Standings(props: Props) {
     );
 
   return (
-    <div className="table-scroll dense-scroll">
-      <table className="standings dense">
+    <div className="table-scroll dense-scroll" ref={wrapRef}>
+      <table className={`standings dense ${hasAverage ? "with-solves" : ""}`}>
         <thead>
           <tr>
             <th scope="col" className="rank">#</th>
             <th scope="col" className="name-col">Player</th>
-            <th scope="col">{hasAverage ? `Solve ${match.solveIndex + 1}` : "Time"}</th>
+            {hasAverage ? (
+              solves.map((i) => (
+                <th
+                  key={i}
+                  scope="col"
+                  className={`solve-col ${i === match.solveIndex ? "current" : ""}`}
+                  aria-label={`Solve ${i + 1}`}
+                  aria-current={i === match.solveIndex && match.phase === "solving" ? "step" : undefined}
+                >
+                  {i + 1}
+                </th>
+              ))
+            ) : (
+              <th scope="col">Time</th>
+            )}
             {hasAverage && <th scope="col">{averageLabel}</th>}
             <th scope="col">Pts</th>
           </tr>
@@ -93,7 +116,7 @@ export const Standings = memo(function Standings(props: Props) {
             const row = match.results[id];
             const isMe = id === youId;
             const expanded = open === id;
-            const pending = isMe ? myPending(match.solveIndex) : undefined;
+            const dropped = droppedIndexes(row, room.settings.format);
             return (
               <Fragment key={id}>
                 <tr className={`${isMe ? "me" : ""} ${expanded ? "open" : ""}`} onClick={() => setOpen(expanded ? null : id)}>
@@ -104,6 +127,12 @@ export const Standings = memo(function Standings(props: Props) {
                     <button type="button" className="row-toggle" aria-expanded={expanded} data-dense title={player?.nickname ?? names[id]}>
                       <Avatar id={id} name={player?.nickname ?? names[id]} size="xs" />
                       <span className="row-name">{player?.nickname ?? names[id] ?? "Player"}</span>
+                      {mixed && match.events[id] && (
+                        <span className="row-event" title={getCubeEvent(match.events[id]).name}>
+                          <EventIcon id={match.events[id]} />
+                          <span className="sr-only"> {getCubeEvent(match.events[id]).name}</span>
+                        </span>
+                      )}
                       {id === room.hostId && (
                         <span className="host-mark" title="Host">
                           <Icon name="crown" size={12} />
@@ -121,15 +150,31 @@ export const Standings = memo(function Standings(props: Props) {
                     </button>
                     <Pops pops={props.pops[id]} />
                   </th>
-                  <td className="time-cell">
-                    <CurrentCell
-                      result={row?.[match.solveIndex] ?? null}
-                      pending={pending ? formatSolve(pending.timeMs, pending.penalty) : null}
-                      fastest={fastest.has(id)}
-                      player={player}
-                      solvingPhase={match.phase === "solving"}
-                    />
-                  </td>
+                  {solves.map((i) => {
+                    const pending = isMe ? myPending(i) : undefined;
+                    return (
+                      <td key={i} className={`time-cell ${i === match.solveIndex ? "current" : ""}`}>
+                        {i === match.solveIndex ? (
+                          <CurrentCell
+                            result={row?.[i] ?? null}
+                            pending={pending ? formatSolve(pending.timeMs, pending.penalty) : null}
+                            fastest={fastest.get(i)!.has(id)}
+                            dropped={dropped.includes(i)}
+                            player={player}
+                            solvingPhase={match.phase === "solving"}
+                          />
+                        ) : (
+                          <SolveCell
+                            result={row?.[i] ?? null}
+                            pending={pending ? formatSolve(pending.timeMs, pending.penalty) : null}
+                            fastest={fastest.get(i)!.has(id)}
+                            dropped={dropped.includes(i)}
+                            upcoming={i > match.solveIndex}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   {hasAverage && <td className="num avg">{formatMark(match.standings[id]?.result)}</td>}
                   <td className="num pts">
                     <span className={(match.points[id] ?? 0) > 0 ? "pts-some" : "pts-zero"}>{match.points[id] ?? 0}</span>
@@ -138,9 +183,9 @@ export const Standings = memo(function Standings(props: Props) {
                 {expanded && (
                   <tr className="details">
                     <td colSpan={columns}>
-                      {liveMovesOf(id) && match.scramble && (
+                      {liveMovesOf(id) && match.scrambles[match.events[id]] && (
                         <div className="live-cube-wrap">
-                          <LiveCube scramble={match.scramble} moves={liveMovesOf(id)!} />
+                          <LiveCube scramble={match.scrambles[match.events[id]]!} moves={liveMovesOf(id)!} />
                           <span className="tiny muted">Live: {liveMovesOf(id)!.length} moves</span>
                         </div>
                       )}
@@ -166,26 +211,70 @@ export const Standings = memo(function Standings(props: Props) {
   );
 });
 
-/** The "this solve" cell: the time, or what the player is doing. Plain text: the fastest is bold, DNF is grey. */
-function CurrentCell(props: {
-  result: SolveResult | null;
-  pending: string | null;
-  fastest: boolean;
-  player?: PlayerSnapshot;
-  solvingPhase: boolean;
-}) {
-  const { result, player } = props;
+/**
+ * How many solve columns fit next to the names, the average and the points
+ * (at most 5). On every new solve, set or width it starts from 5 again, and
+ * drops one column at a time while the table is wider than its box; all
+ * before the screen is painted. Short events (2.31) fit all 5 even on small
+ * phones; 3x3 times may show the last 3 or 4 there (tap a row for every solve).
+ */
+function useFittingColumns(wrapRef: RefObject<HTMLDivElement | null>, contentKey: string): number {
+  const [fit, setFit] = useState(SOLVE_COLUMNS);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const observer = new ResizeObserver(() => setWidth(wrap.clientWidth));
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, [wrapRef]);
+
+  useLayoutEffect(() => setFit(SOLVE_COLUMNS), [width, contentKey]);
+
+  // After every render: still too wide? One column less.
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const table = wrap?.firstElementChild as HTMLElement | null;
+    if (wrap && table && fit > 1 && table.offsetWidth > wrap.clientWidth + 1) setFit(fit - 1);
+  });
+
+  return fit;
+}
+
+/**
+ * One finished solve: the time in plain text. The fastest of the column is
+ * bold, DNF is grey, and once the set is complete the best and worst solve are
+ * in brackets (they don't count for the average). Solves still to come are empty.
+ */
+function SolveCell(props: { result: SolveResult | null; pending: string | null; fastest: boolean; dropped: boolean; upcoming?: boolean }) {
+  const { result } = props;
   if (result) {
-    const tone = result.penalty === "DNF" ? "dnf" : props.fastest ? "fastest" : "";
+    const tone = props.dropped ? "dropped" : result.penalty === "DNF" ? "dnf" : props.fastest ? "fastest" : "";
+    const text = formatResult(result);
     return (
       <span className={tone} title={formatResultLong(result)}>
-        {formatResult(result)}
+        {props.dropped ? `(${text})` : text}
         {props.fastest && result.penalty !== "DNF" && <span className="sr-only"> fastest</span>}
         <VerifiedMark result={result} />
       </span>
     );
   }
   if (props.pending) return <span className="pending" title="Sending">{props.pending}</span>;
+  return props.upcoming ? null : <span className="muted">–</span>;
+}
+
+/** The current solve's cell: the time, or what the player is doing (solving, offline…). */
+function CurrentCell(props: {
+  result: SolveResult | null;
+  pending: string | null;
+  fastest: boolean;
+  dropped: boolean;
+  player?: PlayerSnapshot;
+  solvingPhase: boolean;
+}) {
+  const { result, player } = props;
+  if (result || props.pending) return <SolveCell {...props} />;
   if (!player) return <span className="status muted">left</span>;
   if (player.status === "reconnecting") return <span className="status muted">offline</span>;
   if (player.spectator) return <span className="status muted">watching</span>;

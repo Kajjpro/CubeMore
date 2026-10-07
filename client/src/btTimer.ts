@@ -15,7 +15,6 @@ export interface BtTimerInfo {
   error: string | null;
 }
 
-/** What the timer did: hands on / ready / running / stopped (with its time) / back to idle. */
 export type BtTimerEvent =
   | { kind: "hands-on" }
   | { kind: "ready" }
@@ -40,7 +39,7 @@ export function useBtTimer(): BtTimerInfo {
       infoListeners.add(listener);
       return () => infoListeners.delete(listener);
     },
-    () => info,
+    () => info
   );
 }
 
@@ -57,7 +56,9 @@ export async function connectBtTimer(): Promise<void> {
   if (info.status !== "off") return;
   setInfo({ status: "connecting", error: null });
   try {
-    const { connectGanTimer, GanTimerState } = await import("gan-web-bluetooth");
+    const { connectGanTimer, GanTimerState } = await import(
+      "gan-web-bluetooth"
+    );
     const connection = await connectGanTimer();
     const subscription = connection.events$.subscribe((event) => {
       switch (event.state) {
@@ -70,7 +71,8 @@ export async function connectBtTimer(): Promise<void> {
         case GanTimerState.RUNNING:
           return emit({ kind: "running" });
         case GanTimerState.STOPPED:
-          if (event.recordedTime) emit({ kind: "stopped", timeMs: event.recordedTime.asTimestamp });
+          if (event.recordedTime)
+            emit({ kind: "stopped", timeMs: event.recordedTime.asTimestamp });
           return;
         case GanTimerState.IDLE:
           return emit({ kind: "idle" });
@@ -88,7 +90,12 @@ export async function connectBtTimer(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     const cancelled = /cancel|chosen/i.test(message);
-    setInfo({ status: "off", error: cancelled ? null : "Couldn't connect to the timer. Is it on and close by?" });
+    setInfo({
+      status: "off",
+      error: cancelled
+        ? null
+        : "Couldn't connect to the timer. Is it on and close by?",
+    });
   }
 }
 

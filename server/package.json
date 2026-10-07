@@ -10,6 +10,7 @@
     "chaos": "tsx chaos/chaos.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.23.0",
     "@cube-racing/shared": "*",
     "cubing": "^0.63.8",
     "express": "^5.2.1",

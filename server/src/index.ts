@@ -1,4 +1,6 @@
 import pg from "pg";
+import { clerkAccounts } from "./accounts";
+import { MemoryContactStore, PostgresContactStore, type ContactStore } from "./contact";
 import { config } from "./config";
 import { MemoryDailyStore, PostgresDailyStore, type DailyStore } from "./daily/store";
 import { PostgresStore } from "./persistence/store";
@@ -8,6 +10,7 @@ import { startServer } from "./server";
 // is kept in the history, and the daily leaderboard is kept. Without: all in memory.
 let dailyStore: DailyStore = new MemoryDailyStore();
 let store: PostgresStore | null = null;
+let contactStore: ContactStore = new MemoryContactStore();
 if (config.databaseUrl) {
   const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
   // Hosted databases close idle connections now and then. Without this
@@ -15,6 +18,7 @@ if (config.databaseUrl) {
   pool.on("error", (error) => console.error("Database connection error:", error.message));
   dailyStore = await PostgresDailyStore.open(pool);
   store = await PostgresStore.open(pool);
+  contactStore = await PostgresContactStore.open(pool);
   console.log("Rooms, match history and daily results are saved in Postgres");
 } else {
   console.log("Everything is kept in memory (set DATABASE_URL to keep rooms and history across restarts)");
@@ -22,11 +26,18 @@ if (config.databaseUrl) {
 
 const restoredRooms = store ? await store.loadRooms() : [];
 
+// Accounts: sign in with Google, or email and password (Clerk). Guests can always play.
+const accounts = config.clerkSecretKey ? clerkAccounts(config.clerkSecretKey, config.clerkAuthorizedParties) : null;
+console.log(accounts ? "Accounts are on (Clerk)" : "Accounts are off (set CLERK_SECRET_KEY to let players sign in)");
+
 const server = await startServer({
   dailyStore,
   store,
   reader: store,
   restoredRooms,
+  accounts,
+  contactStore,
+  adminUserIds: config.adminUserIds,
   weeklySchedule: config.weeklySchedule,
   port: config.port,
   timing: config.timing,

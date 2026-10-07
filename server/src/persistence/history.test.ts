@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, RECONNECT_GRACE_MS, type Scramble } from "@cube-racing/shared";
-import type { MatchTiming } from "../match/types";
-import { createRoom, joinRoom, publicIdFor, rematch, startMatch, submitSolve, tickRoom, type LogicResult } from "../rooms/roomLogic";
+import type { MatchTiming, SetScrambles } from "../match/types";
+import { createRoom as createSetupRoom, joinRoom, publicIdFor, rematch, startMatch, submitSolve, tickRoom, type LogicResult } from "../rooms/roomLogic";
 import type { ServerRoom } from "../rooms/types";
 import { historyEvents } from "./history";
 import { RESTORE_VERSION_JUMP, restoreRoom } from "./restore";
+
+/** A room its host has already set up and opened (most tests start there; setup has its own tests). */
+const createRoom = (...args: Parameters<typeof createSetupRoom>) => ({ ...createSetupRoom(...args), setup: false });
+
 
 const timing: MatchTiming = { solveReviewMs: 0, setResultMs: 6_000, submitGraceMs: 6_000 };
 const alice = { playerId: "alice-id", nickname: "Alice" };
@@ -16,7 +20,9 @@ function ok(result: LogicResult): ServerRoom {
   return result.room;
 }
 
-const scrambles = (n: number): Scramble[] => Array.from({ length: n }, (_, i) => ({ cubeEvent: "333", text: `R U F${i}` }));
+const scrambles = (n: number): SetScrambles => ({
+  "333": Array.from({ length: n }, (_, i): Scramble => ({ cubeEvent: "333", text: `R U F${i}` })),
+});
 
 /** Alice and Bob in a bo1 single room, the match just started. */
 function started(): { lobby: ServerRoom; room: ServerRoom } {
@@ -58,8 +64,8 @@ describe("history events", () => {
     const events = historyEvents(one, done, T0 + 11_000);
     expect(events.map((e) => e.kind)).toEqual(["set_finished"]);
     expect(events[0]).toMatchObject({
-      cubeEvent: "333",
-      scrambles: ["R U F0"],
+      events: { [publicIdFor(alice.playerId)]: "333", [publicIdFor(bob.playerId)]: "333" },
+      scrambles: { "333": ["R U F0"] },
       set: { setIndex: 0, winnerIds: [publicIdFor(alice.playerId)] },
     });
 
@@ -107,5 +113,14 @@ describe("restoring a room", () => {
 
     // Nobody comes back: after 30 seconds they're removed, like any disconnect.
     expect(tickRoom(restored, now + RECONNECT_GRACE_MS).players).toEqual([]);
+  });
+
+  it("a match saved before mixed rooms: one scramble list, everyone on the room's event", () => {
+    const { room } = started();
+    const { events: _events, ...match } = room.match!;
+    const older = { ...room, match: { ...match, scrambles: room.match!.scrambles["333"] } } as unknown as ServerRoom;
+    const restored = restoreRoom(older, T0, T0);
+    expect(restored.match!.scrambles).toEqual(room.match!.scrambles);
+    expect(restored.match!.events).toEqual(room.match!.events);
   });
 });

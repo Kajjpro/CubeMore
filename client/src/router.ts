@@ -1,5 +1,6 @@
 // A tiny router: the pages are "/" (home), "/room/CODE", "/room/CODE/overlay"
-// (for streamers) and "/daily" (the daily scramble).
+// (for streamers), "/daily" (the daily scramble), "/contact" and "/admin"
+// (the contact messages, for the site owner).
 
 import { useSyncExternalStore } from "react";
 
@@ -15,6 +16,7 @@ window.addEventListener("popstate", notify);
 /** Go to another page without reloading. */
 export function navigate(path: string): void {
   window.history.pushState(null, "", path);
+  window.scrollTo(0, 0); // a new page starts at the top
   notify();
 }
 

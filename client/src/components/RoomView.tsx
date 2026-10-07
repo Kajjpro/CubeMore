@@ -16,20 +16,24 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatMessage, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
 import { useNewScrambleAlert } from "../alerts";
 import { useLayout } from "../layout";
+import { canPickEvent, eventOf, scrambleFor } from "../mixed";
 import { setPref, usePrefs, type InputMode, type RunningDisplay } from "../prefs";
 import { useSessionStats } from "../session";
 import type { TimerPhase } from "../timer/useSpeedTimer";
 import type { CubeMoves } from "../useRoom";
 import { useWakeLock } from "../wakeLock";
 import { ChatPanel } from "./ChatPanel";
+import { ConfirmButton } from "./ConfirmButton";
 import { DEBUG, DebugPanel } from "./DebugPanel";
 import { Lobby } from "./Lobby";
+import { RoomSetup, WarmupRoom } from "./WaitingRoom";
 import { FinishLine, HostPanel, MatchOver, SessionPanel, SetResult, waitingNames, waitingText } from "./RoomPanels";
 import { useReactionPops, type Reaction, type ReactionPops } from "./Reactions";
 import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
+import { MixedEventPicker } from "./SettingsForm";
 import { Standings } from "./Standings";
 import { Timer, type TimerDemo } from "./Timer";
 import { TopBar } from "./TopBar";
@@ -41,6 +45,12 @@ export interface RoomActions {
   start: () => void;
   /** In the lobby. `pin` is sent when the room becomes private or its PIN changes. */
   updateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
+  /** Mixed rooms: the event you race. */
+  chooseEvent: (cubeEvent: CubeEventId) => void;
+  /** Step away and just watch (true), or race again from the next set (false). */
+  setWatching: (watching: boolean) => void;
+  /** Host: setup done, open the room. */
+  openRoom: () => void;
   kick: (player: PlayerSnapshot) => void;
   skip: (player: PlayerSnapshot) => void;
   endMatch: () => void;
@@ -126,7 +136,7 @@ export function RoomView(props: RoomViewProps) {
 
   useWakeLock(true);
 
-  const lobbyEvent = room.match ? null : room.settings.cubeEvent;
+  const lobbyEvent = room.match ? null : eventOf(room, youId);
   useEffect(() => {
     if (lobbyEvent) preloadScramblePreview(lobbyEvent);
   }, [lobbyEvent]);
@@ -142,6 +152,16 @@ export function RoomView(props: RoomViewProps) {
 
   const match = room.match;
   const isHost = room.hostId === youId;
+  const scramble = scrambleFor(room, youId);
+  const me = room.players.find((p) => p.id === youId) ?? null;
+  // Open and waiting alone (or still finishing a warm-up solve when someone
+  // joins): the warm-up timer. Then the lobby and its countdown take over.
+  const alone = room.players.filter((p) => p.id !== youId && !p.watching).length === 0;
+  const midWarmup = phase === "holding" || phase === "ready" || phase === "running" || me?.timerStatus === "solving";
+  const warmingUp = !room.weekly && !room.setup && !!me && !me.watching && !room.bestOfLocked && (alone || midWarmup);
+  // Stepping away during a set you're in turns your remaining solves into DNFs (the menu asks first).
+  const awayCostsSolves =
+    !!match && !!youId && (match.phase === "solving" || match.phase === "solve_review") && !!match.results[youId]?.some((r) => r === null);
 
   // The chat is "on screen" in the lobby, or when its tab is open.
   const chatVisible = !match || (layout === "phone" ? sheetOpen && sheetTab === "chat" : tab === "chat");
@@ -192,6 +212,10 @@ export function RoomView(props: RoomViewProps) {
         onToggleMenu={toggleMenu}
         onCloseMenu={closeMenu}
         onLeave={actions.leave}
+        setup={room.setup}
+        watching={me ? me.watching : null}
+        awayCostsSolves={awayCostsSolves}
+        onSetWatching={actions.setWatching}
       />
 
       <div className="banners" aria-live="polite">
@@ -215,7 +239,25 @@ export function RoomView(props: RoomViewProps) {
         )}
       </div>
 
-      {!match ? (
+      {!match && room.setup && isHost ? (
+        <RoomSetup
+          room={room}
+          busy={props.starting}
+          onUpdateSettings={actions.updateSettings}
+          onOpen={actions.openRoom}
+          onLeave={actions.leave}
+        />
+      ) : !match && warmingUp ? (
+        <WarmupRoom
+          room={room}
+          youId={youId}
+          isHost={isHost}
+          onUpdateSettings={actions.updateSettings}
+          onChooseEvent={actions.chooseEvent}
+          onPhaseChange={onPhaseChange}
+          chat={chatPanel}
+        />
+      ) : !match ? (
         <Lobby
           room={room}
           youId={youId}
@@ -224,14 +266,27 @@ export function RoomView(props: RoomViewProps) {
           onStart={actions.start}
           onKick={actions.kick}
           onUpdateSettings={actions.updateSettings}
+          onChooseEvent={actions.chooseEvent}
+          onSetWatching={actions.setWatching}
           chat={chatPanel}
         />
       ) : (
         <div className="room-body">
           <section className="stage" aria-label="Solve">
-            {match.scramble && (match.phase === "solving" || match.phase === "solve_review") && (
+            {/* While others solve, the stage itself says you're watching (with this button); between solves, this bar. */}
+            {me?.watching && match.phase !== "match_over" && match.phase !== "solving" && (
+              <div className="watching-bar" role="status">
+                <span className="grow">
+                  <b>You're watching.</b> Nobody waits for you.
+                </span>
+                <button type="button" className="primary" onClick={() => actions.setWatching(false)}>
+                  Race again
+                </button>
+              </div>
+            )}
+            {scramble && (match.phase === "solving" || match.phase === "solve_review") && (
               <ScrambleBlock
-                scramble={match.scramble}
+                scramble={scramble}
                 preview={prefs.preview}
                 onTogglePreview={togglePreview}
                 round={<RoundPips match={match} />}
@@ -259,9 +314,21 @@ export function RoomView(props: RoomViewProps) {
                   />
                 ) : (
                   <div className="result-screen spectating">
-                    <h2>Spectating</h2>
-                    <p className="small muted">You joined during this set. You race from the next set.</p>
-                    <p className="small">{waitingText(waitingNames(room, match, youId))}</p>
+                    <h2>{me?.watching ? "Watching" : "Spectating"}</h2>
+                    <p className="small muted">
+                      {me?.watching
+                        ? "Take your time. Tap \"Race again\" when you're back: you join from the next set."
+                        : "You joined during this set. You race from the next set."}
+                    </p>
+                    <p className="small spectating-waiting">{waitingText(waitingNames(room, match, youId))}</p>
+                    {me?.watching && (
+                      <button type="button" className="primary" onClick={() => actions.setWatching(false)}>
+                        Race again
+                      </button>
+                    )}
+                    {canPickEvent(room, youId) && (
+                      <MixedEventPicker label="Your event" value={eventOf(room, youId)} onChange={actions.chooseEvent} />
+                    )}
                   </div>
                 ))}
               {match.phase === "solve_review" && (
@@ -283,12 +350,22 @@ export function RoomView(props: RoomViewProps) {
                     isHost={isHost}
                     busy={props.starting}
                     settings={room.settings}
+                    nextEvent={room.players.find((p) => p.id === youId)?.cubeEvent ?? room.settings.cubeEvent}
+                    onChooseEvent={actions.chooseEvent}
                     onRematch={actions.rematch}
                     onBackToLobby={actions.backToLobby}
                   />
                 </div>
               )}
             </div>
+            {match.phase === "solving" && youId && match.roster.includes(youId) && (
+              <TimerTools
+                inputMode={demo?.inputMode ?? prefs.inputMode}
+                smartOnly={room.settings.smartOnly}
+                awayCostsSolves={awayCostsSolves}
+                onWatch={() => actions.setWatching(true)}
+              />
+            )}
             {match.phase === "solving" && layout === "phone" && (
               <section className="stage-standings" aria-label="Standings">
                 {standings}
@@ -372,6 +449,46 @@ function roomStatus(room: RoomSnapshot): string {
   if (match.phase === "match_over") return "Match over";
   const solved = match.roster.filter((id) => match.results[id]?.[match.solveIndex]).length;
   return `${solved}/${match.roster.length} Solved`;
+}
+
+/**
+ * Right under the timer, always in sight: type your times in instead of
+ * timing, and step away to just watch. (Both are in the Menu too.)
+ */
+function TimerTools(props: { inputMode: InputMode; smartOnly: boolean; awayCostsSolves: boolean; onWatch: () => void }) {
+  return (
+    <div className="timer-tools" role="group" aria-label="Timer options">
+      {!props.smartOnly && (
+        <div className="mini-toggle" role="radiogroup" aria-label="How you enter times">
+          {(
+            [
+              ["timer", "Timer"],
+              ["typing", "Type in"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={props.inputMode === mode}
+              onClick={() => setPref("inputMode", mode)}
+              data-dense
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <span className="grow" />
+      {props.awayCostsSolves ? (
+        <ConfirmButton className="quiet watch-button" label="Watch" confirmLabel="Tap again: rest of set is DNF" onConfirm={props.onWatch} dense />
+      ) : (
+        <button type="button" className="quiet watch-button" onClick={props.onWatch} data-dense>
+          Watch
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** Above the scramble: "Set 2, solve 3 of 5". */

@@ -1,17 +1,37 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ClientEvents, NICKNAME_MAX_LENGTH, PIN_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
+import { useAccount } from "../auth";
+import { GuestHint } from "../components/Account";
 import { RoomView, type RoomActions } from "../components/RoomView";
 import { Brand } from "../components/ui";
 import { navigate } from "../router";
 import { request, useIsConnected } from "../socket";
 import { loadIdentity, loadRoomPin, saveNickname, saveRoomPin } from "../storage";
+import { setPref } from "../prefs";
 import { useRoom } from "../useRoom";
 
-/** /room/CODE. Asks for a nickname first if we don't have one saved. */
+/**
+ * /room/CODE. Signed in, you join under your username; as a guest, it asks
+ * for a nickname first if we don't have one saved.
+ */
 export function RoomPage({ code }: { code: string }) {
   const [nickname, setNickname] = useState(() => loadIdentity().nickname);
-  if (!nickname) return <NicknameForm code={code} onDone={setNickname} />;
-  return <Room code={code} nickname={nickname} />;
+  const account = useAccount();
+  if (!account.loaded) return <Joining text={`Joining room ${code}…`} />;
+  const name = account.signedIn ? account.username : nickname;
+  if (!name) return <NicknameForm code={code} onDone={setNickname} />;
+  return <Room code={code} nickname={name} />;
+}
+
+function Joining({ text }: { text: string }) {
+  return (
+    <main className="page page-center">
+      <div className="joining">
+        <span className="loader" aria-hidden />
+        <p className="muted">{text}</p>
+      </div>
+    </main>
+  );
 }
 
 /**
@@ -73,6 +93,12 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
       rematch: (settings = {}) => void withStarting(() => send(ClientEvents.REMATCH, { settings })),
       backToLobby: () => void send(ClientEvents.BACK_TO_LOBBY, {}),
       updateSettings: (settings, pin) => void send(ClientEvents.UPDATE_SETTINGS, { settings, ...(pin ? { pin } : {}) }),
+      setWatching: (watching) => void send(ClientEvents.SET_WATCHING, { watching }),
+      openRoom: () => void withStarting(() => send(ClientEvents.OPEN_ROOM, {})),
+      chooseEvent: (cubeEvent) => {
+        setPref("mixedEvent", cubeEvent); // remembered for the next mixed room
+        void send(ClientEvents.CHOOSE_EVENT, { cubeEvent });
+      },
       kick: (player) => void send(ClientEvents.KICK_PLAYER, { targetId: player.id }),
       skip: (player) => void send(ClientEvents.SKIP_PLAYER, { targetId: player.id }),
       endMatch: () => void send(ClientEvents.END_MATCH, {}),
@@ -92,16 +118,7 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
   if (needsPin) return <PinForm code={code} error={pin ? joinError : null} onSubmit={setPin} />;
   if (joinError) return <JoinError code={code} error={joinError} />;
 
-  if (!room) {
-    return (
-      <main className="page page-center">
-        <div className="joining">
-          <span className="loader" aria-hidden />
-          <p className="muted">{connected ? `Joining room ${code}…` : "Connecting…"}</p>
-        </div>
-      </main>
-    );
-  }
+  if (!room) return <Joining text={connected ? `Joining room ${code}…` : "Connecting…"} />;
 
   return (
     <RoomView
@@ -209,6 +226,7 @@ function NicknameForm({ code, onDone }: { code: string; onDone: (nickname: strin
             Join
           </button>
         </form>
+        <GuestHint />
       </div>
     </main>
   );

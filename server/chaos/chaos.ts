@@ -130,6 +130,9 @@ class Bot {
     this.youId = response.youId;
     this.joined = true;
     this.apply(response.room);
+    // A new room starts in setup (nobody can join yet): the host opens it.
+    const opened = await this.socket.timeout(5000).emitWithAck("room:open", {});
+    if (!opened.ok) throw new Error(`open failed: ${opened.error}`);
     return response.room.code;
   }
 

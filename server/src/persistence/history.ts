@@ -12,7 +12,7 @@
  * The store writes them in order. Players are kept by their PUBLIC id only.
  */
 
-import type { RoomSettings } from "@cube-racing/shared";
+import type { CubeEventId, RoomSettings } from "@cube-racing/shared";
 import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import type { FinishedSet, Match } from "../match/types";
 import type { ServerRoom } from "../rooms/types";
@@ -23,9 +23,11 @@ export type HistoryEvent =
   | {
       kind: "set_finished";
       matchId: string;
-      cubeEvent: string;
+      /** The event each player in the set raced (a mixed room has several). */
+      events: Record<string, CubeEventId>;
       set: FinishedSet;
-      scrambles: string[];
+      /** Each event's scrambles, by solve. */
+      scrambles: Partial<Record<CubeEventId, string[]>>;
       /** Verified smart cube solves of the set, by "publicId/solveIndex". */
       replays: Record<string, SmartSolveData>;
       at: number;
@@ -75,9 +77,12 @@ export function historyEvents(before: ServerRoom, next: ServerRoom, now: number)
   for (const set of current.finishedSets.slice(alreadyFinished)) {
     // The scrambles and replays stay on the match until the next set starts.
     const thisSet = set.setIndex === current.setIndex;
-    const scrambles = thisSet ? current.scrambles.map((s) => s.text) : [];
+    const scrambles = thisSet
+      ? Object.fromEntries(Object.entries(current.scrambles).map(([event, list]) => [event, list.map((s) => s.text)]))
+      : {};
     const replays = thisSet ? current.replays : {};
-    events.push({ kind: "set_finished", matchId: current.matchId, cubeEvent: current.settings.cubeEvent, set, scrambles, replays, at: now });
+    const setEvents = Object.fromEntries(set.roster.map((id) => [id, current.events[id] ?? current.settings.cubeEvent]));
+    events.push({ kind: "set_finished", matchId: current.matchId, events: setEvents, set, scrambles, replays, at: now });
   }
 
   if (current.phase === "match_over" && !(sameMatch && old.phase === "match_over")) {

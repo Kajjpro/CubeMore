@@ -12,6 +12,8 @@ import { RoomView, type RoomActions, type RoomDemo } from "../components/RoomVie
 import { HomePage } from "../pages/HomePage";
 import { JoinError, PinForm } from "../pages/RoomPage";
 import { OverlayView } from "../pages/OverlayPage";
+import { UsernameForm } from "../components/Account";
+import { ContactPage } from "../pages/ContactPage";
 import { DailyView } from "../pages/DailyPage";
 import { drawResultCard } from "../shareCard";
 import { applyTheme, type ThemePref } from "../prefs";
@@ -19,17 +21,23 @@ import { AO5_FULL, AO5_TIMES, LONG_NAMES, NAMES, SCRAMBLES, ao12Times, mockChat,
 
 const noop = () => {};
 
+const MIXED = { name: "Pyra vs 2x2 vs Skewb", cubeEvent: "222", mixedEvents: true } as const;
+
 const ROOMS: PublicRoomInfo[] = [
-  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public", smartOnly: false },
-  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private", smartOnly: false },
-  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public", smartOnly: false },
-  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public", smartOnly: false },
-  { code: "T2CKW7", name: "Verified 3x3", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "public", smartOnly: true },
+  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public", smartOnly: false, mixedEvents: false },
+  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private", smartOnly: false, mixedEvents: false },
+  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public", smartOnly: false, mixedEvents: false },
+  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public", smartOnly: false, mixedEvents: false },
+  { code: "M1XD42", name: "Pyra vs 2x2 vs Skewb", cubeEvent: "222", mixedEvents: true, format: "ao5", winCondition: "bo3", players: 3, maxPlayers: 10, racing: false, hostName: "Bilguun", visibility: "public", smartOnly: false },
+  { code: "T2CKW7", name: "Verified 3x3", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "public", smartOnly: true, mixedEvents: false },
 ];
 const actions: RoomActions = {
   leave: noop,
   start: noop,
   updateSettings: noop,
+  chooseEvent: noop,
+  setWatching: noop,
+  openRoom: noop,
   kick: noop,
   skip: noop,
   endMatch: noop,
@@ -119,6 +127,66 @@ const ROOM_STATES: Record<string, RoomState> = {
   },
   "long-names-lobby": { mock: { names: LONG_NAMES, phase: "lobby", hostIndex: 1 } },
   "long-names-match": { mock: { ...SOLVING, names: LONG_NAMES }, demo: { sheetOpen: true } },
+  "room-setup": { mock: { phase: "lobby", names: ["Temuulen"], setup: true } },
+  "warmup-alone": { mock: { phase: "lobby", names: ["Temuulen"], bestOfLocked: false } },
+  "warmup-private": { mock: { phase: "lobby", names: ["Temuulen"], bestOfLocked: false, pin: "4821" } },
+  "watching-match": { mock: { ...SOLVING, watching: [0] } },
+  "watching-lobby": { mock: { phase: "lobby", names: NAMES.slice(0, 4), watching: [0, 2] } },
+  "mixed-join-picking": {
+    mock: { names: ["Anar", "Bilguun"], phase: "lobby", settings: MIXED, events: ["pyram", "222"], picking: [1], meIndex: 1, autoStartIn: 2_000 },
+  },
+  "mixed-waiting-for-pick": {
+    mock: { names: ["Anar", "Bilguun"], phase: "lobby", settings: MIXED, events: ["pyram", "222"], picking: [1], autoStartIn: 2_000 },
+  },
+  "mixed-lobby": {
+    mock: { names: ["Anar", "Bilguun", "Tuya"], phase: "lobby", settings: MIXED, events: ["pyram", "222", "skewb"] },
+  },
+  "mixed-solving": {
+    mock: {
+      names: ["Anar", "Bilguun", "Tuya"],
+      phase: "solving",
+      settings: MIXED,
+      events: ["pyram", "222", "skewb"],
+      solveIndex: 3,
+      times: [
+        [2310, 1840, 2500, null],
+        [2640, 2480, 2100, 2710],
+        [2900, 2550, 3010, null],
+      ],
+      solving: [2],
+      points: [1, 0, 0],
+    },
+  },
+  "mixed-set-result": {
+    mock: {
+      names: ["Anar", "Bilguun", "Tuya"],
+      phase: "set_result",
+      settings: MIXED,
+      events: ["pyram", "222", "skewb"],
+      solveIndex: 4,
+      times: [
+        [2310, 1840, 2500, 3120, 2200],
+        [2640, 2480, 2100, 2710, 3050],
+        [2900, 2550, 3010, 2770, "DNF:0"],
+      ],
+      points: [2, 0, 0],
+    },
+  },
+  "mixed-match-over": {
+    mock: {
+      names: ["Anar", "Bilguun", "Tuya"],
+      phase: "match_over",
+      settings: MIXED,
+      events: ["pyram", "222", "skewb"],
+      solveIndex: 4,
+      times: [
+        [2310, 1840, 2500, 3120, 2200],
+        [2640, 2480, 2100, 2710, 3050],
+        [2900, 2550, 3010, 2770, "DNF:0"],
+      ],
+      points: [2, 1, 0],
+    },
+  },
   "scramble-4x4": { mock: { ...SOLVING, settings: { cubeEvent: "444" }, scramble: { cubeEvent: "444", text: SCRAMBLES["444"] } } },
   "scramble-7x7": { mock: { ...SOLVING, settings: { cubeEvent: "777" }, scramble: { cubeEvent: "777", text: SCRAMBLES["777"] } } },
   "scramble-megaminx": { mock: { ...SOLVING, settings: { cubeEvent: "minx" }, scramble: { cubeEvent: "minx", text: SCRAMBLES.minx } } },
@@ -137,6 +205,11 @@ export const STATE_NAMES = [
   "overlay",
   "overlay-lobby",
   "share-card",
+  "home-private-tab",
+  "contact",
+  "contact-sent",
+  "choose-username",
+  "choose-username-taken",
   "pin-prompt",
   "pin-wrong",
   "join-error",
@@ -146,6 +219,13 @@ export const STATE_NAMES = [
 function renderState(name: string): ReactNode {
   if (name === "home") return <HomePage demo={{ nickname: "Temuulen", rooms: ROOMS, daily: mockDaily("new") }} />;
   if (name === "home-no-rooms") return <HomePage demo={{ nickname: "Temuulen", rooms: [], daily: mockDaily("new") }} />;
+  if (name === "home-private-tab") return <HomePage demo={{ nickname: "Temuulen", rooms: ROOMS, daily: mockDaily("new"), tab: "private" }} />;
+  if (name === "contact") return <ContactPage />;
+  if (name === "contact-sent") return <ContactPage demoSent={{ name: "Anu", email: "anu@example.com" }} />;
+  if (name === "choose-username") return <UsernameForm suggestion="anarb" onSave={async () => null} onSignOut={noop} />;
+  if (name === "choose-username-taken") {
+    return <UsernameForm suggestion="anar" onSave={async () => "That username is taken. Try another one."} onSignOut={noop} />;
+  }
   if (name === "pin-prompt") return <PinForm code="K7M2QX" error={null} onSubmit={noop} />;
   if (name === "pin-wrong") return <PinForm code="K7M2QX" error="Wrong PIN. Try again." onSubmit={noop} />;
   if (name === "home-daily-done") return <HomePage demo={{ nickname: "Temuulen", rooms: ROOMS, daily: mockDaily("done") }} />;

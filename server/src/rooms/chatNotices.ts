@@ -30,13 +30,30 @@ export function chatNotices(before: ServerRoom, after: ServerRoom): string[] {
   for (const player of before.players) {
     if (!after.players.some((p) => p.playerId === player.playerId)) notices.push(`${player.nickname} left the room`);
   }
+  // Stepping away and coming back.
+  for (const player of after.players) {
+    const old = before.players.find((p) => p.playerId === player.playerId);
+    if (!old || old.watching === player.watching) continue;
+    if (player.watching) notices.push(`${player.nickname} is watching for now`);
+    else notices.push(after.match && after.match.phase !== "match_over" ? `${player.nickname} is back and races from the next set` : `${player.nickname} is back to race`);
+  }
+  // Mixed rooms: "Anu picked Pyraminx", so everyone can see who races what.
+  if (after.settings.mixedEvents) {
+    for (const player of after.players) {
+      const old = before.players.find((p) => p.playerId === player.playerId);
+      if (old && player.cubeEvent && old.cubeEvent !== player.cubeEvent) {
+        notices.push(`${player.nickname} picked ${getCubeEvent(player.cubeEvent).name}`);
+      }
+    }
+  }
 
   const was = before.match;
   const now = after.match;
 
   if (now && (!was || now.matchId !== was.matchId)) {
     const s = now.settings;
-    notices.push(`Match started: ${getCubeEvent(s.cubeEvent).name}, ${s.format}, ${BEST_OF[s.winCondition]}`);
+    const event = s.mixedEvents ? "Mixed events" : getCubeEvent(s.cubeEvent).name;
+    notices.push(`Match started: ${event}, ${s.format}, ${BEST_OF[s.winCondition]}`);
     return notices;
   }
   if (!now) {

@@ -171,7 +171,7 @@ export class PostgresStore implements PersistenceStore, HistoryReader {
         await this.pool.query(
           `INSERT INTO matches (match_id, room_code, room_name, cube_event, format, win_condition, scoring, started_at, weekly_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (match_id) DO NOTHING`,
-          [event.matchId, event.roomCode, s.name, s.cubeEvent, s.format, s.winCondition, s.scoring, event.at, event.weeklyId],
+          [event.matchId, event.roomCode, s.name, s.mixedEvents ? "mixed" : s.cubeEvent, s.format, s.winCondition, s.scoring, event.at, event.weeklyId],
         );
         return;
       }
@@ -200,19 +200,21 @@ export class PostgresStore implements PersistenceStore, HistoryReader {
             [event.matchId, set.setIndex, JSON.stringify(set.winnerIds), JSON.stringify(set.standings),
               set.paces === null ? null : JSON.stringify(set.paces), event.at],
           );
-          const params: unknown[] = [event.matchId, set.setIndex, event.cubeEvent, event.at];
+          const params: unknown[] = [event.matchId, set.setIndex, event.at];
           const values: string[] = [];
           for (const [publicId, results] of Object.entries(set.results)) {
+            const cubeEvent = event.events[publicId];
+            if (!cubeEvent) continue;
             results.forEach((result, solveIndex) => {
               const scored = scoredTime(result);
               const replay = result.verified ? event.replays[`${publicId}/${solveIndex}`] : undefined;
-              const b = params.length; // this row's own values are $b+1 ... $b+11
-              params.push(solveIndex, publicId, event.scrambles[solveIndex] ?? null,
+              const b = params.length; // this row's own values are $b+1 ... $b+12
+              params.push(solveIndex, publicId, cubeEvent, event.scrambles[cubeEvent]?.[solveIndex] ?? null,
                 result.timeMs, result.penalty, result.source, scored === "DNF" ? null : scored,
                 Boolean(replay), replay ? result.verified!.tps : null,
                 replay ? JSON.stringify(replay.moves) : null, replay ? JSON.stringify(replay.times) : null);
-              const own = Array.from({ length: 11 }, (_, i) => `$${b + i + 1}`);
-              values.push(`($1, $2, ${own[0]}, ${own[1]}, $3, ${own.slice(2).join(", ")}, $4)`);
+              const own = Array.from({ length: 12 }, (_, i) => `$${b + i + 1}`);
+              values.push(`($1, $2, ${own.join(", ")}, $3)`);
             });
           }
           if (values.length === 0) return;

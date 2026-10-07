@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import type {
-  AckResponse,
-  ClientRequests,
-  ClientToServerEvents,
-  ServerToClientEvents,
+import {
+  SIGN_IN_REFUSED,
+  type AckResponse,
+  type ClientRequests,
+  type ClientToServerEvents,
+  type ServerToClientEvents,
 } from "@cube-racing/shared";
+import { sessionToken } from "./auth";
 
 /**
  * Where the game server is. Set VITE_SERVER_URL when the website and the server
@@ -16,11 +18,44 @@ import type {
  */
 const SERVER_URL: string | undefined = import.meta.env.VITE_SERVER_URL || undefined;
 
+/** After the server refused our sign-in token: get a fresh one on the next try. */
+let freshToken = false;
+
+const options = {
+  // Signed in: every (re)connect carries the current session token, so the
+  // server knows who we are. Guests send nothing.
+  auth: (callback: (data: object) => void) => {
+    void sessionToken(freshToken).then((token) => {
+      freshToken = false;
+      callback(token ? { token } : {});
+    });
+  },
+};
+
 /**
  * The ONE connection to the server, shared by the whole app.
  * If the connection drops, Socket.IO keeps retrying automatically.
  */
-export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = SERVER_URL ? io(SERVER_URL) : io();
+export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = SERVER_URL ? io(SERVER_URL, options) : io(options);
+
+// The server refused our sign-in token (usually: it had just expired). Socket.IO
+// doesn't retry after a refusal by itself, so try again with a fresh token.
+let refusals = 0;
+socket.on("connect_error", (error) => {
+  if (error.message !== SIGN_IN_REFUSED) return;
+  refusals += 1;
+  freshToken = true;
+  setTimeout(() => socket.connect(), Math.min(10_000, 500 * refusals));
+});
+socket.on("connect", () => {
+  refusals = 0;
+});
+
+/** Signed in or out: connect again, so the server sees the new identity (rooms rejoin by themselves). */
+export function reconnectAsCurrentUser(): void {
+  socket.disconnect();
+  socket.connect();
+}
 
 const REQUEST_TIMEOUT_MS = 5000;
 

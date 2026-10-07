@@ -11,6 +11,8 @@ export function ConfirmButton(props: {
   onConfirm: () => void;
   className?: string;
   ariaLabel?: string;
+  /** A compact control in the race layout (see DESIGN.md, tap targets). */
+  dense?: boolean;
 }) {
   const [armed, setArmed] = useState(false);
 
@@ -25,6 +27,7 @@ export function ConfirmButton(props: {
       type="button"
       className={props.className}
       data-armed={armed}
+      data-dense={props.dense || undefined}
       aria-label={armed ? props.confirmLabel : props.ariaLabel}
       onClick={() => {
         if (armed) {
