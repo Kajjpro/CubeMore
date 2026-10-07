@@ -1,11 +1,20 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AUTO_START_DELAY_MS, getCubeEvent, type PlayerSnapshot, type RoomSettings, type RoomSnapshot } from "@cube-racing/shared";
+import {
+  AUTO_START_DELAY_MS,
+  getCubeEvent,
+  type CubeEventId,
+  type PlayerSnapshot,
+  type RoomSettings,
+  type RoomSnapshot,
+} from "@cube-racing/shared";
 import { serverNow } from "../clock";
-import { settingsSummary } from "../labels";
+import { EVENT_SHORT, nameList, settingsSummary } from "../labels";
+import { SITE } from "../site";
+import { eventOf } from "../mixed";
 import { PlayerList } from "./RoomPanels";
-import { LobbySettings } from "./SettingsForm";
+import { LobbySettings, MixedEventPicker } from "./SettingsForm";
 import { roomLink, useCopy } from "./TopBar";
-import { EventIcon } from "./ui";
+import { RoomEventIcon } from "./ui";
 
 interface Props {
   room: RoomSnapshot;
@@ -15,6 +24,10 @@ interface Props {
   onStart: () => void;
   onKick: (player: PlayerSnapshot) => void;
   onUpdateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
+  /** Mixed rooms: pick the event you race. */
+  onChooseEvent: (cubeEvent: CubeEventId) => void;
+  /** Just watch the next race, or race. */
+  onSetWatching: (watching: boolean) => void;
   /** The room chat (built by RoomView). */
   chat: ReactNode;
 }
@@ -27,27 +40,36 @@ const canShare = typeof navigator !== "undefined" && typeof navigator.share === 
  * code and PIN; a public room is on the home page, so it needs no code). There's no
  * need to press Start: the race starts by itself 3 seconds after someone joins.
  */
-export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, chat }: Props) {
+export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, chat }: Props) {
+  const mixed = room.settings.mixedEvents;
   const [copied, copy] = useCopy(room.code, room.pin);
   const alone = room.players.length === 1;
   const isPrivate = room.settings.visibility === "private";
   const copyLabel = copied ? "Copied" : isPrivate ? "Copy invite link" : "Copy link";
-  const secondsLeft = useSecondsLeft(room.autoStartAt, !room.weekly);
+  // The countdown waits for people picking their event (mixed rooms) or finishing a warm-up solve.
+  const waitingFor = room.weekly ? null : startHeldBy(room, youId);
+  const me = room.players.find((p) => p.id === youId) ?? null;
+  const secondsLeft = useSecondsLeft(waitingFor ? null : room.autoStartAt, !room.weekly);
 
   function share(): void {
     void navigator
-      .share({ title: room.settings.name, text: isPrivate ? `Race me on Cube Racing: room ${room.code}` : "Race me on Cube Racing", url: roomLink(room.code, room.pin) })
+      .share({
+        title: room.settings.name,
+        text: isPrivate ? `Race me on ${SITE.name}: room ${room.code}` : `Race me on ${SITE.name}`,
+        url: roomLink(room.code, room.pin),
+      })
       .catch(() => {});
   }
 
   return (
     <main className="lobby">
+      {me?.pickingEvent && <PickEventCard current={me.cubeEvent} onReady={onChooseEvent} />}
       {/* Two columns on wide screens; on phones the columns dissolve into one list (display: contents). */}
       <div className="lobby-col">
         <section className="panel share" data-alone={alone} style={{ gridArea: "share" }}>
           <div className="share-title">
             <span className="event-chip large">
-              <EventIcon id={room.settings.cubeEvent} />
+              <RoomEventIcon settings={room.settings} />
             </span>
             <div className="grow">
               <h2>{room.settings.name}</h2>
@@ -105,12 +127,14 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
           ) : (
             <div className="settings-summary">
               <span className="event-chip large">
-                <EventIcon id={room.settings.cubeEvent} />
+                <RoomEventIcon settings={room.settings} />
               </span>
               <div>
-                <b>{getCubeEvent(room.settings.cubeEvent).name}</b>
+                <b>{mixed ? "Mixed events" : getCubeEvent(room.settings.cubeEvent).name}</b>
                 <p className="small muted">{settingsSummary(room.settings)}</p>
-                <p className="tiny muted">The host picks the event and format.</p>
+                <p className="tiny muted">
+                  {mixed ? "Everyone picks their own event. The host picks the format." : "The host picks the event and format."}
+                </p>
               </div>
             </div>
           )}
@@ -125,7 +149,16 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
               {room.players.length}/{room.settings.maxPlayers}
             </span>
           </h2>
-          <PlayerList players={room.players} hostId={room.hostId} youId={youId} onKick={isHost ? onKick : undefined} seats />
+          {mixed && youId && <MixedEventPicker value={eventOf(room, youId)} onChange={onChooseEvent} />}
+          <PlayerList
+            players={room.players}
+            hostId={room.hostId}
+            youId={youId}
+            onKick={isHost ? onKick : undefined}
+            onSetWatching={onSetWatching}
+            seats
+            showEvents={mixed}
+          />
         </section>
 
         <section className="panel lobby-chat" style={{ gridArea: "chat" }} aria-label="Room chat">
@@ -143,7 +176,15 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
 
       <div className="start-bar" data-counting={secondsLeft !== null}>
         <div className="inner">
-          <StartBar room={room} isHost={isHost} alone={alone} starting={starting} onStart={onStart} secondsLeft={secondsLeft} />
+          <StartBar
+            room={room}
+            isHost={isHost}
+            alone={alone}
+            starting={starting}
+            onStart={onStart}
+            secondsLeft={secondsLeft}
+            waitingFor={room.autoStartAt !== null ? waitingFor : null}
+          />
         </div>
       </div>
     </main>
@@ -177,6 +218,8 @@ function StartBar(props: {
   starting: boolean;
   onStart: () => void;
   secondsLeft: number | null;
+  /** "Waiting for Anu to pick an event": the countdown starts once they're ready. */
+  waitingFor: string | null;
 }) {
   const { secondsLeft } = props;
   // The weekly race: no host, it starts on the minute for everyone here.
@@ -201,6 +244,16 @@ function StartBar(props: {
       </button>
     );
 
+  if (props.waitingFor) {
+    return (
+      <>
+        <p className="grow countdown" role="status">
+          {props.waitingFor}
+        </p>
+        {startButton("Start now", false)}
+      </>
+    );
+  }
   if (secondsLeft !== null) {
     return (
       <>
@@ -227,9 +280,56 @@ function StartBar(props: {
   return (
     <>
       <p className="grow small muted">
-        {props.isHost ? `${props.room.players.length} players in the room` : "Waiting for the host to start the next race"}
+        {props.isHost ? playersLine(props.room) : "Waiting for the host to start the next race"}
       </p>
       {startButton("Start", true)}
     </>
+  );
+}
+
+/** "4 players in the room", or with people just watching: "2 racing, 2 watching". */
+function playersLine(room: RoomSnapshot): string {
+  const watching = room.players.filter((p) => p.watching).length;
+  if (watching === 0) return `${room.players.length} players in the room`;
+  return `${room.players.length - watching} racing, ${watching} watching`;
+}
+
+/**
+ * Who the race start waits for, in words: someone who just joined a mixed room
+ * and is picking their event, or someone finishing a warm-up solve. null = nobody.
+ */
+function startHeldBy(room: RoomSnapshot, youId: string | null): string | null {
+  const name = (p: PlayerSnapshot) => (p.id === youId ? "you" : p.nickname);
+  const picking = room.players.filter((p) => p.pickingEvent && !p.watching);
+  if (picking.length > 0) {
+    if (picking.some((p) => p.id === youId)) return "Pick your event: the race starts when you're ready";
+    return `Waiting for ${nameList(picking.map(name))} to pick ${picking.length > 1 ? "their events" : "an event"}`;
+  }
+  const warming = room.players.filter((p) => p.timerStatus === "solving" && !p.watching);
+  if (warming.length > 0) return `Waiting for ${nameList(warming.map(name))} to finish a warm-up solve`;
+  return null;
+}
+
+/**
+ * Mixed rooms, just joined: pick the event you race, then "Ready". Your last
+ * pick is chosen already. The race waits for you (up to 30 seconds).
+ */
+function PickEventCard({ current, onReady }: { current: CubeEventId; onReady: (cubeEvent: CubeEventId) => void }) {
+  const [choice, setChoice] = useState<CubeEventId>(current);
+  return (
+    <div className="pick-event-overlay">
+      <section className="panel section pick-event-card" role="dialog" aria-modal="true" aria-labelledby="pick-event-title">
+        <div>
+          <h2 id="pick-event-title" className="card-title">
+            Pick your event
+          </h2>
+          <p className="small muted">Everyone in this room races their own event. The race starts when you're ready.</p>
+        </div>
+        <MixedEventPicker label="Your event" value={choice} onChange={setChoice} />
+        <button type="button" className="primary" onClick={() => onReady(choice)}>
+          Ready with {EVENT_SHORT[choice]}
+        </button>
+      </section>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { PlayerStatus, RoomSettings, TimerStatus } from "@cube-racing/shared";
+import type { CubeEventId, PlayerStatus, RoomSettings, TimerStatus } from "@cube-racing/shared";
 import type { Match } from "../match/types";
 
 // These are the SERVER's own copies of rooms and players. They hold a few
@@ -19,6 +19,14 @@ export interface ServerPlayer {
   joinedAt: number;
   /** When their connection dropped, or null if they're connected. */
   disconnectedAt: number | null;
+  /** No account: playing with a nickname only. Signed-in players' nicknames are their usernames. */
+  guest: boolean;
+  /** Stepped away: in the room, but not in any set until they come back. */
+  watching: boolean;
+  /** Mixed rooms: joined the lobby and hasn't picked their event yet (the race waits, up to PICK_EVENT_MAX_MS). */
+  pickingEvent: boolean;
+  /** The event they picked for mixed rooms, or null (= the room's event). Ignored in other rooms. */
+  cubeEvent: CubeEventId | null;
 }
 
 export interface ServerRoom {
@@ -41,6 +49,8 @@ export interface ServerRoom {
   autoStartAt: number | null;
   /** True once the first race has started. From then on Best of is fixed. */
   hasRaced: boolean;
+  /** Just created: only the host is in it, setting it up. Not listed, nobody can join. */
+  setup: boolean;
   /**
    * The weekly race: opened by the server, no host, starts at `startsAt` for
    * whoever is there, and isn't deleted while it waits. null for normal rooms.

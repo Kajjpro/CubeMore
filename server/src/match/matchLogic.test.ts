@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, type Penalty, type RoomSettings, type Scramble } from "@cube-racing/shared";
+import { DEFAULT_SETTINGS, type CubeEventId, type Penalty, type RoomSettings, type Scramble } from "@cube-racing/shared";
 import {
   changePenalty,
   createMatch,
   endMatch,
   needsNextSet,
   removeFromMatch,
+  scramblesFit,
+  setEvents,
   skipPlayer,
   startNextSet,
   submitSolve,
@@ -13,20 +15,26 @@ import {
   type MatchUpdate,
 } from "./matchLogic";
 import { solvesPerSet } from "./scoring";
-import type { Match, MatchTiming } from "./types";
+import type { Match, MatchTiming, SetScrambles } from "./types";
 
 const timing: MatchTiming = { solveReviewMs: 3_000, setResultMs: 6_000, submitGraceMs: 6_000 };
 
-function scramblesFor(settings: RoomSettings): Scramble[] {
-  return Array.from({ length: solvesPerSet(settings.format) }, (_, i) => ({
-    cubeEvent: settings.cubeEvent,
-    text: `R U R' U${i}`,
-  }));
+function eventScrambles(cubeEvent: CubeEventId, settings: RoomSettings): Scramble[] {
+  return Array.from({ length: solvesPerSet(settings.format) }, (_, i) => ({ cubeEvent, text: `R U R' U${i}` }));
+}
+
+function scramblesFor(settings: RoomSettings, events: CubeEventId[] = [settings.cubeEvent]): SetScrambles {
+  return Object.fromEntries(events.map((event) => [event, eventScrambles(event, settings)]));
+}
+
+/** Everyone races the room's event. */
+function samePicks(roster: string[], settings: RoomSettings): Record<string, CubeEventId> {
+  return Object.fromEntries(roster.map((id) => [id, settings.cubeEvent]));
 }
 
 function startMatch(roster: string[], overrides: Partial<RoomSettings> = {}): Match {
   const settings = { ...DEFAULT_SETTINGS, ...overrides };
-  return createMatch({ matchId: "m1", settings, timing, roster, scrambles: scramblesFor(settings), now: 0 });
+  return createMatch({ matchId: "m1", settings, timing, roster, picks: samePicks(roster, settings), scrambles: scramblesFor(settings), now: 0 });
 }
 
 function ok(update: MatchUpdate): Match {
@@ -63,7 +71,7 @@ function playSet(match: Match, times: Record<string, number>, present = Object.k
 function nextSet(match: Match, roster: string[], present = roster): Match {
   match = tickMatch(match, match.phaseEndsAt!, present);
   expect(needsNextSet(match, match.phaseEndsAt!)).toBe(true);
-  return ok(startNextSet(match, roster, scramblesFor(match.settings), match.phaseEndsAt!));
+  return ok(startNextSet(match, roster, samePicks(roster, match.settings), scramblesFor(match.settings), match.phaseEndsAt!));
 }
 
 describe("a solve", () => {
@@ -96,6 +104,7 @@ describe("a solve", () => {
       settings,
       timing: { ...timing, solveReviewMs: 0 },
       roster: ["a", "b"],
+      picks: samePicks(["a", "b"], settings),
       scrambles: scramblesFor(settings),
       now: 0,
     });
@@ -259,7 +268,7 @@ describe("winning the match", () => {
     expect(match.phase).toBe("set_result");
     expect(needsNextSet(match, match.phaseEndsAt!)).toBe(true);
 
-    match = ok(startNextSet(match, ["a", "b"], scramblesFor(match.settings), match.phaseEndsAt!));
+    match = ok(startNextSet(match, ["a", "b"], samePicks(["a", "b"], match.settings), scramblesFor(match.settings), match.phaseEndsAt!));
     match = playSet(match, { a: 12_000, b: 10_000 });
     match = tickMatch(match, match.phaseEndsAt!, ["a", "b"]);
     expect(match).toMatchObject({ phase: "match_over", winnerIds: ["b"] });
@@ -299,5 +308,47 @@ describe("handicap scoring", () => {
   it("normal rooms keep fastest-wins scoring", () => {
     const match = playSet(startMatch(["fast", "slow"]), { fast: 10_000, slow: 25_000 });
     expect(match.finishedSets[0]).toMatchObject({ winnerIds: ["fast"], paces: null });
+  });
+});
+
+describe("mixed events", () => {
+  const mixed = { ...DEFAULT_SETTINGS, cubeEvent: "222" as const, mixedEvents: true, format: "ao5" as const };
+
+  function startMixed(picks: Record<string, CubeEventId>): Match {
+    const roster = Object.keys(picks);
+    const events = [...new Set(Object.values(picks))];
+    return createMatch({ matchId: "m1", settings: mixed, timing, roster, picks, scrambles: scramblesFor(mixed, events), now: 0 });
+  }
+
+  it("each player races their own event, with that event's scrambles", () => {
+    const match = startMixed({ a: "pyram", b: "222", c: "pyram" });
+    expect(match.events).toEqual({ a: "pyram", b: "222", c: "pyram" });
+    expect(Object.keys(match.scrambles).sort()).toEqual(["222", "pyram"]);
+  });
+
+  it("needs one scramble per solve for every event someone races", () => {
+    const events = { a: "pyram", b: "skewb" } as const;
+    expect(scramblesFit(mixed, events, scramblesFor(mixed, ["pyram", "skewb"]))).toBe(true);
+    expect(scramblesFit(mixed, events, scramblesFor(mixed, ["pyram"]))).toBe(false);
+    const wrongEvent = { pyram: eventScrambles("pyram", mixed), skewb: eventScrambles("pyram", mixed) };
+    expect(scramblesFit(mixed, events, wrongEvent)).toBe(false);
+    const missing = { matchId: "m1", settings: mixed, timing, roster: ["a", "b"], picks: events, scrambles: scramblesFor(mixed, ["pyram"]), now: 0 };
+    expect(() => createMatch(missing)).toThrow();
+  });
+
+  it("keeps a player's event for the whole match; a newcomer brings their pick", () => {
+    let match = startMixed({ a: "pyram", b: "222" });
+    match = playSet(match, { a: 2_000, b: 3_000 });
+    match = tickMatch(match, match.phaseEndsAt!, ["a", "b", "c"]);
+    // a switched to skewb meanwhile: that only counts from the next match.
+    const picks = { a: "skewb", b: "222", c: "clock" } as const;
+    expect(setEvents(match, ["a", "b", "c"], picks)).toEqual({ a: "pyram", b: "222", c: "clock" });
+    match = ok(startNextSet(match, ["a", "b", "c"], picks, scramblesFor(mixed, ["pyram", "222", "clock"]), match.phaseEndsAt!));
+    expect(match.events).toEqual({ a: "pyram", b: "222", c: "clock" });
+  });
+
+  it("the fastest average wins, whatever the event", () => {
+    const match = playSet(startMixed({ a: "pyram", b: "222" }), { a: 2_500, b: 2_100 });
+    expect(match.finishedSets[0].winnerIds).toEqual(["b"]);
   });
 });

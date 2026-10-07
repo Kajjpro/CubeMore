@@ -49,7 +49,7 @@ describe("the weekly race's room", () => {
   const alice = { playerId: "alice-id", nickname: "Alice" };
   const bob = { playerId: "bob-id", nickname: "Bob" };
   const scrambles: Scramble[] = Array.from({ length: 5 }, () => ({ cubeEvent: "333", text: "R U F" }));
-  const start = { matchId: "w1", scrambles, timing };
+  const start = { matchId: "w1", scrambles: { "333": scrambles }, timing };
 
   it("waits, empty and without a host, until its start time", () => {
     const empty = room();
@@ -120,9 +120,9 @@ describe("reading the history", () => {
     await s.record({
       kind: "set_finished",
       matchId,
-      cubeEvent: "333",
+      events: Object.fromEntries(players.map((p) => [p[0], "333" as const])),
       set: { setIndex: 0, roster: players.map((p) => p[0]), results, standings, winnerIds: [], paces: null },
-      scrambles: [SCRAMBLE],
+      scrambles: { "333": [SCRAMBLE] },
       replays,
       at: 2,
     });

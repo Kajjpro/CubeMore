@@ -20,6 +20,7 @@ import {
   ClientEvents,
   DEFAULT_SETTINGS,
   ServerEvents,
+  SIGN_IN_REFUSED,
   type AckResponse,
   type ClientRequests,
   type ClientToServerEvents,
@@ -30,6 +31,10 @@ import {
 import {
   changePenaltySchema,
   chatSchema,
+  chooseEventSchema,
+  watchSchema,
+  contactIdSchema,
+  contactSchema,
   createRoomSchema,
   describeProblem,
   emptySchema,
@@ -49,6 +54,8 @@ import {
   timerStatusSchema,
   updateSettingsSchema,
 } from "@cube-racing/shared/schemas";
+import { accountPlayerId, type Account, type AccountVerifier } from "./accounts";
+import { newContactMessage, type ContactStore } from "./contact";
 import type { MatchTiming } from "./match/types";
 import type { RoomPersistence } from "./persistence/persistence";
 import { restoreRoom } from "./persistence/restore";
@@ -74,6 +81,8 @@ interface SocketData {
   watching: string | null;
   /** Smart cube moves have their own limit (up to ~10 batches a second while solving). */
   movesLimiter: RateLimiter;
+  /** The signed-in account (checked when the connection opened), or null for a guest. */
+  account: Account | null;
 }
 
 type NoEvents = Record<string, never>;
@@ -97,6 +106,12 @@ export interface SocketOptions {
   weeklySchedule: WeeklySchedule;
   /** The history (weekly results, verified leaderboard, replays), or null without a database. */
   reader?: HistoryReader | null;
+  /** Checks sign-in tokens (Clerk), or null: no accounts, everyone is a guest. */
+  accounts?: AccountVerifier | null;
+  /** Where contact form messages go. */
+  contact: ContactStore;
+  /** Clerk user ids allowed to read them (the site owner). */
+  adminUserIds: string[];
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -129,6 +144,35 @@ export function registerSocketHandlers(
     log(live.code, `restored (${live.state.players.length} players, waiting for them to reconnect)`);
   }
 
+  // SIGN-IN: a browser that is signed in sends its session token when it
+  // connects. It's checked once, here. A token that isn't valid refuses the
+  // connection (the browser then comes back with a fresh one) rather than
+  // quietly making a signed-in player a guest.
+  const accounts = options.accounts ?? null;
+
+  // The contact form: 3 messages, then one every 5 minutes, per visitor (by
+  // address, so reconnecting doesn't reset it). Behind a host's proxy (Render,
+  // Fly) the visitor's address is the first one in X-Forwarded-For.
+  const contactLimiters = new Map<string, RateLimiter>();
+  const contactLimiter = (socket: IoSocket): RateLimiter => {
+    const forwarded = socket.handshake.headers["x-forwarded-for"];
+    const address = (typeof forwarded === "string" ? forwarded.split(",")[0].trim() : "") || socket.handshake.address;
+    if (contactLimiters.size > 10_000) contactLimiters.clear(); // never grows without end
+    let limiter = contactLimiters.get(address);
+    if (!limiter) contactLimiters.set(address, (limiter = new RateLimiter(3, 1 / 300)));
+    return limiter;
+  };
+  io.use(async (socket, next) => {
+    const token: unknown = socket.handshake.auth?.token;
+    let account: Account | null = null;
+    if (typeof token === "string" && token && accounts) {
+      account = await accounts.verify(token);
+      if (!account) return next(new Error(SIGN_IN_REFUSED));
+    }
+    socket.data = { ...socket.data, account };
+    next();
+  });
+
   io.on("connection", (socket) => {
     socket.data = {
       roomCode: null,
@@ -137,33 +181,48 @@ export function registerSocketHandlers(
       chatLimiter: new RateLimiter(CHAT_BURST, CHAT_PER_SECOND),
       watching: null,
       movesLimiter: new RateLimiter(20, 12),
+      account: socket.data?.account ?? null,
+    };
+
+    /**
+     * Who this connection plays as: a signed-in account (the same player on
+     * every device, called by their username), or the guest id and nickname
+     * the browser sent.
+     */
+    const me = (input: { playerId: string; nickname?: string }): { playerId: string; nickname: string; guest: boolean } => {
+      const account = socket.data.account;
+      return account
+        ? { playerId: accountPlayerId(account.userId), nickname: account.username, guest: false }
+        : { playerId: input.playerId, nickname: input.nickname ?? "", guest: true };
     };
 
     // ---- Rooms ----
 
     on(socket, ClientEvents.CREATE_ROOM, createRoomSchema, async (input) => {
       const settings = { ...DEFAULT_SETTINGS, ...input.settings };
-      const smartError = logic.smartEventError(settings);
-      if (smartError) return logic.fail(smartError);
+      const settingsError = logic.settingsError(settings);
+      if (settingsError) return logic.fail(settingsError);
       await leaveCurrentRoom(socket);
       const code = rooms.generateUniqueCode();
-      const room = logic.createRoom(code, settings, input, Date.now(), input.pin ?? null);
+      const player = { ...me(input), cubeEvent: input.cubeEvent };
+      const room = logic.createRoom(code, settings, player, Date.now(), input.pin ?? null);
       const live = openRoom(room);
-      log(code, `${room.settings.visibility} room "${room.settings.name}" created by ${input.nickname}`);
-      live.addChat("system", `${input.nickname} created the room`);
+      log(code, `${room.settings.visibility} room "${room.settings.name}" created by ${player.nickname}`);
+      live.addChat("system", `${player.nickname} created the room`);
 
       return live.run(() => {
-        enterSocketRoom(socket, code, input.playerId);
-        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId), chat: live.chatHistory() };
+        enterSocketRoom(socket, code, player.playerId);
+        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(player.playerId), chat: live.chatHistory() };
       });
     });
 
     /** Used for joining the first time AND for coming back after a refresh or network drop. */
     on(socket, ClientEvents.JOIN_ROOM, joinRoomSchema, async (input) => {
       if (!rooms.get(input.code)) return logic.fail(ROOM_NOT_FOUND_ERROR);
+      const player = { ...me(input), cubeEvent: input.cubeEvent };
 
       // One tab can only be in one room at a time, as one player.
-      if (socket.data.roomCode !== input.code || socket.data.playerId !== input.playerId) {
+      if (socket.data.roomCode !== input.code || socket.data.playerId !== player.playerId) {
         await leaveCurrentRoom(socket);
       }
 
@@ -172,23 +231,23 @@ export function registerSocketHandlers(
 
       return live.run(() => {
         if (live.deleted) return logic.fail(ROOM_NOT_FOUND_ERROR);
-        const needsPin = live.state.pin !== null && !logic.findPlayer(live.state, input.playerId);
+        const needsPin = live.state.pin !== null && !logic.findPlayer(live.state, player.playerId);
         if (needsPin && input.pin && !live.wrongPins.hasToken()) {
           return logic.fail("Too many wrong PINs for this room. Wait a minute and try again.", "PIN_REQUIRED");
         }
-        const result = logic.joinRoom(live.state, input, Date.now(), input.pin);
+        const result = logic.joinRoom(live.state, player, Date.now(), input.pin);
         if (!result.ok) {
           if (result.code === "PIN_REQUIRED" && input.pin) live.wrongPins.tryTake();
           return result;
         }
 
-        const isNewPlayer = !logic.findPlayer(live.state, input.playerId);
+        const isNewPlayer = !logic.findPlayer(live.state, player.playerId);
         live.commit(result.room);
-        enterSocketRoom(socket, input.code, input.playerId);
-        if (isNewPlayer) log(input.code, `${input.nickname} joined`);
+        enterSocketRoom(socket, input.code, player.playerId);
+        if (isNewPlayer) log(input.code, `${player.nickname} joined`);
 
         // The player gets the full current snapshot (and the recent chat) right away, in the reply.
-        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(input.playerId), chat: live.chatHistory() };
+        return { ok: true, room: live.snapshot(), youId: logic.publicIdFor(player.playerId), chat: live.chatHistory() };
       });
     });
 
@@ -265,11 +324,42 @@ export function registerSocketHandlers(
 
     // ---- The daily scramble ----
 
-    on(socket, ClientEvents.DAILY_STATUS, dailySchema, (input) => options.daily.status(input.playerId));
-    on(socket, ClientEvents.DAILY_START, dailyStartSchema, (input) => options.daily.start(input.playerId, input.nickname));
+    // A signed-in player has one daily attempt per account (not per device).
+    on(socket, ClientEvents.DAILY_STATUS, dailySchema, (input) => options.daily.status(me(input).playerId));
+    on(socket, ClientEvents.DAILY_START, dailyStartSchema, (input) => {
+      const player = me(input);
+      return options.daily.start(player.playerId, player.nickname);
+    });
     on(socket, ClientEvents.DAILY_SUBMIT, dailySubmitSchema, (input) =>
-      options.daily.submit(input.playerId, input.timeMs, input.penalty),
+      options.daily.submit(me(input).playerId, input.timeMs, input.penalty),
     );
+
+    // ---- The contact form, and reading it (the site owner only) ----
+
+    on(socket, ClientEvents.CONTACT_SEND, contactSchema, async (input) => {
+      if (!contactLimiter(socket).tryTake()) {
+        return logic.fail("Thanks! You've sent a few messages already. Please wait a few minutes.", "RATE_LIMITED");
+      }
+      // The hidden "website" field is only ever filled in by bots: say thanks, keep nothing.
+      if (input.website) return { ok: true };
+      const { name, email, message } = input;
+      await options.contact.add(newContactMessage({ name, email, message, username: socket.data.account?.username ?? null }, Date.now()));
+      log("contact", `new message from ${name}`);
+      return { ok: true };
+    });
+
+    const isAdmin = () => socket.data.account !== null && options.adminUserIds.includes(socket.data.account.userId);
+    const NOT_ADMIN = "Only the site owner can read the messages. Sign in with that account.";
+
+    on(socket, ClientEvents.ADMIN_MESSAGES, emptySchema, async () =>
+      isAdmin() ? { ok: true, messages: await options.contact.list(500) } : logic.fail(NOT_ADMIN),
+    );
+
+    on(socket, ClientEvents.ADMIN_DELETE_MESSAGE, contactIdSchema, async (input) => {
+      if (!isAdmin()) return logic.fail(NOT_ADMIN);
+      await options.contact.remove(input.id);
+      return { ok: true };
+    });
 
     // ---- Smart cubes: the weekly race, the verified leaderboard, replays ----
 
@@ -307,6 +397,36 @@ export function registerSocketHandlers(
       ),
     );
 
+    on(socket, ClientEvents.CHOOSE_EVENT, chooseEventSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => commitResult(live, logic.chooseEvent(live.state, playerId, input.cubeEvent, Date.now()))),
+    );
+
+    /** Host: done setting up; the room is listed and others can join. */
+    on(socket, ClientEvents.OPEN_ROOM, emptySchema, () =>
+      inMyRoom(socket, (live, playerId) => {
+        const result = logic.openRoom(live.state, playerId);
+        if (result.ok && result.room !== live.state) log(live.code, "opened (setup done)");
+        return commitResult(live, result);
+      }),
+    );
+
+    /**
+     * Warming up alone: a scramble of your event. It only reads the room, so it
+     * doesn't wait in the room's queue (a big cube's scramble can take a moment).
+     */
+    on(socket, ClientEvents.WARMUP_SCRAMBLE, emptySchema, async () => {
+      const { roomCode, playerId } = socket.data;
+      const live = roomCode ? rooms.get(roomCode) : undefined;
+      const player = live && playerId ? logic.findPlayer(live.state, playerId) : undefined;
+      if (!live || !player) return logic.fail(NOT_IN_ROOM_ERROR);
+      const [scramble] = await (options.makeScrambles ?? generateSetScrambles)(logic.eventOf(live.state.settings, player), 1);
+      return { ok: true, scramble };
+    });
+
+    on(socket, ClientEvents.SET_WATCHING, watchSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => commitResult(live, logic.setWatching(live.state, playerId, input.watching, Date.now()))),
+    );
+
     on(socket, ClientEvents.KICK_PLAYER, targetPlayerSchema, (input) =>
       inMyRoom(socket, (live, playerId) => {
         const target = live.state.players.find((p) => p.publicId === input.targetId);
@@ -334,7 +454,7 @@ export function registerSocketHandlers(
         const error = logic.startMatchError(live.state, playerId);
         if (error) return logic.fail(error);
         // We're inside the room's queue, so nothing else can change the room while we wait.
-        const scrambles = await live.takeScrambles(live.state.settings);
+        const scrambles = await live.takeScrambles(logic.newMatchEvents(live.state), live.state.settings.format);
         const start = { matchId: randomUUID(), scrambles, timing: live.timing };
         const result = logic.startMatch(live.state, playerId, start, Date.now());
         if (result.ok) log(live.code, "match started, set 1 started");
@@ -349,7 +469,7 @@ export function registerSocketHandlers(
         if (error) return logic.fail(error);
         // Scrambles for the NEW event (if the host picked another one).
         const next = logic.settingsAfterRestart(live.state, input.settings);
-        const scrambles = await live.takeScrambles(next);
+        const scrambles = await live.takeScrambles(logic.newMatchEvents(live.state, next), next.format);
         const start = { matchId: randomUUID(), scrambles, timing: live.timing };
         const result = logic.rematch(live.state, playerId, start, Date.now(), input.settings);
         if (result.ok) log(live.code, `new match (${next.cubeEvent}, ${next.format}), set 1 started`);

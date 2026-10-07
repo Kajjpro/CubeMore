@@ -1,4 +1,4 @@
-# Cube Racing
+# Cubist
 
 Real-time speedcubing races with friends: rooms, all 17 WCA events, shared random-state
 scrambles with a picture, a stackmat-style timer (or type your times), OK / +2 / DNF,
@@ -96,6 +96,17 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   pick another event for a rematch, or restart in the middle of a match with another event
   (points go back to 0).
 - You can join a room whose match has already started: you watch that set and race from the next one.
+- **Creating a room**: a private setup first (event, format, Best of, public or private, name):
+  nobody can see or join it yet. **Open room**, then wait on the timer with warm-up solves (they
+  don't count). When someone joins, the race starts 3 seconds later, but not in the middle of
+  your warm-up solve. Once people are together in the lobby (after a race), the host presses Start.
+- **Mixed rooms**: someone who joins picks their event first ("Ready with Pyra"); the race waits
+  for them, up to 30 seconds.
+- **Under the timer**: `Timer | Type in` and `Watch`, always in sight (also in the Menu).
+- **Step away**: Menu → "Step away, just watch" (or "Just watch" on your card in the lobby). You stay in
+  the room and the chat, but nobody waits for you; mid-set, the rest of your set counts as DNF and your
+  points stay. "Race again" puts you back in from the next set. If everyone steps away, the match
+  waits at the set result until someone is back.
 - Every room has a **chat**. The server also posts short notices there ("Anu joined the room",
   "Nomin submitted 9.12", "Nomin wins set 1"). The last 100 lines are kept for people who join later.
 
@@ -109,6 +120,15 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   and stops when the fastest crosses the line; then the gaps ("+0.42").
 - **Reactions**: 🔥 👏 😮 😂 on someone's time (on the finish line, or tap their row). They
   float up from their row and show in the chat.
+- **Accounts** (optional): sign in with Google, or email and password (Clerk). Right after
+  signing up you choose a unique username; it's your name everywhere, and your seat, daily attempt and history follow you
+  across devices. Guests can still race with just a nickname. Setup: "Accounts" in DEPLOY.md.
+- **Mixed events** (room setting): everyone picks their own event from 2x2, Pyraminx, Skewb
+  and Clock (short events, so the times are close) and races on time, with the fastest
+  average winning, e.g. a Pyra main against a 2x2 main. Each event gets its own scrambles.
+  You pick in the lobby (your last pick is remembered); during a match your event is fixed,
+  and you can switch for the next one. Works in public and private rooms, and "Race now" for
+  one of these events finds mixed rooms too.
 - **Handicap scoring** (room setting): everyone races their own pace (their average from
   earlier sets; set 1 sets it). Whoever beats their pace by the most wins the set, so
   a 25-second solver can beat a 9-second solver.

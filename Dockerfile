@@ -13,6 +13,14 @@ COPY client/package.json client/
 RUN npm ci
 
 COPY . .
+# Accounts (Clerk): the publishable key is baked into the website when it's built.
+# Render passes the service's environment variables in as build arguments; on Fly,
+# set it under [build.args] in fly.toml. Empty = no sign-in, everyone is a guest.
+ARG VITE_CLERK_PUBLISHABLE_KEY=""
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+# The site's public address, for link previews, robots.txt and the sitemap.
+ARG VITE_SITE_URL=""
+ENV VITE_SITE_URL=$VITE_SITE_URL
 RUN npm run build
 
 # ---- Stage 2: the small image that actually runs ----

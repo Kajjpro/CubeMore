@@ -19,6 +19,9 @@ import { Avatar, Brand, ThemeButton } from "../components/ui";
 import { setPref, usePrefs } from "../prefs";
 import { navigate } from "../router";
 import { request, socket } from "../socket";
+import { useAccount } from "../auth";
+import { SITE } from "../site";
+import { GuestHint, SignedInName } from "../components/Account";
 import { loadIdentity, profileKey, saveNickname } from "../storage";
 import { formatResult, formatResultLong, formatSolve } from "../time";
 import { useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
@@ -159,11 +162,14 @@ function NextIn({ nextAt }: { nextAt: number }) {
 function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname: string) => Promise<boolean> }) {
   const [nickname, setNickname] = useState(() => loadIdentity().nickname);
   const [busy, setBusy] = useState(false);
+  const account = useAccount();
+  // Signed in: one attempt per account, under your username.
+  const accountName = account.signedIn ? account.username : null;
 
   async function start(): Promise<void> {
-    const name = nickname.trim();
+    const name = accountName ?? nickname.trim();
     if (!name || busy) return;
-    saveNickname(name);
+    if (!accountName) saveNickname(name);
     setBusy(true);
     await onStart(name);
     setBusy(false);
@@ -183,13 +189,18 @@ function StartCard({ daily, onStart }: { daily: DailyStatus; onStart: (nickname:
         </li>
       </ul>
       <div className="you-row">
-        <Avatar id={daily.youId} name={nickname || "?"} size="lg" />
-        <label className="field grow">
-          <span className="field-label">Nickname on the leaderboard</span>
-          <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={NICKNAME_MAX_LENGTH} placeholder="Your name" autoComplete="nickname" />
-        </label>
+        <Avatar id={daily.youId} name={accountName ?? (nickname || "?")} size="lg" />
+        {accountName ? (
+          <SignedInName username={accountName} label="On the leaderboard as" />
+        ) : (
+          <label className="field grow">
+            <span className="field-label">Nickname on the leaderboard</span>
+            <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={NICKNAME_MAX_LENGTH} placeholder="Your name" autoComplete="nickname" />
+          </label>
+        )}
       </div>
-      <button type="button" className="primary xl" onClick={start} disabled={busy || !nickname.trim()}>
+      {account.loaded && !account.signedIn && <GuestHint />}
+      <button type="button" className="primary xl" onClick={start} disabled={busy || !(accountName ?? nickname.trim())}>
         {busy ? "Starting…" : "Start my attempt"}
       </button>
     </section>
@@ -295,7 +306,7 @@ function DoneCard({ daily }: { daily: DailyStatus }) {
   const result = daily.result!;
 
   async function share(): Promise<void> {
-    const text = `Cube Racing daily ${daily.day}: ${formatResult(result)}, #${daily.rank} of ${daily.total}\n${window.location.origin}/daily`;
+    const text = `${SITE.name} daily ${daily.day}: ${formatResult(result)}, #${daily.rank} of ${daily.total}\n${window.location.origin}/daily`;
     if (navigator.share) {
       try {
         await navigator.share({ text });

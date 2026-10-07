@@ -1,8 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   CUBE_EVENTS,
+  getCubeEvent,
   MAX_PLAYERS_LIMIT,
   MIN_PLAYERS_LIMIT,
+  MIXED_EVENTS,
   PIN_LENGTH,
   ROOM_FORMATS,
   ROOM_NAME_MAX_LENGTH,
@@ -38,17 +40,19 @@ export function EventSelect(props: { value: CubeEventId; onChange: (id: CubeEven
 }
 
 /**
- * Every WCA event as a tile with its icon: a sideways strip ("strip", the home
- * page) or a wrapping grid ("grid", the lobby). A radio group: arrow keys move
- * the choice.
+ * Every WCA event (or just `events`) as a tile with its icon: a sideways strip
+ * ("strip", the home page) or a wrapping grid ("grid", the lobby). A radio
+ * group: arrow keys move the choice.
  */
 export function EventPicker(props: {
   value: CubeEventId;
   onChange: (id: CubeEventId) => void;
   label: string;
   layout: "strip" | "grid";
+  events?: readonly CubeEventId[];
 }) {
   const labelId = useId();
+  const events = props.events ? props.events.map(getCubeEvent) : CUBE_EVENTS;
   const listRef = useRef<HTMLDivElement>(null);
 
   // The strip starts scrolled to the chosen event (it may be far to the right).
@@ -64,8 +68,8 @@ export function EventPicker(props: {
     const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
     if (!step) return;
     event.preventDefault();
-    const index = CUBE_EVENTS.findIndex((e) => e.id === props.value);
-    const next = CUBE_EVENTS[(index + step + CUBE_EVENTS.length) % CUBE_EVENTS.length];
+    const index = events.findIndex((e) => e.id === props.value);
+    const next = events[(index + step + events.length) % events.length];
     props.onChange(next.id);
     listRef.current?.querySelector<HTMLElement>(`[data-event="${next.id}"]`)?.focus();
   }
@@ -82,7 +86,7 @@ export function EventPicker(props: {
         aria-labelledby={labelId}
         onKeyDown={onKeyDown}
       >
-        {CUBE_EVENTS.map((event) => {
+        {events.map((event) => {
           const checked = event.id === props.value;
           return (
             <button
@@ -105,6 +109,11 @@ export function EventPicker(props: {
       </div>
     </div>
   );
+}
+
+/** Mixed rooms: the event you race (2x2, Pyraminx, Skewb or Clock). */
+export function MixedEventPicker(props: { value: CubeEventId; onChange: (id: CubeEventId) => void; label?: string }) {
+  return <EventPicker label={props.label ?? "Your event"} layout="grid" events={MIXED_EVENTS} value={props.value} onChange={props.onChange} />;
 }
 
 /** A titled group of settings. */
@@ -190,32 +199,56 @@ export function LobbySettings(props: {
   return (
     <div className="settings-form">
       <Group title="Puzzle">
-        <EventPicker
-          label="Event"
-          layout="grid"
-          value={settings.cubeEvent}
-          // Another event than 3x3 turns "smart cubes only" off (smart cubes are 3x3).
-          onChange={(cubeEvent) => onChange(SMART_CUBE_EVENTS.includes(cubeEvent) ? { cubeEvent } : { cubeEvent, smartOnly: false })}
-        />
         <Segmented
-          label="Timing"
-          value={settings.smartOnly ? "smart" : "any"}
+          label="Events"
+          value={settings.mixedEvents ? "mixed" : "one"}
           options={[
-            { value: "any", label: "Any timer" },
-            { value: "smart", label: "Smart cubes only" },
+            { value: "one", label: "One event" },
+            { value: "mixed", label: "Mixed" },
           ]}
           onChange={(value) =>
             onChange(
-              value === "smart"
-                ? { smartOnly: true, ...(SMART_CUBE_EVENTS.includes(settings.cubeEvent) ? {} : { cubeEvent: "333" }) }
-                : { smartOnly: false },
+              value === "mixed"
+                ? { mixedEvents: true, smartOnly: false, ...(MIXED_EVENTS.includes(settings.cubeEvent) ? {} : { cubeEvent: MIXED_EVENTS[0] }) }
+                : { mixedEvents: false },
             )
           }
         />
-        {settings.smartOnly && (
+        {settings.mixedEvents ? (
           <p className="tiny muted">
-            Every solve is checked move by move: only verified smart cube solves count. 3x3 and 3x3 one-handed.
+            Everyone picks their own event: {MIXED_EVENTS.map((id) => EVENT_SHORT[id]).join(", ")}. Short events, so the
+            times are close; the fastest average wins.
           </p>
+        ) : (
+          <>
+            <EventPicker
+              label="Event"
+              layout="grid"
+              value={settings.cubeEvent}
+              // Another event than 3x3 turns "smart cubes only" off (smart cubes are 3x3).
+              onChange={(cubeEvent) => onChange(SMART_CUBE_EVENTS.includes(cubeEvent) ? { cubeEvent } : { cubeEvent, smartOnly: false })}
+            />
+            <Segmented
+              label="Timing"
+              value={settings.smartOnly ? "smart" : "any"}
+              options={[
+                { value: "any", label: "Any timer" },
+                { value: "smart", label: "Smart cubes only" },
+              ]}
+              onChange={(value) =>
+                onChange(
+                  value === "smart"
+                    ? { smartOnly: true, ...(SMART_CUBE_EVENTS.includes(settings.cubeEvent) ? {} : { cubeEvent: "333" }) }
+                    : { smartOnly: false },
+                )
+              }
+            />
+            {settings.smartOnly && (
+              <p className="tiny muted">
+                Every solve is checked move by move: only verified smart cube solves count. 3x3 and 3x3 one-handed.
+              </p>
+            )}
+          </>
         )}
       </Group>
 

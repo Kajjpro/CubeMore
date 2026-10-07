@@ -1,3 +1,4 @@
+import type { CubeEventId } from "./cubeEvents";
 import type { RoomSettings } from "./types";
 
 export const ROOM_CODE_LENGTH = 6;
@@ -30,7 +31,14 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   solveTimeLimit: "off",
   scoring: "fastest",
   smartOnly: false,
+  mixedEvents: false,
 };
+
+/**
+ * The events of a mixed room: each player races their own, on time. They're all
+ * short events (a few seconds), so the times are close enough to race.
+ */
+export const MIXED_EVENTS: readonly CubeEventId[] = ["222", "pyram", "skewb", "clock"];
 
 /** Events a smart cube can be used for (and the only ones for smart-cube rooms). */
 export const SMART_CUBE_EVENTS: readonly string[] = ["333", "333oh"];
@@ -51,6 +59,18 @@ export const REACTIONS = ["🔥", "👏", "😮", "😂"] as const;
 
 /** When a second player joins the lobby, the race starts this long after. */
 export const AUTO_START_DELAY_MS = 3_000;
+
+/**
+ * A warm-up solve (alone in the lobby) holds back the race start until the
+ * timer stops, but no longer than this (someone who walked away mid-solve).
+ */
+export const WARMUP_MAX_MS = 2 * 60_000;
+
+/**
+ * Mixed rooms: someone who joins the lobby picks their event first; the race
+ * waits for them, but no longer than this (then they race their last pick).
+ */
+export const PICK_EVENT_MAX_MS = 30_000;
 
 /**
  * How long everyone's times for a solve are shown before the next scramble.

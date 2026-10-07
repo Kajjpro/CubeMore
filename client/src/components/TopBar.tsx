@@ -1,11 +1,12 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { getCubeEvent, type RoomSettings } from "@cube-racing/shared";
-import { EVENT_SHORT, FORMAT_LABELS, WIN_CONDITION_LABELS } from "../labels";
+import { FORMAT_LABELS, roomEventShort, WIN_CONDITION_LABELS } from "../labels";
 import { setPref, usePrefs, type Prefs } from "../prefs";
 import { connectBtTimer, disconnectBtTimer, useBtTimer } from "../btTimer";
 import { bluetoothSupported } from "../smartCube";
+import { ConfirmButton } from "./ConfirmButton";
 import { SmartCubeControls } from "./SmartCube";
-import { EventIcon, Icon, LogoMark, Segmented } from "./ui";
+import { Icon, LogoMark, RoomEventIcon, Segmented } from "./ui";
 
 /**
  * The room's links. A private room's links include the PIN, so friends just tap
@@ -73,6 +74,13 @@ interface TopBarProps {
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onLeave: () => void;
+  /** The host is still setting the room up: no code or link anywhere until it's opened. */
+  setup: boolean;
+  /** Stepping away: you're only watching (null = you're not in the room). */
+  watching: boolean | null;
+  /** True if stepping away now turns your remaining solves in this set into DNFs. */
+  awayCostsSolves: boolean;
+  onSetWatching: (watching: boolean) => void;
 }
 
 /**
@@ -88,22 +96,24 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
       <span className="topbar-logo">
         <LogoMark size={26} />
       </span>
-      <span className="event-badge" title={getCubeEvent(settings.cubeEvent).name}>
-        <EventIcon id={settings.cubeEvent} />
-        <span className="long">{getCubeEvent(settings.cubeEvent).name}</span>
-        <span className="short">{EVENT_SHORT[settings.cubeEvent]}</span>
+      <span className="event-badge" title={settings.mixedEvents ? "Mixed events: everyone races their own" : getCubeEvent(settings.cubeEvent).name}>
+        <RoomEventIcon settings={settings} />
+        <span className="long">{settings.mixedEvents ? "Mixed events" : getCubeEvent(settings.cubeEvent).name}</span>
+        <span className="short">{roomEventShort(settings)}</span>
       </span>
-      <button
-        type="button"
-        className="code-button"
-        onClick={copy}
-        aria-label={props.pin ? `Room ${props.code}. Copy link` : "Copy link"}
-        data-copied={copied}
-        data-dense
-      >
-        <span className="code-text">{copied ? "Copied" : props.pin ? props.code : "Link"}</span>
-        <Icon name={copied ? "check" : "copy"} size={14} />
-      </button>
+      {!props.setup && (
+        <button
+          type="button"
+          className="code-button"
+          onClick={copy}
+          aria-label={props.pin ? `Room ${props.code}. Copy link` : "Copy link"}
+          data-copied={copied}
+          data-dense
+        >
+          <span className="code-text">{copied ? "Copied" : props.pin ? props.code : "Link"}</span>
+          <Icon name={copied ? "check" : "copy"} size={14} />
+        </button>
+      )}
       <span className="format">
         <span className="long">
           {FORMAT_LABELS[settings.format]}, {WIN_CONDITION_LABELS[settings.winCondition]}
@@ -131,7 +141,22 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
         <span className="menu-label">Menu</span>
       </button>
       {props.menuOpen && (
-        <Menu name={props.name} code={props.code} pin={props.pin} onCopy={copy} copied={copied} onClose={props.onCloseMenu} onLeave={props.onLeave} />
+        <Menu
+          name={props.name}
+          code={props.code}
+          pin={props.pin}
+          onCopy={copy}
+          copied={copied}
+          onClose={props.onCloseMenu}
+          onLeave={props.onLeave}
+          setup={props.setup}
+          watching={props.watching}
+          awayCostsSolves={props.awayCostsSolves}
+          onSetWatching={(watching) => {
+            props.onSetWatching(watching);
+            props.onCloseMenu();
+          }}
+        />
       )}
     </header>
   );
@@ -145,6 +170,10 @@ function Menu(props: {
   onCopy: () => void;
   onClose: () => void;
   onLeave: () => void;
+  setup: boolean;
+  watching: boolean | null;
+  awayCostsSolves: boolean;
+  onSetWatching: (watching: boolean) => void;
 }) {
   const { onClose, onLeave } = props;
   const prefs = usePrefs();
@@ -173,15 +202,47 @@ function Menu(props: {
     <div className="menu" id="room-menu" ref={ref}>
       <div className="section menu-room">
         <h2 title={props.name}>{props.name}</h2>
-        {props.pin && (
-          <p className="small muted">
-            Room <span className="mono">{props.code}</span>, PIN <span className="mono">{props.pin}</span>
+        {props.setup ? (
+          <p className="small muted">Only you can see this room until you open it.</p>
+        ) : (
+          <>
+            {props.pin && (
+              <p className="small muted">
+                Room <span className="mono">{props.code}</span>, PIN <span className="mono">{props.pin}</span>
+              </p>
+            )}
+            <button type="button" className="with-icon" onClick={props.onCopy}>
+              <Icon name={props.copied ? "check" : "link"} />
+              {props.copied ? "Copied" : props.pin ? "Copy invite link" : "Copy link"}
+            </button>
+          </>
+        )}
+        {props.watching === false &&
+          (props.awayCostsSolves ? (
+            <ConfirmButton
+              className="with-icon"
+              label="Step away, just watch"
+              confirmLabel="Tap again: the rest of this set is DNF"
+              onConfirm={() => props.onSetWatching(true)}
+            />
+          ) : (
+            <button type="button" className="with-icon" onClick={() => props.onSetWatching(true)}>
+              <Icon name="eye" />
+              Step away, just watch
+            </button>
+          ))}
+        {props.watching === true && (
+          <button type="button" className="primary with-icon" onClick={() => props.onSetWatching(false)}>
+            Race again
+          </button>
+        )}
+        {props.watching !== null && (
+          <p className="tiny muted">
+            {props.watching
+              ? "You're watching: you stay in the room and chat, but nobody waits for you."
+              : "Need a break? Watch for a while; nobody waits for you, and your points stay."}
           </p>
         )}
-        <button type="button" className="with-icon" onClick={props.onCopy}>
-          <Icon name={props.copied ? "check" : "link"} />
-          {props.copied ? "Copied" : props.pin ? "Copy invite link" : "Copy link"}
-        </button>
       </div>
       <SmartCubeSection />
       <BtTimerSection />

@@ -3,6 +3,7 @@
 import {
   DEFAULT_SETTINGS,
   type ChatMessage,
+  type CubeEventId,
   type DailyStatus,
   type MatchPhase,
   type MatchSnapshot,
@@ -30,6 +31,10 @@ export const SCRAMBLES = {
     "R-- D++ R-- D-- R++ D++ R-- D++ R++ D-- U'",
     "R++ D++ R++ D-- R-- D-- R-- D++ R++ D++ U",
   ].join("\n"),
+  "222": "R U2 F' R2 U' F U' R2 U'",
+  pyram: "U' L' B R' U L' R B' l r' b'",
+  skewb: "R U' B L' U' R' B L R'",
+  clock: "UR3+ DR2- DL1+ UL4- U0+ R6+ D5- L3+ ALL2- y2 U1+ R2- D3+ L4- ALL5+ UR",
   sq1: "(1, 0) / (-4, -1) / (-3, 0) / (1, -2) / (5, -1) / (-3, 0) / (-5, 0) / (3, 0) / (-1, 0) / (-2, -5) / (6, -2) / (-2, 0)",
 };
 
@@ -103,6 +108,16 @@ export interface MockRoomOptions {
   bestOfLocked?: boolean;
   /** Handicap rooms: each player's pace in ms (null = no pace yet). */
   paces?: (number | null)[];
+  /** Mixed rooms: each player's event. */
+  events?: CubeEventId[];
+  /** Players without an account. */
+  guests?: number[];
+  /** Players who stepped away to watch (not in the set). */
+  watching?: number[];
+  /** Just created: the host is setting the room up. */
+  setup?: boolean;
+  /** Mixed rooms: just joined, still picking their event. */
+  picking?: number[];
 }
 
 export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: string } {
@@ -121,7 +136,11 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     timerStatus: o.solving?.includes(i) ? "solving" : "idle",
     // Solving players started a few seconds ago, so their live clocks show something.
     solvingSince: o.solving?.includes(i) ? Date.now() - 4_300 - i * 1_700 : null,
-    spectator: o.phase !== "lobby" && !!o.spectators?.includes(i),
+    spectator: o.phase !== "lobby" && (!!o.spectators?.includes(i) || !!o.watching?.includes(i)),
+    cubeEvent: o.events?.[i] ?? settings.cubeEvent,
+    guest: !!o.guests?.includes(i),
+    watching: !!o.watching?.includes(i),
+    pickingEvent: !!o.picking?.includes(i),
   }));
   const youId = ids[o.meIndex ?? 0];
   const base = {
@@ -134,6 +153,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     players,
     bestOfLocked: o.bestOfLocked ?? o.phase !== "lobby",
     weekly: false,
+    setup: !!o.setup,
   };
   if (!o.phase || o.phase === "lobby") {
     const autoStartAt = o.autoStartIn === undefined ? null : Date.now() + o.autoStartIn;
@@ -141,7 +161,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
   }
 
   const perSet = settings.format === "single" ? 1 : settings.format === "ao5" ? 5 : 12;
-  const roster = ids.filter((_, i) => !o.spectators?.includes(i));
+  const roster = ids.filter((_, i) => !o.spectators?.includes(i) && !o.watching?.includes(i));
   const results: MatchSnapshot["results"] = {};
   const standings: MatchSnapshot["standings"] = {};
   roster.forEach((id) => {
@@ -154,6 +174,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
   const points: Record<string, number> = {};
   roster.forEach((id) => (points[id] = o.points?.[ids.indexOf(id)] ?? 0));
 
+  const events: Record<string, CubeEventId> = Object.fromEntries(roster.map((id) => [id, players[ids.indexOf(id)].cubeEvent]));
   const setIndex = o.setIndex ?? 1;
   const handicap = settings.scoring === "handicap";
   const paces: Record<string, number | null> | null = handicap ? {} : null;
@@ -178,10 +199,8 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     solveIndex: o.solveIndex ?? 2,
     solvesPerSet: perSet,
     targetPoints: settings.winCondition === "unlimited" ? null : { bo1: 1, bo3: 2, bo5: 3 }[settings.winCondition],
-    scramble:
-      o.phase === "solving" || o.phase === "solve_review"
-        ? (o.scramble ?? { cubeEvent: settings.cubeEvent, text: SCRAMBLES["333"] })
-        : null,
+    scrambles: o.phase === "solving" || o.phase === "solve_review" ? mockScrambles(o, settings, roster.map((id) => events[id])) : {},
+    events,
     solveDeadline: o.solveDeadlineIn ? Date.now() + o.solveDeadlineIn : null,
     phaseEndsAt: o.phase === "solve_review" ? Date.now() + 3000 : o.phase === "set_result" ? Date.now() + 6000 : null,
     roster,
@@ -193,6 +212,14 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     winnerIds: o.phase === "match_over" ? [winner] : [],
   };
   return { room: { ...base, match, autoStartAt: null }, youId };
+}
+
+/** The current scramble of each event raced (o.scramble for a one-event room). */
+function mockScrambles(o: MockRoomOptions, settings: RoomSettings, raced: CubeEventId[]): MatchSnapshot["scrambles"] {
+  if (o.scramble) return { [o.scramble.cubeEvent]: o.scramble };
+  const texts: Partial<Record<CubeEventId, string>> = SCRAMBLES;
+  const events = raced.length ? [...new Set(raced)] : [settings.cubeEvent];
+  return Object.fromEntries(events.map((event) => [event, { cubeEvent: event, text: texts[event] ?? SCRAMBLES["333"] }]));
 }
 
 /** Six players, ao5, set 2, solve 3: Nomin and Saraa done, Bat and Anu solving. */

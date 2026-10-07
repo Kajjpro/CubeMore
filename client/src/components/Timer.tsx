@@ -59,12 +59,13 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smart
   // A connected smart cube times 3x3 solves by itself (no spacebar). In a
   // smart-cube room it's the only way to time a solve.
   const smartCube = useSmartCube();
-  const smartEvent = SMART_CUBE_EVENTS.includes(match.scramble?.cubeEvent ?? "");
+  const scramble = match.scrambles[match.events[youId]] ?? null;
+  const smartEvent = SMART_CUBE_EVENTS.includes(scramble?.cubeEvent ?? "");
   const smartUsable = !demo && smartCube.status === "on" && smartEvent && (inputMode === "timer" || smartOnly);
   const needsCube = !demo && smartOnly && smartCube.status !== "on" && canStart;
   const smart = useSmartSolve({
     active: smartUsable && canStart,
-    scramble: match.scramble?.text ?? "",
+    scramble: scramble?.text ?? "",
     onStart: () => sendTimerStatus("solving"),
     onStop: stopSolve,
   });

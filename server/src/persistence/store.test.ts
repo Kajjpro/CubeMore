@@ -69,6 +69,7 @@ describe("PostgresStore", () => {
       settings: { name: "Saved room", format: "single", winCondition: "bo1" },
     });
     const code: string = room.code;
+    await alice.send(ClientEvents.OPEN_ROOM, {});
     await bob.send(ClientEvents.JOIN_ROOM, { playerId: BOB, nickname: "Bob", code });
     await alice.send(ClientEvents.START_MATCH);
     const match = (await until(() => alice.seen.room?.match, "the match")).matchId;

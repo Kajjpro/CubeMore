@@ -3,7 +3,8 @@
 // phone's share sheet, or downloaded where sharing files isn't supported.
 
 import type { MatchSnapshot, RoomSettings } from "@cube-racing/shared";
-import { EVENT_SHORT, FORMAT_LABELS, WIN_CONDITION_LABELS, nameList } from "./labels";
+import { FORMAT_LABELS, roomEventShort, WIN_CONDITION_LABELS, nameList } from "./labels";
+import { SITE } from "./site";
 import { formatMark } from "./time";
 
 export interface CardData {
@@ -69,7 +70,7 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = COLORS.accent;
   ctx.font = `600 26px ${SANS}`;
-  ctx.fillText("Cube Racing", 64, 84);
+  ctx.fillText(SITE.name, 64, 84);
   ctx.textAlign = "right";
   ctx.fillStyle = COLORS.muted;
   ctx.font = `500 22px ${SANS}`;
@@ -89,7 +90,7 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   ctx.fillStyle = COLORS.text2;
   ctx.font = `500 28px ${MONO}`;
   ctx.fillText(
-    `${EVENT_SHORT[settings.cubeEvent]}, ${FORMAT_LABELS[settings.format]}, ${WIN_CONDITION_LABELS[settings.winCondition]}${handicap}${score}`,
+    `${roomEventShort(settings)}, ${FORMAT_LABELS[settings.format]}, ${WIN_CONDITION_LABELS[settings.winCondition]}${handicap}${score}`,
     64,
     226,
   );
@@ -141,7 +142,7 @@ export async function shareResultCard(data: CardData): Promise<"shared" | "downl
   const file = new File([blob], "cube-racing-result.png", { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: "Cube Racing result" });
+      await navigator.share({ files: [file], title: `${SITE.name} result` });
       return "shared";
     } catch {
       return "cancelled"; // closed the share sheet

@@ -11,12 +11,15 @@ import {
   autoStart,
   autoStartDue,
   backToLobby,
-  createRoom,
+  chooseEvent,
+  createRoom as createSetupRoom,
   endMatch,
   joinRoom,
   kickPlayer,
   leaveRoom,
   markDisconnected,
+  newMatchEvents,
+  nextSetEvents,
   publicIdFor,
   removeExpiredPlayers,
   shouldDeleteRoom,
@@ -27,6 +30,10 @@ import {
   setTimerStatus,
   roomList,
   rematch,
+  openRoom,
+  setWatching,
+  startNextSet,
+  needsNextSet,
   submitSolve,
   tickRoom,
   toSnapshot,
@@ -35,6 +42,10 @@ import {
   type MatchStartInfo,
 } from "./roomLogic";
 import type { ServerRoom } from "./types";
+
+/** A room its host has already set up and opened (most tests start there; setup has its own tests). */
+const createRoom = (...args: Parameters<typeof createSetupRoom>) => ({ ...createSetupRoom(...args), setup: false });
+
 
 // Fake players. Real playerIds are UUIDs, but any string works for the logic.
 const alice = { playerId: "alice-id", nickname: "Alice" };
@@ -58,8 +69,11 @@ function roomWithThreePlayers(): ServerRoom {
 }
 
 /** What the server hands to startMatch: an id, one scramble per solve, and timings. */
-function matchStart(cubeEvent: CubeEventId = "333", count = 5): MatchStartInfo {
-  const scrambles: Scramble[] = Array.from({ length: count }, (_, i) => ({ cubeEvent, text: `R U R' U${i}` }));
+function matchStart(cubeEvent: CubeEventId | CubeEventId[] = "333", count = 5): MatchStartInfo {
+  const events = Array.isArray(cubeEvent) ? cubeEvent : [cubeEvent];
+  const scrambles = Object.fromEntries(
+    events.map((event) => [event, Array.from({ length: count }, (_, i): Scramble => ({ cubeEvent: event, text: `${event} R U R' U${i}` }))]),
+  );
   return { matchId: "m1", scrambles, timing: { solveReviewMs: 3000, setResultMs: 6000, submitGraceMs: 6000 } };
 }
 
@@ -229,7 +243,7 @@ describe("settings and start", () => {
 
     const started = ok(startMatch(room, alice.playerId, start, START));
     expect(started.match).toMatchObject({ phase: "solving", setIndex: 0, solveIndex: 0 });
-    expect(toSnapshot(started, START).match?.scramble).toEqual(start.scrambles[0]);
+    expect(toSnapshot(started, START).match?.scrambles).toEqual({ "333": start.scrambles["333"]![0] });
 
     expect(startMatch(started, alice.playerId, start, START).ok).toBe(false);
     expect(updateSettings(started, alice.playerId, { format: "single" }).ok).toBe(false);
@@ -248,8 +262,8 @@ describe("rooms during a match", () => {
     const start = matchStart();
     const room = ok(startMatch(roomWithThreePlayers(), alice.playerId, start, START));
     const snapshot = JSON.stringify(toSnapshot(room, START));
-    expect(snapshot).toContain(start.scrambles[0].text);
-    for (const future of start.scrambles.slice(1)) {
+    expect(snapshot).toContain(start.scrambles["333"]![0].text);
+    for (const future of start.scrambles["333"]!.slice(1)) {
       expect(snapshot).not.toContain(future.text);
     }
   });
@@ -471,5 +485,242 @@ describe("reactions and live clocks", () => {
     expect(bobRow().solvingSince).toBe(START + 500);
     room = submit(room, bob.playerId, 9120, START + 9_700);
     expect(bobRow()).toMatchObject({ timerStatus: "idle", solvingSince: null });
+  });
+});
+
+describe("mixed events", () => {
+  const MIXED = { ...DEFAULT_SETTINGS, cubeEvent: "222" as const, mixedEvents: true };
+  const id = (player: { playerId: string }) => publicIdFor(player.playerId);
+
+  /** Alice (pyra) hosts a mixed room; Bob joins with 2x2, Carol hasn't picked. */
+  function mixedRoom(format: "single" | "ao5" = "ao5"): ServerRoom {
+    let room = createRoom("ABC234", { ...MIXED, format }, { ...alice, cubeEvent: "pyram" }, START);
+    room = ok(joinRoom(room, { ...bob, cubeEvent: "222" }, START + 1000));
+    return ok(joinRoom(room, carol, START + 2000));
+  }
+
+  it("only goes with the mixed events, and never with smart cubes only", () => {
+    const room = roomWithThreePlayers();
+    expect(updateSettings(room, alice.playerId, { mixedEvents: true }).ok).toBe(false); // the room's event is 3x3
+    expect(updateSettings(room, alice.playerId, { mixedEvents: true, cubeEvent: "skewb" }).ok).toBe(true);
+    expect(updateSettings(room, alice.playerId, { mixedEvents: true, cubeEvent: "222", smartOnly: true }).ok).toBe(false);
+  });
+
+  it("everyone picks their own event; someone who hasn't picked races the room's event", () => {
+    const room = mixedRoom();
+    expect(toSnapshot(room, START).players.map((p) => p.cubeEvent)).toEqual(["pyram", "222", "222"]);
+    const picked = ok(chooseEvent(room, carol.playerId, "clock"));
+    expect(toSnapshot(picked, START).players.map((p) => p.cubeEvent)).toEqual(["pyram", "222", "clock"]);
+    expect(newMatchEvents(picked)).toEqual(["222", "clock", "pyram"]);
+  });
+
+  it("refuses events outside the list, and picks in a one-event room", () => {
+    expect(chooseEvent(mixedRoom(), bob.playerId, "333").ok).toBe(false);
+    expect(chooseEvent(roomWithThreePlayers(), bob.playerId, "pyram").ok).toBe(false);
+  });
+
+  it("a pick in a one-event room is kept but ignored", () => {
+    const room = ok(joinRoom(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), { ...bob, cubeEvent: "pyram" }, START));
+    expect(toSnapshot(room, START).players.map((p) => p.cubeEvent)).toEqual(["333", "333"]);
+  });
+
+  it("each event gets its own scrambles, and only the current one of each is sent", () => {
+    const start = matchStart(["222", "pyram"]);
+    const room = ok(startMatch(mixedRoom(), alice.playerId, start, START));
+    const snapshot = toSnapshot(room, START).match!;
+    expect(snapshot.events).toEqual({ [id(alice)]: "pyram", [id(bob)]: "222", [id(carol)]: "222" });
+    expect(snapshot.scrambles).toEqual({ "222": start.scrambles["222"]![0], pyram: start.scrambles.pyram![0] });
+    expect(JSON.stringify(snapshot)).not.toContain(start.scrambles.pyram![1].text);
+  });
+
+  it("refuses to start without scrambles for every event someone races", () => {
+    expect(startMatch(mixedRoom(), alice.playerId, matchStart("222"), START).ok).toBe(false);
+  });
+
+  it("your event is fixed during the match; it changes for the next one", () => {
+    let room = ok(startMatch(mixedRoom(), alice.playerId, matchStart(["222", "pyram"]), START));
+    expect(chooseEvent(room, alice.playerId, "skewb").ok).toBe(false);
+    room = ok(endMatch(room, alice.playerId));
+    room = ok(chooseEvent(room, alice.playerId, "skewb"));
+    expect(newMatchEvents(room)).toEqual(["222", "skewb"]);
+    room = ok(rematch(room, alice.playerId, matchStart(["222", "skewb"]), START + 5000));
+    expect(room.match!.events[id(alice)]).toBe("skewb");
+  });
+
+  it("someone who joins mid-match can pick before their first set", () => {
+    let room = ok(startMatch(mixedRoom("single"), alice.playerId, matchStart(["222", "pyram"], 1), START));
+    const dave = { playerId: "dave-id", nickname: "Dave" };
+    room = ok(joinRoom(room, dave, START + 100));
+    room = ok(chooseEvent(room, dave.playerId, "clock"));
+    expect(nextSetEvents(room)).toEqual(["222", "clock", "pyram"]);
+
+    for (const player of [alice, bob, carol]) room = submit(room, player.playerId, 3000, START + 3000);
+    room = tickRoom(room, START + 3000 + 3000 + 6000);
+    room = ok(startNextSet(room, matchStart(["222", "clock", "pyram"], 1).scrambles, START + 12_000));
+    expect(room.match!.events[publicIdFor(dave.playerId)]).toBe("clock");
+  });
+
+  it("is listed as mixed, and Race now finds it for any of its events", () => {
+    const room = mixedRoom();
+    expect(roomList([room])[0]).toMatchObject({ mixedEvents: true });
+    expect(quickRaceCode([room], "skewb", null)).toBe("ABC234");
+    expect(quickRaceCode([room], "333", null)).toBeNull();
+  });
+});
+
+describe("stepping away to watch", () => {
+  const id = (player: { playerId: string }) => publicIdFor(player.playerId);
+  const single = { ...DEFAULT_SETTINGS, format: "single" as const, winCondition: "bo5" as const };
+
+  /** Alice, Bob and Carol racing singles (best of 5). */
+  function racing(): ServerRoom {
+    let room = createRoom("ABC234", single, alice, START);
+    room = ok(joinRoom(room, bob, START + 1));
+    room = ok(joinRoom(room, carol, START + 2));
+    return ok(startMatch(room, alice.playerId, matchStart("333", 1), START + 10));
+  }
+
+  it("mid-set, the rest of your set is a DNF and nobody waits for you; your points stay", () => {
+    let room = racing();
+    room = submit(room, alice.playerId, 9000, START + 100);
+    room = submit(room, bob.playerId, 9500, START + 200);
+    expect(room.match!.phase).toBe("solving"); // waiting for Carol
+    room = ok(setWatching(room, carol.playerId, true, START + 300));
+    expect(room.match!.results[id(carol)][0]).toMatchObject({ penalty: "DNF", source: "away" });
+    expect(room.match!.phase).not.toBe("solving"); // the set went on without her
+    expect(toSnapshot(room, START).players.find((p) => p.id === id(carol))).toMatchObject({ watching: true });
+  });
+
+  it("isn't in the next set; back, races from the one after", () => {
+    let room = ok(setWatching(racing(), carol.playerId, true, START + 50));
+    for (const p of [alice, bob]) room = submit(room, p.playerId, 9000, START + 100);
+    const nextAt = room.match!.phaseEndsAt!;
+    room = tickRoom(room, nextAt);
+    room = ok(startNextSet(room, matchStart("333", 1).scrambles, nextAt));
+    expect(room.match!.roster).toEqual([id(alice), id(bob)]);
+
+    room = ok(setWatching(room, carol.playerId, false, nextAt + 10));
+    expect(room.match!.roster).not.toContain(id(carol)); // this set is already running
+    for (const p of [alice, bob]) room = submit(room, p.playerId, 9000, nextAt + 100);
+    const third = room.match!.phaseEndsAt!;
+    room = ok(startNextSet(tickRoom(room, third), matchStart("333", 1).scrambles, third));
+    expect(room.match!.roster).toContain(id(carol));
+  });
+
+  it("everyone watching: the match waits on the set result (no busy loop) until someone is back", () => {
+    let room = racing();
+    for (const p of [alice, bob, carol]) room = submit(room, p.playerId, 9000, START + 100);
+    room = tickRoom(room, room.match!.phaseEndsAt!); // the review screen ends: the set result
+    expect(room.match!.phase).toBe("set_result");
+    for (const p of [alice, bob, carol]) room = ok(setWatching(room, p.playerId, true, START + 200));
+    const due = room.match!.phaseEndsAt!;
+    room = tickRoom(room, due + 1);
+    expect(room.match!.phase).toBe("set_result");
+    expect(needsNextSet(room, due + 1)).toBe(false);
+    expect(nextDeadline(room)).toBeNull();
+    room = ok(setWatching(room, bob.playerId, false, due + 5000));
+    expect(needsNextSet(room, due + 5000)).toBe(true);
+  });
+
+  it("in the lobby: watchers don't count for the countdown or the race", () => {
+    let room = createRoom("ABC234", DEFAULT_SETTINGS, alice, START);
+    room = ok(setWatching(room, alice.playerId, true, START));
+    room = ok(joinRoom(room, bob, START + 1000));
+    expect(room.autoStartAt).toBeNull(); // only one racer
+    room = ok(joinRoom(room, carol, START + 2000));
+    expect(room.autoStartAt).not.toBeNull();
+    room = ok(setWatching(room, carol.playerId, true, START + 2500));
+    expect(room.autoStartAt).toBeNull(); // back to one racer
+    const started = ok(startMatch(room, alice.playerId, matchStart(), START + 3000));
+    expect(started.match!.roster).toEqual([id(bob)]);
+
+    room = ok(setWatching(room, bob.playerId, true, START + 3000));
+    expect(startMatch(room, alice.playerId, matchStart(), START + 3000).ok).toBe(false); // nobody races
+  });
+});
+
+describe("creating a room: setup, then waiting alone", () => {
+  it("while the host sets it up: not listed, nobody else can join; the host can come back", () => {
+    let room = createSetupRoom("ABC234", DEFAULT_SETTINGS, alice, START);
+    expect(toSnapshot(room, START).setup).toBe(true);
+    expect(roomList([room])).toEqual([]);
+    expect(quickRaceCode([room], "333", null)).toBeNull();
+    expect(joinRoom(room, bob, START + 1).ok).toBe(false);
+    room = ok(joinRoom(markDisconnected(room, alice.playerId, START + 2), alice, START + 3)); // a refresh
+    expect(openRoom(room, bob.playerId).ok).toBe(false);
+
+    room = ok(openRoom(room, alice.playerId));
+    expect(room.setup).toBe(false);
+    expect(roomList([room])).toHaveLength(1);
+    expect(joinRoom(room, bob, START + 4).ok).toBe(true);
+  });
+
+  it("someone joins the host waiting alone: the countdown starts", () => {
+    const room = ok(joinRoom(ok(openRoom(createSetupRoom("ABC234", DEFAULT_SETTINGS, alice, START), alice.playerId)), bob, START + 1000));
+    expect(room.autoStartAt).toBe(START + 1000 + AUTO_START_DELAY_MS);
+  });
+
+  it("people already together in the lobby (after a race): a newcomer doesn't start it, the host does", () => {
+    let room = roomWithThreePlayers();
+    room = { ...room, autoStartAt: null }; // e.g. back in the lobby after a match
+    room = ok(joinRoom(room, { playerId: "dave-id", nickname: "Dave" }, START + 5000));
+    expect(room.autoStartAt).toBeNull();
+  });
+
+  it("a warm-up solve holds the start back until the timer stops, then the full 3 seconds", () => {
+    let room = ok(openRoom(createSetupRoom("ABC234", DEFAULT_SETTINGS, alice, START), alice.playerId));
+    room = setTimerStatus(room, alice.playerId, "solving", START + 100); // warming up
+    room = ok(joinRoom(room, bob, START + 200));
+    const due = room.autoStartAt!;
+    expect(autoStartDue(room, due + 10_000)).toBe(false); // still solving
+    expect(nextDeadline(room, due)).toBe(START + 100 + 2 * 60_000); // checks again when the warm-up stops counting
+
+    room = setTimerStatus(room, alice.playerId, "idle", due + 10_000);
+    expect(room.autoStartAt).toBe(due + 10_000 + AUTO_START_DELAY_MS);
+    expect(autoStartDue(room, due + 10_000 + AUTO_START_DELAY_MS)).toBe(true);
+  });
+
+  it("a warm-up left running doesn't hold the race forever", () => {
+    let room = ok(openRoom(createSetupRoom("ABC234", DEFAULT_SETTINGS, alice, START), alice.playerId));
+    room = setTimerStatus(room, alice.playerId, "solving", START);
+    room = ok(joinRoom(room, bob, START + 100));
+    expect(autoStartDue(room, START + 2 * 60_000 + 1)).toBe(true);
+  });
+});
+
+describe("mixed rooms: a newcomer picks their event before the race starts", () => {
+  const MIXED = { ...DEFAULT_SETTINGS, cubeEvent: "222" as const, mixedEvents: true };
+  /** Anar opened a mixed room and waits alone; Bilguun joins. */
+  function joined(): ServerRoom {
+    const room = ok(openRoom(createSetupRoom("ABC234", MIXED, { ...alice, cubeEvent: "pyram" }, START), alice.playerId));
+    return ok(joinRoom(room, { ...bob, cubeEvent: "222" }, START + 1000));
+  }
+  const bobId = publicIdFor(bob.playerId);
+
+  it("the countdown waits while they pick", () => {
+    const room = joined();
+    expect(toSnapshot(room, START).players.find((p) => p.id === bobId)).toMatchObject({ pickingEvent: true });
+    expect(autoStartDue(room, room.autoStartAt! + 5000)).toBe(false);
+    expect(nextDeadline(room, START + 2000)).toBe(START + 1000 + 30_000);
+  });
+
+  it("picking (or keeping their last pick) makes them ready: the countdown starts again from 3", () => {
+    let room = joined();
+    room = ok(chooseEvent(room, bob.playerId, "skewb", START + 9000));
+    expect(toSnapshot(room, START).players.find((p) => p.id === bobId)).toMatchObject({ pickingEvent: false, cubeEvent: "skewb" });
+    expect(room.autoStartAt).toBe(START + 9000 + AUTO_START_DELAY_MS);
+    expect(autoStartDue(room, START + 9000 + AUTO_START_DELAY_MS)).toBe(true);
+
+    const kept = ok(chooseEvent(joined(), bob.playerId, "222", START + 4000)); // "Ready" with the event they had
+    expect(kept.players.find((p) => p.publicId === bobId)!.pickingEvent).toBe(false);
+  });
+
+  it("someone who never picks doesn't hold the race for more than 30 seconds", () => {
+    expect(autoStartDue(joined(), START + 1000 + 30_000)).toBe(true);
+  });
+
+  it("one-event rooms don't wait", () => {
+    const room = ok(joinRoom(ok(openRoom(createSetupRoom("ABC234", DEFAULT_SETTINGS, alice, START), alice.playerId)), bob, START + 1000));
+    expect(autoStartDue(room, room.autoStartAt!)).toBe(true);
   });
 });

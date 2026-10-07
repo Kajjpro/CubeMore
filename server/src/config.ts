@@ -37,6 +37,27 @@ export const config = {
    * history, the daily leaderboard. Empty = kept in memory (reset on every restart).
    */
   databaseUrl: process.env.DATABASE_URL ?? "",
+  /**
+   * Accounts (sign in with Google, or email and password) through Clerk: the
+   * Secret Key from the Clerk dashboard. Empty = no accounts, everyone is a guest.
+   */
+  clerkSecretKey: process.env.CLERK_SECRET_KEY ?? "",
+  /**
+   * The website address(es) people sign in on, e.g. "https://cubits.onrender.com".
+   * Clerk tokens from any other site are refused. Empty = not checked.
+   */
+  clerkAuthorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+  /**
+   * Who may read the contact form's messages on /admin: Clerk user ids
+   * ("user_2Rf..."), separated by commas. Find yours in the Clerk dashboard → Users.
+   */
+  adminUserIds: (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
   /** The weekly smart-cube race: day (0 = Sunday ... 6 = Saturday) and hour, in UTC. */
   weeklySchedule: {
     day: Math.min(6, numberFromEnv("WEEKLY_RACE_DAY", 6)),

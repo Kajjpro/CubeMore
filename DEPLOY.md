@@ -1,6 +1,6 @@
 # Deploying
 
-Ways to put Cube Racing online:
+Ways to put Cubist online:
 
 - **Free: everything on Render** (no credit card): follow "Deploying to Render (free)" right below.
 - **Paid: everything on Fly.io** (never sleeps): follow "Deploying to Fly.io" further down.
@@ -89,6 +89,85 @@ and stop for each request and can't keep WebSocket connections open. The game se
 must run all the time, keep every room in memory, and hold a live connection to every
 player during a race. So on Vercel only the website can live; the server needs a host
 that runs one program continuously (Fly.io, Render, Railway...).
+
+# Accounts: sign in with Google, or email and password (Clerk)
+
+Players can create an account and sign in; guests can still race with just a
+nickname. A signed-in player:
+
+- is called by their **username** everywhere (unique, so nobody can pose as them;
+  guests show a "guest" tag in the lobby),
+- is the **same player on every device**: their seat in a room, their daily attempt and
+  their match history follow the account.
+
+Sign-in is handled by **Clerk** (clerk.com, free plan): it shows the sign-in and sign-up
+screens, sends the emails, and keeps the passwords. The game server only checks the token
+the browser sends when it connects. No database is needed for accounts (but add one for
+the history: see "Adding a database").
+
+### 1. Create the Clerk application
+
+1. Sign up at https://dashboard.clerk.com and click **Create application** (e.g. "Cubits").
+2. Sign-in options: turn on **Email** and **Google**. Create it.
+3. **Configure → User & authentication**:
+   - **Username**: on, but **not required**. Sign-up stays quick (one tap with Google);
+     right after it, the app asks the new player to choose their username (4-20 letters,
+     numbers or `_`), and Clerk makes sure nobody else has it. Turn on letting users change
+     it, so they can rename themselves later from the account button.
+   - **Email**: sign in with **password** on.
+   - **Google**: on. Development keys use Clerk's own Google credentials, so it works right away.
+4. **Configure → API keys**: copy the **Publishable key** (`pk_test_…`) and the
+   **Secret key** (`sk_test_…`).
+
+### 2. Try it on your computer
+
+In the project root, in `.env` (copy `.env.example`):
+
+```bash
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+```
+
+`npm run dev`: the server log says `Accounts are on (Clerk)`, and the home page has a
+**Sign in** button.
+
+### 3. On Render
+
+Your service → **Environment** → add:
+
+| Key | Value |
+| --- | --- |
+| `VITE_CLERK_PUBLISHABLE_KEY` | `pk_…` (it's built into the website, so it must be there at build time; Render passes it to the Docker build) |
+| `CLERK_SECRET_KEY` | `sk_…` (server only, never in the website) |
+| `CLERK_AUTHORIZED_PARTIES` | your site's address, e.g. `https://cubits.onrender.com` (sign-in tokens from any other site are refused) |
+
+Save, then **Manual Deploy → Deploy latest commit** so the website is built again with the key.
+(On Fly: `fly secrets set CLERK_SECRET_KEY=sk_… CLERK_AUTHORIZED_PARTIES=https://…`, and add
+`VITE_CLERK_PUBLISHABLE_KEY = "pk_…"` under `[build.args]` in `fly.toml`.)
+
+### 4. Going live
+
+Development keys (`pk_test_…`) are for trying it out: Clerk shows a "Development mode"
+label. For the real launch, create a **production instance** in Clerk (top of the dashboard).
+It needs a **domain you own** (Clerk adds DNS records to it), and for Google, your own
+Google OAuth client (Clerk's guide walks through it). Then swap in the `pk_live_…` /
+`sk_live_…` keys. Check Clerk's pricing page for the free plan's limits.
+
+# Going live as Cubist: checklist
+
+1. **Your address.** Set `VITE_SITE_URL` to the site's public address (no slash at the
+   end), e.g. `https://cubist.app`, on Render (**Environment**) and redeploy. Link previews
+   on Facebook, Instagram, Messenger, WhatsApp and Discord then show the Cubist card
+   (`client/public/og-image.png`), and search engines find `robots.txt` and `sitemap.xml`.
+   Check a preview with https://www.opengraph.xyz or Facebook's Sharing Debugger.
+2. **Accounts**: see "Accounts" above (Clerk production instance on your own domain).
+3. **Contact.** Messages from `/contact` are kept in the database (`DATABASE_URL`; without
+   one they're lost on restart). To read them on `/admin`, set `ADMIN_USER_IDS` to your Clerk
+   user id (Clerk dashboard → Users → you → the id starting with `user_`) and sign in.
+   Each visitor can send 3 messages, then one every 5 minutes.
+4. **Email and social links**: fill them in at the top of `client/src/site.ts`. Empty ones
+   aren't shown anywhere.
+5. **Installable**: phones can "Add to Home Screen"; it opens full screen with the Cubist icon.
 
 # Deploying to Fly.io (Tokyo)
 

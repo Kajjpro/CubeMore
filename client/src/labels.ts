@@ -50,9 +50,14 @@ export function timeLimitLabel(limit: SolveTimeLimit): string {
   return limit === "off" ? "Off" : `${limit} min`;
 }
 
+/** The room's event, short: "3x3", or "Mixed" when everyone picks their own. */
+export function roomEventShort(settings: Pick<RoomSettings, "cubeEvent" | "mixedEvents">): string {
+  return settings.mixedEvents ? "Mixed" : EVENT_SHORT[settings.cubeEvent];
+}
+
 /** The one-line summary used everywhere: "3x3, ao5, Best of 3". */
 export function settingsSummary(settings: RoomSettings): string {
-  const parts = [EVENT_SHORT[settings.cubeEvent], FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
+  const parts = [roomEventShort(settings), FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
   if (settings.scoring === "handicap") parts.push("Handicap");
   if (settings.smartOnly) parts.push("Smart cubes only");
   if (settings.solveTimeLimit !== "off") parts.push(`${settings.solveTimeLimit} min limit`);

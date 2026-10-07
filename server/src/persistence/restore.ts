@@ -12,7 +12,8 @@
  *     older than what they've seen, so the version jumps far ahead.
  */
 
-import { DEFAULT_SETTINGS } from "@cube-racing/shared";
+import { DEFAULT_SETTINGS, type CubeEventId, type Scramble } from "@cube-racing/shared";
+import type { Match } from "../match/types";
 import type { ServerRoom } from "../rooms/types";
 
 /** Far more changes than a room could make between two saves. */
@@ -27,6 +28,7 @@ export function restoreRoom(room: ServerRoom, savedAt: number, now: number): Ser
     // Fields added in later versions of the server get their defaults.
     settings: { ...DEFAULT_SETTINGS, ...room.settings },
     scheduled: room.scheduled ?? null,
+    setup: room.setup ?? false,
     version: room.version + RESTORE_VERSION_JUMP,
     players: room.players.map((player) => ({
       ...player,
@@ -34,6 +36,10 @@ export function restoreRoom(room: ServerRoom, savedAt: number, now: number): Ser
       disconnectedAt: now,
       timerStatus: "idle",
       solvingSince: null,
+      cubeEvent: player.cubeEvent ?? null,
+      guest: player.guest ?? true,
+      watching: player.watching ?? false,
+      pickingEvent: player.pickingEvent ?? false,
     })),
     emptySince: later(room.emptySince),
     autoStartAt: later(room.autoStartAt),
@@ -41,8 +47,22 @@ export function restoreRoom(room: ServerRoom, savedAt: number, now: number): Ser
       ...room.match,
       settings: { ...DEFAULT_SETTINGS, ...room.match.settings },
       replays: room.match.replays ?? {},
+      ...olderMatchFields(room.match),
       phaseEndsAt: later(room.match.phaseEndsAt),
       solveDeadline: later(room.match.solveDeadline),
     },
   };
+}
+
+/**
+ * Matches saved before mixed rooms: the scrambles were one list (for the room's
+ * event), and everyone raced the room's event.
+ */
+function olderMatchFields(match: Match): Pick<Match, "scrambles" | "events"> {
+  const saved = match as Omit<Match, "scrambles" | "events"> & { scrambles: Match["scrambles"] | Scramble[]; events?: Match["events"] };
+  const event: CubeEventId = saved.settings.cubeEvent;
+  const scrambles = Array.isArray(saved.scrambles) ? { [event]: saved.scrambles } : saved.scrambles;
+  if (saved.events) return { scrambles, events: saved.events };
+  const everyone = new Set([...saved.roster, ...Object.keys(saved.points)]);
+  return { scrambles, events: Object.fromEntries([...everyone].map((id) => [id, event])) };
 }

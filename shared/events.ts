@@ -29,6 +29,10 @@ import type { z } from "zod";
 import type {
   changePenaltySchema,
   chatSchema,
+  chooseEventSchema,
+  watchSchema,
+  contactIdSchema,
+  contactSchema,
   quickRaceSchema,
   watchRoomSchema,
   dailySchema,
@@ -46,7 +50,7 @@ import type {
   timerStatusSchema,
   updateSettingsSchema,
 } from "./schemas";
-import type { ChatMessage, DailyStatus, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
+import type { ChatMessage, ContactMessage, DailyStatus, Scramble, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -54,6 +58,14 @@ export const ClientEvents = {
   JOIN_ROOM: "room:join",
   LEAVE_ROOM: "room:leave",
   UPDATE_SETTINGS: "room:update_settings",
+  /** Mixed rooms: pick the event you race. */
+  CHOOSE_EVENT: "room:choose_event",
+  /** Step away and only watch, or race again (from the next set). */
+  SET_WATCHING: "room:set_watching",
+  /** Host: setup is done, open the room (listed, joinable). */
+  OPEN_ROOM: "room:open",
+  /** Waiting alone: a scramble of your event to warm up on (doesn't count). */
+  WARMUP_SCRAMBLE: "room:warmup_scramble",
   KICK_PLAYER: "room:kick",
   START_MATCH: "room:start",
   /** Every open room (public and private), for the list on the home page. */
@@ -90,6 +102,13 @@ export const ClientEvents = {
   /** Every move of one verified solve, to watch it again. */
   REPLAY: "replay:get",
 
+  /** The contact form. */
+  CONTACT_SEND: "contact:send",
+  /** The site owner (ADMIN_USER_IDS): every contact message, newest first. */
+  ADMIN_MESSAGES: "admin:messages",
+  /** The site owner deletes a contact message. */
+  ADMIN_DELETE_MESSAGE: "admin:delete_message",
+
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
 } as const;
@@ -107,6 +126,12 @@ export const ServerEvents = {
   /** A player's smart cube moves during the current solve (not part of the room state). */
   CUBE_MOVES: "match:cube_moves",
 } as const;
+
+/**
+ * The connection is refused with this message when the sign-in token it came
+ * with isn't valid (usually: expired). The client connects again with a fresh one.
+ */
+export const SIGN_IN_REFUSED = "SIGN_IN_REFUSED";
 
 /**
  * Error codes the client reacts to (besides showing the message):
@@ -128,6 +153,10 @@ export type AckResponse<Data extends object = object> =
 export type CreateRoomPayload = z.input<typeof createRoomSchema>;
 export type JoinRoomPayload = z.input<typeof joinRoomSchema>;
 export type UpdateSettingsPayload = z.input<typeof updateSettingsSchema>;
+export type ChooseEventPayload = z.input<typeof chooseEventSchema>;
+export type WatchPayload = z.input<typeof watchSchema>;
+export type ContactPayload = z.input<typeof contactSchema>;
+export type ContactIdPayload = z.input<typeof contactIdSchema>;
 export type TargetPlayerPayload = z.input<typeof targetPlayerSchema>;
 export type SubmitSolvePayload = z.input<typeof submitSolveSchema>;
 export type ChangePenaltyPayload = z.input<typeof changePenaltySchema>;
@@ -164,6 +193,10 @@ export interface ClientRequests {
   [ClientEvents.JOIN_ROOM]: { payload: JoinRoomPayload; response: JoinedRoomResponse };
   [ClientEvents.LEAVE_ROOM]: { payload: EmptyPayload; response: object };
   [ClientEvents.UPDATE_SETTINGS]: { payload: UpdateSettingsPayload; response: object };
+  [ClientEvents.CHOOSE_EVENT]: { payload: ChooseEventPayload; response: object };
+  [ClientEvents.SET_WATCHING]: { payload: WatchPayload; response: object };
+  [ClientEvents.OPEN_ROOM]: { payload: EmptyPayload; response: object };
+  [ClientEvents.WARMUP_SCRAMBLE]: { payload: EmptyPayload; response: { scramble: Scramble } };
   [ClientEvents.KICK_PLAYER]: { payload: TargetPlayerPayload; response: object };
   [ClientEvents.START_MATCH]: { payload: EmptyPayload; response: object };
   [ClientEvents.LIST_ROOMS]: { payload: EmptyPayload; response: { rooms: PublicRoomInfo[] } };
@@ -187,6 +220,9 @@ export interface ClientRequests {
   /** available: false = no database, so no history to rank. */
   [ClientEvents.LEADERBOARD]: { payload: LeaderboardPayload; response: { rows: LeaderboardRow[]; available: boolean } };
   [ClientEvents.REPLAY]: { payload: ReplayPayload; response: { replay: Replay } };
+  [ClientEvents.CONTACT_SEND]: { payload: ContactPayload; response: object };
+  [ClientEvents.ADMIN_MESSAGES]: { payload: EmptyPayload; response: { messages: ContactMessage[] } };
+  [ClientEvents.ADMIN_DELETE_MESSAGE]: { payload: ContactIdPayload; response: object };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 

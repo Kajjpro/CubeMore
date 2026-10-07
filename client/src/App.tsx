@@ -1,4 +1,6 @@
 import { lazy, Suspense } from "react";
+import { AdminPage } from "./pages/AdminPage";
+import { ContactPage } from "./pages/ContactPage";
 import { DailyPage } from "./pages/DailyPage";
 import { HomePage } from "./pages/HomePage";
 import { OverlayPage } from "./pages/OverlayPage";
@@ -21,6 +23,8 @@ export function App() {
   }
 
   if (path === "/daily" || path === "/daily/") return <DailyPage />;
+  if (path === "/contact" || path === "/contact/") return <ContactPage />;
+  if (path === "/admin" || path === "/admin/") return <AdminPage />;
 
   // "/room/ABC234/overlay" -> the streamer overlay for that room.
   const overlay = path.match(/^\/room\/([A-Za-z0-9]+)\/overlay\/?$/);

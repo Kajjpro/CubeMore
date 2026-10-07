@@ -37,8 +37,13 @@ export interface RoomSettings {
   /** The room's name, shown in the public list and at the top of the room. */
   name: string;
   visibility: RoomVisibility;
-  /** Which puzzle everyone races on, e.g. "333" or "pyram". */
+  /**
+   * Which puzzle everyone races on, e.g. "333" or "pyram". In a mixed room
+   * it's the event a player races until they pick their own.
+   */
   cubeEvent: CubeEventId;
+  /** Mixed events: every player picks their own event (one of MIXED_EVENTS) and they race on time. */
+  mixedEvents: boolean;
   format: RoomFormat;
   winCondition: WinCondition;
   maxPlayers: number;
@@ -48,7 +53,7 @@ export interface RoomSettings {
   smartOnly: boolean;
 }
 
-/** A scramble that every player in the room solves. Made by the server. */
+/** A scramble that every player on its event solves. Made by the server. */
 export interface Scramble {
   /** The event it was made for (so the picture always matches the text). */
   cubeEvent: CubeEventId;
@@ -69,8 +74,9 @@ export type Penalty = (typeof PENALTIES)[number];
  *  "timeout"   - the solve time limit ran out (automatic DNF)
  *  "skipped"   - the host skipped the player (automatic DNF)
  *  "removed"   - the player left the room (automatic DNF)
+ *  "away"      - the player switched to watching during the set (automatic DNF)
  */
-export type ResultSource = "submitted" | "timeout" | "skipped" | "removed";
+export type ResultSource = "submitted" | "timeout" | "skipped" | "removed" | "away";
 
 /** One solve. Times are ALWAYS whole milliseconds (never decimals). */
 export interface SolveResult {
@@ -109,6 +115,20 @@ export interface PlayerSnapshot {
   solvingSince: number | null;
   /** True if they joined during a set: they watch until the next set starts. */
   spectator: boolean;
+  /** Playing without an account (anyone can use any nickname). Signed-in players have a unique username. */
+  guest: boolean;
+  /**
+   * Stepped away: still in the room (chat, standings), but out of the race
+   * until they come back. Nobody waits for them.
+   */
+  watching: boolean;
+  /** Mixed rooms: just joined and still picking their event (the race waits for them). */
+  pickingEvent: boolean;
+  /**
+   * The event they race next: their own pick in a mixed room, otherwise the
+   * room's event. (In a running match, MatchSnapshot.events says what they race now.)
+   */
+  cubeEvent: CubeEventId;
 }
 
 /**
@@ -136,8 +156,13 @@ export interface MatchSnapshot {
   solvesPerSet: number;
   /** Points needed to win (bo3 = 2), or null for unlimited. */
   targetPoints: number | null;
-  /** Only the CURRENT scramble. Future scrambles are never sent. */
-  scramble: Scramble | null;
+  /**
+   * Only the CURRENT scramble of each event being raced (one event, unless the
+   * room is mixed), while it's being solved. Future scrambles are never sent.
+   */
+  scrambles: Partial<Record<CubeEventId, Scramble>>;
+  /** The event of everyone who has raced in this match. It's fixed until the match ends. */
+  events: Record<string, CubeEventId>;
   /** Server time when the current solve's time limit runs out, or null. */
   solveDeadline: number | null;
   /** Server time when solve_review / set_result ends, or null. */
@@ -182,6 +207,11 @@ export interface RoomSnapshot {
   bestOfLocked: boolean;
   /** The weekly race (opened by the server, no host, starts at autoStartAt). */
   weekly: boolean;
+  /**
+   * Just created: the host is still setting it up. Nobody else can join, and it
+   * isn't listed, until the host opens it.
+   */
+  setup: boolean;
 }
 
 /**
@@ -208,6 +238,8 @@ export interface PublicRoomInfo {
   code: string;
   name: string;
   cubeEvent: RoomSettings["cubeEvent"];
+  /** Everyone picks their own event (2x2, Pyraminx, Skewb, Clock). */
+  mixedEvents: boolean;
   format: RoomFormat;
   winCondition: WinCondition;
   players: number;
@@ -314,4 +346,21 @@ export interface Replay {
   timeMs: number;
   penalty: Penalty;
   tps: number;
+}
+
+// ---------------------------------------------------------------------------
+// The contact form
+// ---------------------------------------------------------------------------
+
+/** A message sent with the contact form. Only the site owner reads them (/admin). */
+export interface ContactMessage {
+  id: string;
+  /** Server time when it was sent. */
+  at: number;
+  name: string;
+  /** Where to reply. */
+  email: string;
+  message: string;
+  /** The sender's username, if they were signed in. */
+  username: string | null;
 }

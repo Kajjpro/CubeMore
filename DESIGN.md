@@ -1,4 +1,4 @@
-# Cube Racing UI design
+# Cubist UI design
 
 A timer for racing other cubers, used on a phone between solves. Plain and quick: the
 scramble, a big timer and the standings, nothing decorative. Reference points: csTimer
@@ -69,19 +69,26 @@ colours still change.
 | landscape | `orientation: landscape` and height ≤ 500 | 844×390 |
 | wide | width ≥ 768 and height > 500 | 768×1024, 1024×768, 1366×768, 1920×1080 |
 
-The home page goes two-column from 960 px. Room content is capped at 1600 px; the sidebar is
+The home page's room cards go two-column from 960 px. Room content is capped at 1600 px; the sidebar is
 340 px (360 px from 1440 px).
 
 ## Screens
 
-**Home.** Header: logo, "2 racing now", theme button. A **hero**: "Race other cubers, live.",
-one sentence, and three numbered steps (pick a puzzle, solve the same scramble, best average
-wins the set). Then the **race card**: your avatar + nickname, **Pick your puzzle** (all 17 events as tiles in a sideways
-strip, arrow keys work), `Race 3x3 now` (big blue), then `Create a room for friends` and a
-code box with `Join`. Right column (below on phones): the **Daily** card, then **Open
-rooms**: cards with the event, name, `PIN` tag (private rooms also show their code), event,
-format, Best of, players and `Racing` or `In lobby`. Their `Join` buttons are plain: `Race now`
-is the only blue button on the page. A one-line timer hint in the footer.
+**Home.** Header: logo (back home), "2 racing now" (hidden under 400 px), theme button,
+`Sign in` (or the account button). The **open rooms are the hero**: "Open rooms" and one
+sentence, `+ Create a room` (the only blue button) and a code box with `Join`; a slim
+"Racing as" bar (avatar + nickname box for guests, the username once signed in) with the
+guest hint under it; then **Public | Private** tabs, each with a count. Room cards (two
+columns from 960 px): event icon, name, `PIN` tag (private rooms also show their code),
+event, format, Best of, players and `Racing` or `In lobby`, a plain `Join`. Each tab has its
+own empty state. Below: the **Daily** and **Contact** cards side by side, smart cube
+racing, a one-line timer hint, and the footer (Daily scramble, Contact, social links, ©).
+
+**Contact** (`/contact`): name, email (to reply), message (10-2000 characters), `Send
+message`; a thank-you with `Send another` / `Back to the races`. With an email or social
+links in `client/src/site.ts`, they show in a side panel (two columns from 960 px).
+**Admin** (`/admin`, the site owner only): the messages, newest first, with `Reply`
+(opens an email) and `Delete`.
 
 **Room shell** (all room screens): a frosted header, 48 px (56 px wide).
 - Left: logo (wide), event pill ("3x3x3" with its WCA icon; "3x3" on phones), room code
@@ -93,6 +100,19 @@ is the only blue button on the page. A one-line timer hint in the footer.
   overlay, preferences, keyboard shortcuts (as keycaps) and `Leave room`.
 - Slim banners under the header (reconnecting, server notice, errors); never a modal.
 
+**New room.** *Setup* (host only, nothing else can reach it): "Set up your room", the full
+settings form, and a bottom bar with `Cancel`, the summary and `Open room` (blue). Then, alone,
+the *warm-up*: the invite card (name, summary, Public/Private, code and PIN for private rooms,
+`Copy link` / `Share`, "Race settings" folded away), a warm-up scramble ("Warm-up, doesn't count")
+and timer, your last warm-up times with ao5 / ao12, and the chat (two columns from 960 px: warm-up
+left). Someone joining mid-solve: "Anu joined. The race starts when you stop the timer."
+In a mixed room, a newcomer gets a *Pick your event* card over the lobby (the event tiles,
+`Ready with Pyra`); everyone else's start bar says "Waiting for Bilguun to pick an event".
+
+**Under the timer** in a race: a slim row with `Timer | Type in` (mini toggle) and `Watch`
+(tap twice mid-set: the rest of the set is DNF). On phones, typing a time is one row (box +
+Submit; the label and help stay for screen readers).
+
 **Lobby**
 - phone: one column: share card, racers, chat, settings. A frosted bar pinned to the bottom.
 - wide: two columns: left = share card + settings, right = racers + chat. The bottom bar
@@ -102,9 +122,12 @@ is the only blue button on the page. A one-line timer hint in the footer.
   home page, so it shows no code), `Copy link` (primary while alone) and `Share`
   (phones with a share sheet).
 - **Racers**: a card per player (avatar, "host" and "you" tags, "reconnecting", Kick for the
-  host). Alone, an empty dashed seat says "Waiting for a racer…".
-- Settings (host): **Puzzle** (the event tile grid), **Format** (format, Best of until the
-  first race, scoring), **Room** (name, who can join, PIN, more options).
+  host). Alone, an empty dashed seat says "Waiting for a racer…". In a mixed room, a
+  "Your event" tile row (2x2, Pyra, Skewb, Clock) sits above the cards, and every card has
+  its player's event tag.
+- Settings (host): **Puzzle** (`One event | Mixed`, then the event tile grid and timing for
+  one event), **Format** (format, Best of until the first race, scoring), **Room** (name,
+  who can join, PIN, more options).
 - The bottom bar: alone, "Waiting for someone to join" + `Practise alone`;
   when someone joins, an orange ring with the seconds, "Race starts in 3" and `Start now`
   for the host, while a big **3, 2, 1, GO** shows in the middle of the screen (it never
@@ -140,14 +163,26 @@ is the only blue button on the page. A one-line timer hint in the footer.
   banners, session strip, standings, sidebar and sheet fade to opacity 0 (150 ms), and the pad loses its
   card. Only the digits, the hold bar, the hint and "reconnecting" (when offline) stay.
 - Review / set result / match over replace the timer in the stage; the standings stay.
+- **Watching** (stepped away, from the Menu): during a solve the stage says "Watching" with a
+  blue `Race again`; between solves, a one-line "You're watching" bar on top of the stage
+  with `Race again`. Their standings row says "watching". In the lobby, your card has
+  `Just watch` / `Race`, watchers get a grey "watching" tag and a faded avatar, and the
+  start bar says "2 racing, 2 watching".
 
 **Live Standings** (table, mono numbers): `#` (plain number; rank 1 is darker once they have
-points), Player (avatar, name, a grey crown for the host), this solve ("Solve 3", or "Time"
-for single; the fastest in bold), `ao5`/`ao12`, `Pts` (bold; grey at 0). Your row has the
-accent tint and a 3 px accent bar. The current-solve cell shows the time, or what the
-player is doing (a grey live clock in tenths, `offline`, `watching`, `left`, `–`). A
-"Waiting for…" line above. Tap a row for that player's whole set: dropped times in parentheses;
-your own times can be tapped to change the penalty (only while that set is running).
+points), Player (avatar, name; in a mixed race their event icon), one column per solve
+(`1 2 3 4 5`; "Time" for single), `ao5`/`ao12`, `Pts` (bold; grey at 0). In each solve
+column the fastest is bold; once a row is complete its best and worst are grey in brackets.
+The current solve's column has a faint tint, and its cell shows the time or what the
+player is doing (a grey live clock in tenths, `offline`, `watching`, `left`, `–`); later
+solves are empty. Your row has the accent tint and a 3 px accent bar. As many solve columns
+show as fit (at most 5; the current solve and the ones before it), measured before paint, so
+the table never scrolls sideways: short events show all 5 even at 360 px, 3x3 times 4 there,
+and an ao12 always shows a window of 5. To make room, rows with solve columns drop the host
+crown and the "more" chevron, and phones (portrait standings, landscape sidebar) drop the
+`#` column (your accent bar moves to the name). A "Waiting for…" line above. Tap a row for
+that player's whole set: dropped times in parentheses; your own times can be tapped to change
+the penalty (only while that set is running).
 
 **Room Chat**: "Room Chat" + "N online". A feed of `14:02 Name text` lines, every name in its
 player's colour (yours in blue), and muted system notices ("Anu joined the room", "Nomin

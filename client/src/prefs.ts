@@ -19,6 +19,8 @@ export interface Prefs {
   preview: PreviewPref;
   /** The event "Race now" looks for. */
   raceEvent: CubeEventId;
+  /** Your event in mixed rooms (your last pick), sent when you join one. */
+  mixedEvent: CubeEventId;
 }
 
 // Dark by default (the race page is designed dark-first); Light and System stay in the Menu.
@@ -29,6 +31,7 @@ const DEFAULTS: Prefs = {
   sound: true,
   preview: "2d",
   raceEvent: "333",
+  mixedEvent: "222",
 };
 const KEY = profileKey("prefs");
 

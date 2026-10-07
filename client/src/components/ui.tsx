@@ -3,13 +3,30 @@
 // countdown bar.
 
 import { useId, useState, type ReactNode } from "react";
-import type { CubeEventId } from "@cube-racing/shared";
+import { getCubeEvent, type CubeEventId, type RoomSettings } from "@cube-racing/shared";
 import { serverNow } from "../clock";
+import { EVENT_SHORT } from "../labels";
 import { setPref, usePrefs, type ThemePref } from "../prefs";
+import { SITE } from "../site";
 
 /** A WCA event icon from @cubing/icons (decorative: always shown next to a text label). */
 export function EventIcon({ id }: { id: CubeEventId }) {
   return <span className={`cubing-icon event-${id}`} aria-hidden />;
+}
+
+/** The room's event icon; a mixed room (everyone picks their own) gets a plain cube. */
+export function RoomEventIcon({ settings }: { settings: Pick<RoomSettings, "cubeEvent" | "mixedEvents"> }) {
+  return settings.mixedEvents ? <Icon name="cube" size={20} className="mixed-icon" /> : <EventIcon id={settings.cubeEvent} />;
+}
+
+/** A player's event in a mixed race: its icon and short name ("Pyra"). */
+export function EventTag({ id }: { id: CubeEventId }) {
+  return (
+    <span className="tag event-tag" title={getCubeEvent(id).name}>
+      <EventIcon id={id} />
+      {EVENT_SHORT[id]}
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -227,14 +244,12 @@ export function LogoMark({ size = 28 }: { size?: number }) {
   );
 }
 
-/** "Cube Racing" with the logo. */
+/** "Cubist" with the logo. */
 export function Brand({ onClick }: { onClick?: () => void }) {
   const content = (
     <>
       <LogoMark />
-      <span className="brand-name">
-        Cube<span>Racing</span>
-      </span>
+      <span className="brand-name">{SITE.name}</span>
     </>
   );
   return onClick ? (

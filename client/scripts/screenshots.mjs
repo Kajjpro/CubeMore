@@ -84,7 +84,9 @@ function checkPage() {
       el.scrollWidth > el.clientWidth + 1 &&
       (cs.overflowX === "hidden" || cs.overflowX === "clip") &&
       cs.textOverflow !== "ellipsis" &&
-      !el.closest(".preview") && !el.classList.contains("sr-only")
+      !el.closest(".preview") &&
+      // Only for screen readers (the .sr-only class, or the same trick in a media query).
+      !el.classList.contains("sr-only") && cs.clipPath !== "inset(50%)"
     ) {
       issues.push(`clipped horizontally: ${describe(el)}`);
     }
@@ -119,7 +121,7 @@ function checkPage() {
   }
 
   // Overlapping controls / key elements (overlays like an open sheet or the menu are expected).
-  const overlay = document.querySelector(".sheet[data-open='true'], .menu");
+  const overlay = document.querySelector(".sheet[data-open='true'], .menu, .pick-event-overlay");
   // Tiles scrolled out of the sideways event strip aren't drawn, so they can't overlap anything.
   const outOfStrip = (el) => {
     const strip = el.closest(".event-strip");

@@ -26,7 +26,8 @@
  *
  * 4. SCRAMBLES ARE READY BEFORE THEY'RE NEEDED
  *    While a set is played, the next set's scrambles are made in the
- *    background. They are never sent to clients until their solve starts.
+ *    background (for each event being raced: a mixed room races several).
+ *    They are never sent to clients until their solve starts.
  */
 
 import { randomUUID } from "node:crypto";
@@ -34,19 +35,21 @@ import {
   CHAT_HISTORY_LENGTH,
   type ChatMessage,
   type CubeEventId,
-  type RoomSettings,
+  type RoomFormat,
   type RoomSnapshot,
   type Scramble,
 } from "@cube-racing/shared";
 import { solvesPerSet } from "../match/scoring";
-import type { MatchTiming } from "../match/types";
+import type { MatchTiming, SetScrambles } from "../match/types";
 import { RateLimiter } from "../rateLimit";
 import { chatNotices } from "./chatNotices";
 import {
   autoStart,
   autoStartDue,
   needsNextSet,
+  newMatchEvents,
   nextDeadline,
+  nextSetEvents,
   shouldDeleteRoom,
   startNextSet,
   tickRoom,
@@ -57,7 +60,7 @@ import type { ServerRoom } from "./types";
 export interface LiveRoomDeps {
   /** Sends a snapshot to everyone in the room. */
   broadcast: (snapshot: RoomSnapshot) => void;
-  /** Makes the scrambles for one set (may be slow, may fail). */
+  /** Makes the scrambles for one set of one event (may be slow, may fail). */
   makeScrambles: (cubeEvent: CubeEventId, count: number) => Promise<Scramble[]>;
   /** Called once when the room is deleted. */
   onDelete: (code: string) => void;
@@ -91,8 +94,8 @@ export class LiveRoom {
   private broadcastTimer: NodeJS.Timeout | null = null;
   private lastBroadcastAt = 0;
 
-  /** Scrambles being made in the background for the next set. */
-  private upcoming: { key: string; scrambles: Promise<Scramble[]> } | null = null;
+  /** Scrambles being made in the background for the next set, by scrambleKey(). */
+  private upcoming = new Map<string, Promise<Scramble[]>>();
 
   /**
    * The room chat: the last 100 lines. Kept here, outside the synced room state,
@@ -233,9 +236,9 @@ export class LiveRoom {
 
     // The lobby countdown (someone joined) is over: the race starts.
     if (autoStartDue(this.current, now) && now >= this.notBefore) {
-      let scrambles: Scramble[];
+      let scrambles: SetScrambles;
       try {
-        scrambles = await this.takeScrambles(this.current.settings);
+        scrambles = await this.takeScrambles(newMatchEvents(this.current), this.current.settings.format);
       } catch (error) {
         this.deps.log(this.code, `could not make scrambles, retrying: ${String(error)}`);
         this.notBefore = Date.now() + SCRAMBLE_RETRY_MS;
@@ -251,9 +254,9 @@ export class LiveRoom {
     }
 
     if (needsNextSet(this.current, now) && now >= this.notBefore) {
-      let scrambles: Scramble[];
+      let scrambles: SetScrambles;
       try {
-        scrambles = await this.takeScrambles(this.current.match!.settings);
+        scrambles = await this.takeScrambles(nextSetEvents(this.current), this.current.match!.settings.format);
       } catch (error) {
         // Never start solving without scrambles: stay on the set result and retry soon.
         this.deps.log(this.code, `could not make scrambles, retrying: ${String(error)}`);
@@ -269,22 +272,26 @@ export class LiveRoom {
   }
 
   /**
-   * Gets the scrambles for a set: the ones prepared in the background if they
-   * fit, otherwise new ones. Then starts preparing the batch after that.
+   * Gets the scrambles for a set, for each of these events: the ones prepared
+   * in the background if there are, otherwise new ones. Then starts preparing
+   * the batch after that.
    */
-  async takeScrambles(settings: RoomSettings): Promise<Scramble[]> {
-    const key = scrambleKey(settings);
-    const prepared = this.upcoming?.key === key ? this.upcoming.scrambles : null;
-    this.upcoming = null;
-
-    let scrambles: Scramble[];
-    try {
-      scrambles = prepared ? await prepared : await this.makeScrambles(settings);
-    } catch {
-      scrambles = await this.makeScrambles(settings); // the prepared batch failed: one fresh try
-    }
+  async takeScrambles(events: CubeEventId[], format: RoomFormat): Promise<SetScrambles> {
+    const count = solvesPerSet(format);
+    const lists = await Promise.all(events.map((event) => this.takeEventScrambles(event, count)));
     this.prepareScrambles();
-    return scrambles;
+    return Object.fromEntries(events.map((event, i) => [event, lists[i]]));
+  }
+
+  private async takeEventScrambles(event: CubeEventId, count: number): Promise<Scramble[]> {
+    const key = scrambleKey(event, count);
+    const prepared = this.upcoming.get(key);
+    this.upcoming.delete(key);
+    try {
+      return prepared ? await prepared : await this.deps.makeScrambles(event, count);
+    } catch {
+      return await this.deps.makeScrambles(event, count); // the prepared batch failed: one fresh try
+    }
   }
 
   /** Deletes the room: stops it for good, and tells the server (which forgets its saved copy). */
@@ -304,7 +311,7 @@ export class LiveRoom {
     if (this.broadcastTimer) clearTimeout(this.broadcastTimer);
     this.wakeUpTimer = null;
     this.broadcastTimer = null;
-    this.upcoming = null;
+    this.upcoming.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -351,22 +358,27 @@ export class LiveRoom {
     }, wait);
   }
 
-  /** Starts making the next set's scrambles in the background (if not already). */
+  /**
+   * Starts making the next set's scrambles in the background, for every event
+   * it needs (if not already). Batches for events nobody races anymore are dropped.
+   */
   private prepareScrambles(): void {
-    const settings = this.current.match?.settings ?? this.current.settings;
-    const key = scrambleKey(settings);
-    if (this.upcoming?.key === key) return;
-
-    const scrambles = this.makeScrambles(settings);
-    scrambles.catch(() => {}); // a failure is dealt with when the scrambles are taken
-    this.upcoming = { key, scrambles };
-  }
-
-  private makeScrambles(settings: RoomSettings): Promise<Scramble[]> {
-    return this.deps.makeScrambles(settings.cubeEvent, solvesPerSet(settings.format));
+    const count = solvesPerSet((this.current.match?.settings ?? this.current.settings).format);
+    const events = this.current.match ? nextSetEvents(this.current) : newMatchEvents(this.current);
+    const wanted = new Set(events.map((event) => scrambleKey(event, count)));
+    for (const key of this.upcoming.keys()) {
+      if (!wanted.has(key)) this.upcoming.delete(key);
+    }
+    for (const event of events) {
+      const key = scrambleKey(event, count);
+      if (this.upcoming.has(key)) continue;
+      const scrambles = this.deps.makeScrambles(event, count);
+      scrambles.catch(() => {}); // a failure is dealt with when the scrambles are taken
+      this.upcoming.set(key, scrambles);
+    }
   }
 }
 
-function scrambleKey(settings: RoomSettings): string {
-  return `${settings.cubeEvent}x${solvesPerSet(settings.format)}`;
+function scrambleKey(event: CubeEventId, count: number): string {
+  return `${event}x${count}`;
 }

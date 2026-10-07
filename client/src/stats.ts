@@ -43,6 +43,19 @@ export function fastestInColumn(results: Record<string, (SolveResult | null)[]>,
   return new Set(ids);
 }
 
+/** At most this many solve columns in the standings: an ao12 shows 5 of its solves (tap a row for all 12). */
+export const SOLVE_COLUMNS = 5;
+
+/**
+ * Which solves get a column in the standings: all of an ao5; for an ao12 (or
+ * a narrow screen that fits fewer than `max`), the current one and the ones before it.
+ */
+export function solveColumns(solvesPerSet: number, solveIndex: number, max = SOLVE_COLUMNS): number[] {
+  const count = Math.max(1, Math.min(solvesPerSet, max));
+  const first = Math.max(0, Math.min(solveIndex - (count - 1), solvesPerSet - count));
+  return Array.from({ length: count }, (_, i) => first + i);
+}
+
 /** Average of `solves` dropping 1 best and 1 worst (ao5 / ao12). null = DNF. Whole-number maths. */
 export function trimmedAverage(solves: SolveResult[]): number | null {
   const values = solves.map(sortValue).sort((a, b) => a - b).slice(1, -1);
