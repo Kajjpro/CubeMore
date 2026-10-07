@@ -1,6 +1,6 @@
 {
-  "name": "Cubist: live speedcubing races",
-  "short_name": "Cubist",
+  "name": "CubeMore: live speedcubing races",
+  "short_name": "CubeMore",
   "description": "Race other cubers live: the same scramble for everyone, a live timer and WCA averages.",
   "start_url": "/",
   "scope": "/",

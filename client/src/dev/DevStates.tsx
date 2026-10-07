@@ -14,6 +14,9 @@ import { JoinError, PinForm } from "../pages/RoomPage";
 import { OverlayView } from "../pages/OverlayPage";
 import { UsernameForm } from "../components/Account";
 import { ContactPage } from "../pages/ContactPage";
+import { PrivacyPage } from "../pages/PrivacyPage";
+import { EventPage } from "../pages/EventPage";
+import { eventPageBySlug } from "@cube-racing/shared";
 import { DailyView } from "../pages/DailyPage";
 import { drawResultCard } from "../shareCard";
 import { applyTheme, type ThemePref } from "../prefs";
@@ -206,8 +209,11 @@ export const STATE_NAMES = [
   "overlay-lobby",
   "share-card",
   "home-private-tab",
+  "event-pyraminx",
+  "event-7x7-empty",
   "contact",
   "contact-sent",
+  "privacy",
   "choose-username",
   "choose-username-taken",
   "pin-prompt",
@@ -220,7 +226,10 @@ function renderState(name: string): ReactNode {
   if (name === "home") return <HomePage demo={{ nickname: "Temuulen", rooms: ROOMS, daily: mockDaily("new") }} />;
   if (name === "home-no-rooms") return <HomePage demo={{ nickname: "Temuulen", rooms: [], daily: mockDaily("new") }} />;
   if (name === "home-private-tab") return <HomePage demo={{ nickname: "Temuulen", rooms: ROOMS, daily: mockDaily("new"), tab: "private" }} />;
+  if (name === "event-pyraminx") return <EventPage page={eventPageBySlug("pyraminx")!} demoRooms={ROOMS} />;
+  if (name === "event-7x7-empty") return <EventPage page={eventPageBySlug("7x7")!} demoRooms={ROOMS} />;
   if (name === "contact") return <ContactPage />;
+  if (name === "privacy") return <PrivacyPage />;
   if (name === "contact-sent") return <ContactPage demoSent={{ name: "Anu", email: "anu@example.com" }} />;
   if (name === "choose-username") return <UsernameForm suggestion="anarb" onSave={async () => null} onSignOut={noop} />;
   if (name === "choose-username-taken") {

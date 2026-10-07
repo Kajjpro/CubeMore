@@ -27,7 +27,7 @@ services:
         sync: false
       # Optional: accounts (sign in with Google, or email and password) through
       # Clerk. See "Accounts" in DEPLOY.md. Without them everyone is a guest.
-      # The site's public address, e.g. https://cubist.app (link previews, sitemap).
+      # The site's public address, e.g. https://cubemore.com (link previews, sitemap).
       - key: VITE_SITE_URL
         sync: false
       - key: VITE_CLERK_PUBLISHABLE_KEY

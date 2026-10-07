@@ -1,6 +1,6 @@
 # Deploying
 
-Ways to put Cubist online:
+Ways to put CubeMore online:
 
 - **Free: everything on Render** (no credit card): follow "Deploying to Render (free)" right below.
 - **Paid: everything on Fly.io** (never sleeps): follow "Deploying to Fly.io" further down.
@@ -20,6 +20,17 @@ with the settings in `render.yaml` (free plan, Singapore, health check `/health`
 - The CPU is small: scrambles for big puzzles (4x4 and up) can take a few seconds, but
   the next ones are made in the background during a set.
 - Check Render's pricing page for the current free-plan limits.
+
+**Keeping the free service awake (no more 1-minute wait).** A free "pinger" visits the site
+every 10 minutes, so it never falls asleep:
+
+1. Go to https://cron-job.org (free) and sign up.
+2. **Create cronjob**: URL `https://<your address>/health`, schedule **every 10 minutes**, save.
+3. Done. `/health` is a tiny page made for this; it doesn't count as a visitor anywhere.
+
+Render gives 750 free hours a month, and one service awake all month uses about 720-744, so
+this works only if CubeMore is your **only** free Render service. When you advertise or get
+busier, the paid Starter plan ($7/month) never sleeps and has a faster machine.
 
 ### 1. Put the latest code on GitHub
 
@@ -153,11 +164,11 @@ It needs a **domain you own** (Clerk adds DNS records to it), and for Google, yo
 Google OAuth client (Clerk's guide walks through it). Then swap in the `pk_live_…` /
 `sk_live_…` keys. Check Clerk's pricing page for the free plan's limits.
 
-# Going live as Cubist: checklist
+# Going live as CubeMore: checklist
 
 1. **Your address.** Set `VITE_SITE_URL` to the site's public address (no slash at the
-   end), e.g. `https://cubist.app`, on Render (**Environment**) and redeploy. Link previews
-   on Facebook, Instagram, Messenger, WhatsApp and Discord then show the Cubist card
+   end), e.g. `https://cubemore.com`, on Render (**Environment**) and redeploy. Link previews
+   on Facebook, Instagram, Messenger, WhatsApp and Discord then show the CubeMore card
    (`client/public/og-image.png`), and search engines find `robots.txt` and `sitemap.xml`.
    Check a preview with https://www.opengraph.xyz or Facebook's Sharing Debugger.
 2. **Accounts**: see "Accounts" above (Clerk production instance on your own domain).
@@ -167,7 +178,17 @@ Google OAuth client (Clerk's guide walks through it). Then swap in the `pk_live_
    Each visitor can send 3 messages, then one every 5 minutes.
 4. **Email and social links**: fill them in at the top of `client/src/site.ts`. Empty ones
    aren't shown anywhere.
-5. **Installable**: phones can "Add to Home Screen"; it opens full screen with the Cubist icon.
+5. **Installable**: phones can "Add to Home Screen"; it opens full screen with the CubeMore icon.
+6. **Search engines.** With `VITE_SITE_URL` set, every page is sent with its own title,
+   description and canonical address (`server/src/seo.ts`, texts in `shared/seo.ts`), rooms and
+   `/admin` are marked noindex, and `/sitemap.xml` lists the home page, Daily, Contact and the 17
+   event pages (`/race/3x3`, `/race/pyraminx`...). Then:
+   - **Google Search Console** (search.google.com/search-console): add your domain, verify it
+     (a DNS record), then **Sitemaps** → submit `sitemap.xml`. Use **URL inspection** on a page to
+     ask Google to crawl it now.
+   - **Bing Webmaster Tools** (bing.com/webmasters): import from Search Console in one click.
+   - Links from cubing places (Reddit r/Cubers, Facebook cubing groups, Discord servers, your
+     socials) help people and search engines find CubeMore more than anything on the page itself.
 
 # Deploying to Fly.io (Tokyo)
 

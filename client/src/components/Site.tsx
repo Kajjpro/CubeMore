@@ -1,4 +1,4 @@
-// The header and footer of Cubist's pages (home, contact, admin).
+// The header and footer of CubeMore's pages (home, contact, admin).
 
 import type { MouseEvent, ReactNode } from "react";
 import { navigate } from "../router";
@@ -40,6 +40,7 @@ export function SiteFooter() {
       <nav className="foot-links" aria-label="More">
         <Link to="/daily">Daily scramble</Link>
         <Link to="/contact">Contact</Link>
+        <Link to="/privacy">Privacy</Link>
         {socials.map((social) => (
           <a key={social.key} href={social.url} target="_blank" rel="noopener noreferrer">
             {social.label}

@@ -1,4 +1,4 @@
-# Cubist UI design
+# CubeMore UI design
 
 A timer for racing other cubers, used on a phone between solves. Plain and quick: the
 scramble, a big timer and the standings, nothing decorative. Reference points: csTimer
