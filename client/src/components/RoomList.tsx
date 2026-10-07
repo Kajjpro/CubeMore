@@ -95,7 +95,7 @@ export function RoomTabs(props: {
 }
 
 /** Rooms as cards with a Join button (a private one asks for its PIN on the room page). */
-function RoomCards(props: {
+export function RoomCards(props: {
   rooms: PublicRoomInfo[] | null;
   connected: boolean;
   onJoin: (code: string) => void;

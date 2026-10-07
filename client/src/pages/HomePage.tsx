@@ -1,15 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ClientEvents, NICKNAME_MAX_LENGTH, ROOM_CODE_LENGTH, type DailyStatus, type PublicRoomInfo } from "@cube-racing/shared";
-import { useAccount } from "../auth";
-import { GuestHint } from "../components/Account";
+import { ClientEvents, EVENT_PAGES, ROOM_CODE_LENGTH, type DailyStatus, type PublicRoomInfo } from "@cube-racing/shared";
+import { useRacer, YouBar } from "../components/Racer";
 import { RoomTabs, useRooms } from "../components/RoomList";
 import { Link, SiteFooter, SiteHeader } from "../components/Site";
 import { SmartHome } from "../components/SmartHome";
-import { Avatar, Icon } from "../components/ui";
-import { getPrefs } from "../prefs";
+import { EventIcon, Icon } from "../components/ui";
 import { navigate } from "../router";
 import { request, socket } from "../socket";
-import { loadIdentity, saveNickname } from "../storage";
+import { loadIdentity } from "../storage";
 import { formatResult } from "../time";
 
 /** Only for /dev/states. */
@@ -26,14 +24,8 @@ export interface HomeDemo {
  * contact, and smart cube racing.
  */
 export function HomePage({ demo }: { demo?: HomeDemo }) {
-  const [nickname, setNickname] = useState(() => demo?.nickname ?? loadIdentity().nickname);
-  const account = useAccount();
-  // Signed in, your name is your username (the server uses it too).
-  const accountName = account.signedIn ? account.username : null;
-  const publicId = usePublicId(account.playerId ?? loadIdentity().playerId);
+  const racer = useRacer(demo?.nickname);
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const { rooms, connected } = useRooms(demo?.rooms);
   const racingNow = rooms?.filter((room) => room.racing).length ?? 0;
 
@@ -43,53 +35,16 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
     if (!demo && socket.connected) void request(ClientEvents.LEAVE_ROOM, {});
   }, [demo]);
 
-  /** Checks the nickname, saves it, and returns it (or null if it's empty). Signed in: your username. */
-  function checkNickname(): string | null {
-    if (accountName) {
-      setError(null);
-      return accountName;
-    }
-    const name = nickname.trim();
-    if (!name) {
-      setError("Enter a nickname first.");
-      document.getElementById("home-nickname")?.focus();
-      return null;
-    }
-    setError(null);
-    saveNickname(name);
-    return name;
-  }
-
-  /**
-   * One tap: the room is made with the defaults (public, 3x3, ao5, Best of 3)
-   * and you're in. The event and everything else are picked in the room.
-   */
-  async function createRoom(): Promise<void> {
-    if (creating) return;
-    const name = checkNickname();
-    if (!name) return;
-    setCreating(true);
-    const response = await request(ClientEvents.CREATE_ROOM, {
-      playerId: loadIdentity().playerId,
-      nickname: name,
-      settings: {},
-      cubeEvent: getPrefs().mixedEvent,
-    });
-    setCreating(false);
-    if (response.ok) navigate(`/room/${response.room.code}`);
-    else setError(response.error);
-  }
-
   function openRoom(roomCode: string): void {
-    if (checkNickname()) navigate(`/room/${roomCode}`);
+    if (racer.check()) navigate(`/room/${roomCode}`);
   }
 
   function join(event: FormEvent): void {
     event.preventDefault();
-    if (!checkNickname()) return;
+    if (!racer.check()) return;
     const clean = code.trim().toUpperCase();
     if (clean.length !== ROOM_CODE_LENGTH) {
-      setError(`Room codes have ${ROOM_CODE_LENGTH} characters.`);
+      racer.setError(`Room codes have ${ROOM_CODE_LENGTH} characters.`);
       return;
     }
     // The room page does the joining (and shows errors like "room not found").
@@ -108,13 +63,17 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
         <section className="panel rooms-hero" aria-labelledby="rooms-title">
           <div className="rooms-hero-head">
             <div className="rooms-hero-title">
-              <h1 id="rooms-title">Open rooms</h1>
+              {/* The page's one h1: the name, in words people search for. */}
+              <h1 className="hero-kicker">CubeMore: online speedcubing races</h1>
+              <h2 id="rooms-title" className="rooms-title">
+                Open rooms
+              </h2>
               <p className="small muted">Race other cubers live: the same scramble for everyone, a live timer, WCA averages.</p>
             </div>
             <div className="rooms-actions">
-              <button type="button" className="primary create-button" onClick={createRoom} disabled={creating}>
+              <button type="button" className="primary create-button" onClick={() => void racer.createRoom()} disabled={racer.creating}>
                 <Icon name="plus" size={18} />
-                {creating ? "Creating…" : "Create a room"}
+                {racer.creating ? "Creating…" : "Create a room"}
               </button>
               <form className="join-form" onSubmit={join}>
                 <label className="sr-only" htmlFor="join-code">
@@ -136,28 +95,7 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
             </div>
           </div>
 
-          <div className="you-bar">
-            <Avatar id={publicId} name={accountName ?? (nickname || "?")} size="sm" />
-            {accountName ? (
-              <span className="you-bar-name">
-                Racing as <b>{accountName}</b>
-              </span>
-            ) : (
-              <label className="you-bar-field">
-                <span className="you-bar-label">Racing as</span>
-                <input
-                  id="home-nickname"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  maxLength={NICKNAME_MAX_LENGTH}
-                  placeholder="Your nickname"
-                  autoComplete="nickname"
-                />
-              </label>
-            )}
-          </div>
-          {account.loaded && !account.signedIn && <GuestHint />}
-          {error && <p className="banner banner-error">{error}</p>}
+          <YouBar racer={racer} />
 
           <RoomTabs rooms={rooms} connected={connected} onJoin={openRoom} initialTab={demo?.tab} />
         </section>
@@ -169,6 +107,7 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
       </main>
 
       <SmartHome />
+      <AboutCubeMore />
 
       <p className="tiny muted home-tip">
         Hold <kbd>Space</kbd> (or the timer on a phone), let go to start. Any key or tap stops it.
@@ -178,41 +117,88 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
   );
 }
 
+/**
+ * What CubeMore is, in words people search for: English, the events (each a
+ * link to its own page), a short FAQ, and the same in Mongolian.
+ */
+function AboutCubeMore() {
+  return (
+    <section className="about" aria-labelledby="about-title">
+      <div className="about-block">
+        <h2 id="about-title">Online speedcubing races, live</h2>
+        <p>
+          CubeMore (also written Cube More) is a free online speedcubing race. Everyone in a room gets the same random-state WCA scramble, solves it on a
+          real cube and stops a stackmat-style timer. Your times, ao5 and ao12 averages and points show up live next to
+          everyone else's, so you know who's ahead before the last solve. Race friends in a private room with a PIN, join a
+          public room, or practise alone. It works in your browser on a phone or a computer, with a keyboard, a touch screen,
+          a Bluetooth timer or a smart cube.
+        </p>
+      </div>
+
+      <div className="about-block">
+        <h2>Race any WCA event</h2>
+        <ul className="event-links">
+          {EVENT_PAGES.map((page) => (
+            <li key={page.id}>
+              <Link to={`/race/${page.slug}`}>
+                <EventIcon id={page.id} />
+                {page.name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <p className="small muted">
+          Mixed rooms let everyone race their own short event: a Pyraminx main against a 2x2 main, Skewb against Clock.
+        </p>
+      </div>
+
+      <div className="about-block faq">
+        <h2>Questions</h2>
+        <dl>
+          <dt>Is CubeMore free?</dt>
+          <dd>Yes. You can race as a guest with just a nickname, or create an account to keep your name and stats.</dd>
+          <dt>How do I race my friends?</dt>
+          <dd>Create a room, set the event and format, open it and send the link. Private rooms need a PIN; the invite link includes it.</dd>
+          <dt>Is it a csTimer alternative?</dt>
+          <dd>It's a timer you share: the same scramble and a live race with other cubers, instead of timing alone. Your session ao5 and ao12 are there too.</dd>
+          <dt>Which events can I race?</dt>
+          <dd>All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock.</dd>
+        </dl>
+      </div>
+
+      <div className="about-block" lang="mn">
+        <h2>Рубик шоогоор онлайн уралдаарай</h2>
+        <p>
+          CubeMore бол спидкубинг сонирхогчдод зориулсан үнэгүй онлайн уралдааны сайт. Өрөөнд байгаа бүх хүн ижил холилтоор
+          (scramble) шоогоо эвлүүлж, цагаа хэмжинэ. Хэн хурдан байгааг шууд харна. 3x3, 2x2, Пираминкс, Скьюб, Clock болон
+          WCA-ийн бүх төрлөөр найзуудтайгаа эсвэл дэлхийн кубикчидтэй уралдаарай.
+        </p>
+        <dl>
+          <dt>Үнэгүй юу?</dt>
+          <dd>Тийм. Бүртгэлгүйгээр зочноор уралдаж болно.</dd>
+          <dt>Найзуудтайгаа яаж уралдах вэ?</dt>
+          <dd>Өрөө үүсгээд холбоосоо найзууддаа илгээгээрэй. Хувийн өрөөнд PIN код хэрэгтэй.</dd>
+          <dt>Цаг хэмжигч яаж ажилладаг вэ?</dt>
+          <dd>Space товчийг (утсан дээр дэлгэцийг) дараад суллахад цаг эхэлнэ, дурын товч дарахад зогсоно. Хугацаагаа гараар оруулж ч болно.</dd>
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 /** Questions, ideas, bugs: the way to the contact page. */
 function ContactCard() {
   return (
     <section className="panel daily-card contact-card" aria-labelledby="contact-card-title">
       <div className="grow">
         <h2 id="contact-card-title">Contact</h2>
-        <p className="small muted">Questions, ideas, a bug, or an event to run on Cubist? Write to us.</p>
+        <p className="small muted">Questions, ideas, a bug, or an event to run on CubeMore? Write to us.</p>
       </div>
       <Link to="/contact" className="button-link">
         Write
       </Link>
     </section>
   );
-}
-
-/**
- * Your public id, worked out like the server does (the first 12 hex digits of
- * SHA-256 of your secret id), so your avatar has the same colour here as in a
- * room. null where Web Crypto isn't available (plain http on a local network).
- */
-function usePublicId(playerId: string): string | null {
-  const [publicId, setPublicId] = useState<string | null>(null);
-  useEffect(() => {
-    const subtle = globalThis.crypto?.subtle;
-    if (!subtle) return;
-    let cancelled = false;
-    void subtle.digest("SHA-256", new TextEncoder().encode(playerId)).then((hash) => {
-      const hex = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      if (!cancelled) setPublicId(hex.slice(0, 12));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [playerId]);
-  return publicId;
 }
 
 /** Today's daily scramble: your status in one line, and a way in. */

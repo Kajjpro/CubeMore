@@ -74,7 +74,7 @@ export function AdminPage() {
                   </div>
                   <p className="message-text">{m.message}</p>
                   <div className="row">
-                    <a className="button-link" href={`mailto:${m.email}?subject=${encodeURIComponent("Re: your message to Cubist")}`}>
+                    <a className="button-link" href={`mailto:${m.email}?subject=${encodeURIComponent("Re: your message to CubeMore")}`}>
                       Reply
                     </a>
                     <ConfirmButton className="quiet danger" label="Delete" confirmLabel="Tap again to delete" onConfirm={() => void remove(m.id)} />

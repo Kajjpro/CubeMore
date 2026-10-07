@@ -1,5 +1,5 @@
 /*
- * Cubist. Tokens and layouts are described in DESIGN.md.
+ * CubeMore. Tokens and layouts are described in DESIGN.md.
  *
  * The palette is the cube: every status colour is one of the six faces.
  *   blue   = you, primary actions, links      green  = ready, fastest, connected
@@ -1184,7 +1184,17 @@ p.banner {
   gap: 14px;
 }
 
-.rooms-hero-title h1 {
+/* "CubeMore: online speedcubing races": the page's h1, small above "Open rooms". */
+.hero-kicker {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.rooms-hero-title .rooms-title,
+.rooms-hero-title h1:not(.hero-kicker) {
   font-size: clamp(26px, 5vw, 34px);
   font-weight: 750;
   line-height: 1.1;
@@ -1343,7 +1353,9 @@ p.banner {
 .foot-links a {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 44px;
+  min-width: 44px;
   font-weight: 600;
   color: var(--text-2);
   text-decoration: none;
@@ -1472,6 +1484,9 @@ p.banner {
 }
 
 .contact-other a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-weight: 600;
   color: var(--accent);
 }
@@ -5695,4 +5710,157 @@ html.overlay-mode body {
 
 .pick-event-card p {
   margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   About CubeMore (home) and the event pages (/race/pyraminx...)
+   --------------------------------------------------------------------------- */
+
+.about {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  padding: 8px 2px;
+}
+
+.about-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.about h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.about p,
+.about dd,
+.how-steps {
+  max-width: 44em;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.about dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.about dt {
+  margin-top: 8px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.about dd {
+  margin: 0;
+}
+
+/* Every event as a link to its own page. */
+.event-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.event-links a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.event-links a:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.event-links .cubing-icon {
+  font-size: 18px;
+  color: var(--text-2);
+}
+
+.how-steps {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Event page: "CubeMore / Pyraminx race", and the event icon in the heading. */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crumbs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  color: var(--text-2);
+}
+
+.event-page h1 .cubing-icon {
+  font-size: 0.85em;
+  vertical-align: -0.08em;
+}
+
+.event-blurb {
+  max-width: 40em;
+}
+
+@media (min-width: 960px) {
+  .about {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+  }
+
+  .about-block:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* /privacy: readable long text. */
+.privacy h2 {
+  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.privacy p {
+  max-width: 44em;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.privacy a {
+  color: var(--accent);
+}
+
+/* A link inside a sentence: a 44 px tap area without moving the line. */
+.inline-link {
+  display: inline-block;
+  padding: 14px 4px;
+  margin: -14px -4px;
+  color: var(--accent);
 }

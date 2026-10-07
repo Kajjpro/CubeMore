@@ -1,10 +1,11 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
+import compression from "compression";
 import express from "express";
 import { Server } from "socket.io";
-import { ServerEvents } from "@cube-racing/shared";
+import { getCubeEvent, ServerEvents } from "@cube-racing/shared";
 import { DailyService } from "./daily/daily";
 import { MemoryDailyStore, type DailyStore } from "./daily/store";
 import type { MatchTiming } from "./match/types";
@@ -14,6 +15,7 @@ import type { WeeklySchedule } from "./weekly/schedule";
 import { generateScramble } from "./scrambles";
 import type { AccountVerifier } from "./accounts";
 import { MemoryContactStore, type ContactStore } from "./contact";
+import { renderPage, sitemap } from "./seo";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
 export interface StartOptions {
@@ -49,6 +51,8 @@ export interface StartOptions {
   contactStore?: ContactStore;
   /** Clerk user ids allowed to read the contact messages. */
   adminUserIds?: string[];
+  /** The site's public address ("https://cubemore.com") for search engines and link previews, or "". */
+  siteUrl?: string;
 }
 
 export interface RunningServer {
@@ -68,6 +72,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   // Express handles normal HTTP requests.
   const app = express();
+  // Pages and files go out compressed (gzip): the website's main script is about
+  // 570 KB, but 170 KB over the network, so the first visit loads much faster.
+  app.use(compression());
   const httpServer = createServer(app);
 
   // Socket.IO shares the same HTTP server and handles the live connections.
@@ -98,6 +105,17 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     adminUserIds: options.adminUserIds ?? [],
   });
 
+  /** A room's name and settings for its link preview ("Sunday practice: race on CubeMore"). Not while it's being set up. */
+  const roomPreview = (pagePath: string): { name: string; summary: string } | null => {
+    const code = pagePath.match(/^\/room\/([A-Za-z0-9]+)/)?.[1]?.toUpperCase();
+    const room = code ? sockets.rooms.get(code)?.state : undefined;
+    if (!room || room.setup) return null;
+    const s = room.settings;
+    const event = s.mixedEvents ? "Mixed events" : getCubeEvent(s.cubeEvent).name;
+    const bestOf = s.winCondition === "unlimited" ? "unlimited sets" : `best of ${s.winCondition.slice(2)}`;
+    return { name: s.name, summary: `${event}, ${s.format}, ${bestOf}` };
+  };
+
   // For uptime checks (Fly.io calls this to know the server is alive).
   app.get("/health", (_req, res) => {
     res.json({
@@ -114,13 +132,22 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     }
     // The built JS and CSS: their names contain a hash, so browsers may keep them for good.
     app.use("/assets", express.static(path.join(options.clientDist, "assets"), { maxAge: "1y", immutable: true }));
+    const siteUrl = (options.siteUrl ?? "").trim().replace(/\/$/, "");
+    // Every page search engines should know about (made here, so it always matches the pages).
+    app.get("/sitemap.xml", (_req, res) => {
+      if (!siteUrl) return void res.status(404).send("Set VITE_SITE_URL to get a sitemap.");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.type("application/xml").send(sitemap(siteUrl));
+    });
     // Icons, the link-preview image, the manifest, robots.txt: same names after a
     // change, so browsers check again after an hour.
     app.use(express.static(options.clientDist, { index: false, maxAge: "1h" }));
-    // Every other page (/, /room/ABC234...) is the single-page app; React shows the right screen.
-    app.get(/.*/, (_req, res) => {
+    // Every other page (/, /race/pyraminx, /room/ABC234...) is the single-page app; React
+    // shows the right screen. The HTML gets that page's title, description and preview tags.
+    const indexHtml = readFileSync(path.join(options.clientDist, "index.html"), "utf8");
+    app.get(/.*/, (req, res) => {
       res.setHeader("Cache-Control", "no-cache");
-      res.sendFile(path.join(options.clientDist!, "index.html"));
+      res.type("html").send(renderPage(indexHtml, req.path, siteUrl, roomPreview(req.path)));
     });
   }
 

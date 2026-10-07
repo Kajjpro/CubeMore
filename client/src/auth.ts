@@ -27,6 +27,29 @@ export interface AccountState {
 
 const NO_ACCOUNTS: AccountState = { loaded: true, signedIn: false, username: null, needsUsername: false, playerId: null };
 
+/**
+ * Set when Clerk refused to save a username because usernames are switched
+ * off in its dashboard: then nobody is asked for one (their first name is
+ * their name) for the rest of this visit, instead of being stuck on that screen.
+ */
+const USERNAMES_OFF_KEY = "cubemore:usernames-off";
+
+export function markUsernamesOff(): void {
+  try {
+    sessionStorage.setItem(USERNAMES_OFF_KEY, "1");
+  } catch {
+    // Storage blocked: the page reload below still lets them in for now.
+  }
+}
+
+function usernamesOff(): boolean {
+  try {
+    return sessionStorage.getItem(USERNAMES_OFF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** If Clerk hasn't loaded by then (blocked, offline), carry on as a guest rather than wait forever. */
 const LOAD_TIMEOUT_MS = 6_000;
 
@@ -48,11 +71,13 @@ function useClerkAccount(): AccountState {
   }, [isLoaded]);
   if (!isLoaded) return gaveUp ? NO_ACCOUNTS : { ...NO_ACCOUNTS, loaded: false };
   if (!isSignedIn) return NO_ACCOUNTS;
+  const off = !user.username && usernamesOff();
   return {
     loaded: true,
     signedIn: true,
-    username: user.username,
-    needsUsername: !user.username,
+    // The server does the same: the first name when there's no username.
+    username: user.username ?? (off ? (user.firstName ?? "Cuber") : null),
+    needsUsername: !user.username && !off,
     playerId: `account:${user.id}`,
   };
 }
