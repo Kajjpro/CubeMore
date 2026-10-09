@@ -30,6 +30,9 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
       <Link to="/analyze" className="head-link">
         Solve analyzer
       </Link>
+      <Link to="/algorithms" className="head-link">
+        Algorithms
+      </Link>
       <ThemeButton />
       <AccountButton />
     </header>
@@ -42,6 +45,7 @@ export function SiteFooter() {
     <footer className="home-foot site-foot">
       <nav className="foot-links" aria-label="More">
         <Link to="/analyze">Solve analyzer</Link>
+        <Link to="/algorithms">OLL and PLL algorithms</Link>
         <Link to="/daily">Daily scramble</Link>
         <Link to="/contact">Contact</Link>
         <Link to="/privacy">Privacy</Link>

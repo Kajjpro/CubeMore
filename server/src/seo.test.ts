@@ -119,3 +119,27 @@ describe("one address per page", () => {
     }
   });
 });
+
+describe("the algorithm pages", () => {
+  it("are sent with their whole content, title and breadcrumb", () => {
+    const html = renderPage(INDEX, "/algorithms/pll/t-perm", SITE);
+    expect(html).toContain("<title>T Perm Algorithm and How to Recognize It | CubeMore</title>");
+    expect(html).toContain("<h1>T Perm algorithm</h1>");
+    expect(html).toContain("R U R&#39; U&#39; R&#39; F R2 U&#39; R&#39; U&#39; R U R&#39; F&#39;");
+    expect(html).toContain("1 of 18 solves");
+    expect(html).toContain('<svg class="case-diagram"');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+    expect(html).toContain(`"item":"${SITE}/algorithms/pll"`);
+    expect(html).not.toContain("noindex");
+  });
+
+  it("the lists and the index are pages too, and all of them are in the sitemap", () => {
+    expect(renderPage(INDEX, "/algorithms/oll", SITE)).toContain("<h1>All 57 OLL algorithms</h1>");
+    expect(renderPage(INDEX, "/algorithms", SITE)).toContain("Start with 2-look");
+    const xml = sitemap(SITE);
+    expect(xml).toContain(`<loc>${SITE}/algorithms/oll/27-sune</loc>`);
+    expect(xml).toContain(`<loc>${SITE}/algorithms/pll/ua-perm</loc>`);
+    expect(isKnownPage("/algorithms/oll/99-nothing")).toBe(false);
+    expect(renderPage(INDEX, "/algorithms/oll/99-nothing", SITE)).toContain("noindex");
+  });
+});

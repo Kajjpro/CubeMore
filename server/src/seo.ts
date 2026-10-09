@@ -9,7 +9,11 @@
  * structured data that tells search engines what CubeMore is.
  */
 
-import { indexablePaths, pageMeta, eventPageBySlug, isKnownPage, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
+import { algorithmCrumbs, algorithmPageHtml, algorithmPageMeta } from "@cube-racing/shared/content/algorithmPages";
+import { indexablePaths, pageMeta, eventPageBySlug, isKnownPage, setExtraPageMeta, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
+
+// The algorithm pages' titles and descriptions (odds, moves...).
+setExtraPageMeta(algorithmPageMeta);
 
 /** For HTML attributes and text: & < > " ' as entities. */
 function escape(text: string): string {
@@ -53,6 +57,16 @@ function structuredData(meta: PageMeta, siteUrl: string): object[] {
       },
     ];
   }
+  if (meta.path.startsWith("/algorithms") && !meta.noindex) {
+    const trail = [{ name: SITE_NAME, path: "/" }, ...algorithmCrumbs(meta.path)];
+    return [
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: trail.map((step, i) => ({ "@type": "ListItem", position: i + 1, name: step.name, item: `${siteUrl}${step.path}` })),
+      },
+    ];
+  }
   const event = meta.path.startsWith("/race/") ? eventPageBySlug(meta.path.slice("/race/".length)) : undefined;
   if (event) {
     return [
@@ -91,7 +105,10 @@ export function renderPage(indexHtml: string, path: string, siteUrl: string, roo
     // "<" escaped so the JSON can never close the script tag.
     extra.push(`<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`);
   }
-  return extra.length ? html.replace("</head>", `    ${extra.join("\n    ")}\n  </head>`) : html;
+  if (extra.length) html = html.replace("</head>", `    ${extra.join("\n    ")}\n  </head>`);
+  // The page's own content, so search engines read it without running the app (which then replaces it).
+  const body = pageBody(meta.path);
+  return body ? html.replace('<div id="root"></div>', `<div id="root">${body}</div>`) : html;
 }
 
 /** The sitemap: every page search engines should know about. */
@@ -121,4 +138,15 @@ export function canonicalRedirect(host: string | undefined, path: string, query:
   const otherHost = Boolean(siteHost && host && host !== siteHost && !host.startsWith("localhost") && !host.startsWith("127.0.0.1"));
   if (!otherHost && clean === path) return null;
   return `${otherHost ? siteUrl : ""}${clean}${query}`;
+}
+
+/** The site's header and footer around prerendered content (the app draws its own once it starts). */
+function frame(main: string): string {
+  return `<div class="home static-page"><header class="site-head"><a class="brand" href="/">${SITE_NAME}</a><span class="grow"></span><a class="head-link" href="/analyze">Solve analyzer</a><a class="head-link" href="/algorithms">Algorithms</a></header><main class="static-main">${main}</main><footer class="home-foot site-foot"><nav class="foot-links" aria-label="More"><a href="/">Race now</a><a href="/analyze">Solve analyzer</a><a href="/algorithms">OLL and PLL algorithms</a><a href="/daily">Daily scramble</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a></nav></footer></div>`;
+}
+
+/** Prerendered content for a page, or null (the app alone). */
+export function pageBody(path: string): string | null {
+  const algorithms = path.startsWith("/algorithms") ? algorithmPageHtml(path) : null;
+  return algorithms ? frame(algorithms) : null;
 }

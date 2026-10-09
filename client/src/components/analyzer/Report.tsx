@@ -10,6 +10,8 @@ import { useState, type ReactNode } from "react";
 import { formatTime } from "@cube-racing/shared";
 import type { Advice, SessionSummary, SolveAnalysis, StageId } from "@cube-racing/shared/analysis";
 import { STAGE_LABEL, STAGE_SHORT, colorName, levelOfId, pairLabel, seconds, typicalFor } from "../../analyzer/labels";
+import { caseById } from "@cube-racing/shared/analysis/caseInfo";
+import { Link } from "../Site";
 import { MovesDemo, SolveReplay } from "./Replay";
 
 interface SolveReportProps {
@@ -225,6 +227,7 @@ export function CaseDetails({ analysis }: { analysis: SolveAnalysis }) {
 }
 
 function LastLayerCard({ step, info }: { step: "OLL" | "PLL"; info: SolveAnalysis["oll"] }) {
+  const casePath = info.caseId ? caseById(info.caseId)?.path : undefined;
   return (
     <div className="case-card">
       <h3>{step}</h3>
@@ -233,7 +236,7 @@ function LastLayerCard({ step, info }: { step: "OLL" | "PLL"; info: SolveAnalysi
       ) : (
         <>
           <p className="small">
-            {step === "OLL" ? `${info.caseId}, ${info.name}` : info.name}
+            {casePath ? <Link to={casePath}>{step === "OLL" ? `${info.caseId}, ${info.name}` : info.name}</Link> : step === "OLL" ? `${info.caseId}, ${info.name}` : info.name}
             {info.looks >= 2 ? `, done in ${info.looks} steps` : ""}.
           </p>
           <p className="small mono alg">{info.alg}</p>

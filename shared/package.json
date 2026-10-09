@@ -8,7 +8,8 @@
     "./cube3": "./cube3.ts",
     "./smartSolve": "./smartSolve.ts",
     "./analysis": "./analysis/index.ts",
-    "./analysis/*": "./analysis/*.ts"
+    "./analysis/*": "./analysis/*.ts",
+    "./content/*": "./content/*.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

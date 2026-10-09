@@ -6,6 +6,7 @@
 // engines read them: titles, descriptions, headings and the visible text.
 
 import type { CubeEventId } from "./cubeEvents";
+import { algorithmPaths } from "./analysis/caseSlugs";
 
 export interface PageMeta {
   title: string;
@@ -68,9 +69,19 @@ export const HOME_META: PageMeta = {
     "CubeMore: race other cubers online in real time, and analyze your smart cube solves. The same scramble for everyone, a stackmat-style timer, WCA averages for all 17 events, and a free CFOP solve analyzer.",
 };
 
+/**
+ * Titles that need more than this file knows (the algorithm pages: odds, moves).
+ * The server sets it (content/algorithmPages.ts); the website's algorithm page
+ * sets its own title, so the main script stays small.
+ */
+let extraMeta: ((path: string) => PageMeta | null) | null = null;
+export function setExtraPageMeta(fn: (path: string) => PageMeta | null): void {
+  extraMeta = fn;
+}
+
 /** Every page search engines should know about (for the sitemap). */
 export function indexablePaths(): string[] {
-  return ["/", "/analyze", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`)];
+  return ["/", "/analyze", "/algorithms", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`), ...algorithmPaths().slice(1)];
 }
 
 /**
@@ -86,6 +97,9 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
       title: "Daily Scramble: One 3x3 Scramble a Day | CubeMore",
       description: "The same 3x3 Rubik's Cube scramble for everyone, every day. One attempt, then see where you rank on today's leaderboard.",
     };
+  }
+  if (clean.startsWith("/algorithms") && isKnownPage(clean)) {
+    return extraMeta?.(clean) ?? { path: clean, title: `OLL and PLL Algorithms | ${SITE_NAME}`, description: HOME_META.description };
   }
   if (clean === "/analyze") {
     return {
@@ -128,6 +142,7 @@ export function isKnownPage(path: string): boolean {
   const clean = path.replace(/\/+$/, "") || "/";
   if (["/", "/analyze", "/daily", "/contact", "/privacy", "/admin", "/dev/states"].includes(clean)) return true;
   if (/^\/room\/[A-Za-z0-9]+(\/overlay)?$/.test(clean)) return true;
+  if (clean.startsWith("/algorithms")) return algorithmPaths().includes(clean);
   const race = clean.match(/^\/race\/([\w-]+)$/);
   return race ? eventPageBySlug(race[1]) !== undefined : false;
 }

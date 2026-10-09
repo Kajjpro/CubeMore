@@ -6765,3 +6765,207 @@ html.overlay-mode body {
   align-items: center;
   gap: 8px 12px;
 }
+
+/* ---------------------------------------------------------------------------
+   Static pages (/algorithms...): the same HTML the server sends to search engines
+   --------------------------------------------------------------------------- */
+
+.static-main {
+  flex: 1;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.static-main h1 {
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.static-main h2 {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+
+.static-main p {
+  max-width: 70ch;
+}
+
+.static-main a {
+  font-weight: 600;
+}
+
+.static-page .site-head a.brand {
+  font-weight: 750;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.alg-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .alg-sections {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.alg-section-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.alg-section-link:hover {
+  border-color: var(--border-strong);
+}
+
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.case-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.case-tile a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.case-tile a:hover .case-tile-name {
+  text-decoration: underline;
+}
+
+.case-tile-name {
+  font-size: 14px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.case-tile .alg {
+  text-align: center;
+  color: var(--text-2);
+}
+
+.case-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.case-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.case-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.case-main {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.alg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.alg-list li {
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.case-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.case-nav a,
+.crumbs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.alg-cta {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text-2);
+}
+
+.case-diagram {
+  flex-shrink: 0;
+}
+
+/* The case pictures: yellow top, green front (the usual way cubers draw them). */
+.case-diagram .st-y,
+.case-diagram .st-U {
+  fill: var(--sticker-1);
+}
+
+.case-diagram .st-o {
+  fill: var(--surface-3);
+}
+
+.case-diagram .st-F {
+  fill: var(--sticker-5);
+}
+
+.case-diagram .st-R {
+  fill: var(--sticker-3);
+}
+
+.case-diagram .st-L {
+  fill: var(--sticker-2);
+}
+
+.case-diagram .st-B {
+  fill: var(--sticker-4);
+}
+
+.case-diagram .st-D {
+  fill: var(--sticker-0);
+}

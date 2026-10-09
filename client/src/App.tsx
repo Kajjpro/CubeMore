@@ -13,6 +13,9 @@ import { usePath } from "./router";
 
 // Development only: every screen and state with mock data. `import.meta.env.DEV`
 // is false in production builds, so this page isn't even included there.
+// The algorithm pages bring every case's facts: loaded only when opened.
+const AlgorithmPage = lazy(() => import("./pages/AlgorithmPage").then((m) => ({ default: m.AlgorithmPage })));
+
 // The analyzer brings the analysis engine and the 3D cube: loaded only when opened.
 const AnalyzerPage = lazy(() => import("./pages/AnalyzerPage").then((m) => ({ default: m.AnalyzerPage })));
 
@@ -23,7 +26,8 @@ export function App() {
 
   // The browser tab shows the page's title (rooms keep their own, with "New scramble" alerts).
   useEffect(() => {
-    if (!path.startsWith("/room/")) document.title = pageMeta(path).title;
+    // Rooms and algorithm pages set their own.
+    if (!path.startsWith("/room/") && !path.startsWith("/algorithms")) document.title = pageMeta(path).title;
   }, [path]);
 
   if (DevStates && path === "/dev/states") {
@@ -35,6 +39,13 @@ export function App() {
   }
 
   if (path === "/daily" || path === "/daily/") return <DailyPage />;
+  if (path.startsWith("/algorithms") && isKnownPage(path)) {
+    return (
+      <Suspense fallback={<div className="home" />}>
+        <AlgorithmPage key={path} path={path.replace(/\/+$/, "")} />
+      </Suspense>
+    );
+  }
   if (path === "/analyze" || path === "/analyze/") {
     return (
       <Suspense fallback={<div className="home" />}>
