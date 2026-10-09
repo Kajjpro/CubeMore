@@ -5,3 +5,4 @@ export * from "./cubeEvents";
 export * from "./format";
 export * from "./seo";
 export * from "./site";
+export * from "./practice";

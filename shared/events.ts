@@ -43,6 +43,9 @@ import type {
   createRoomSchema,
   joinRoomSchema,
   leaderboardSchema,
+  practiceListSchema,
+  practiceSaveSchema,
+  practiceSessionSchema,
   replaySchema,
   restartSchema,
   submitSolveSchema,
@@ -51,6 +54,7 @@ import type {
   updateSettingsSchema,
 } from "./schemas";
 import type { ChatMessage, ContactMessage, DailyStatus, Scramble, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
+import type { PracticeSession, PracticeSessionInfo, PracticeSolve, TopSolve } from "./practice";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -101,6 +105,20 @@ export const ClientEvents = {
   LEADERBOARD: "leaderboard:get",
   /** Every move of one verified solve, to watch it again. */
   REPLAY: "replay:get",
+
+  /** The analyzer: a scramble to practice with (any visitor). */
+  PRACTICE_SCRAMBLE: "practice:scramble",
+  /** Keep an analyzed solve (signed in). The server checks and analyzes it again. */
+  PRACTICE_SAVE: "practice:save",
+  /** Your saved sessions, newest first. */
+  PRACTICE_LIST: "practice:list",
+  /** One saved session with every solve and its analysis. */
+  PRACTICE_SESSION: "practice:session",
+  PRACTICE_DELETE: "practice:delete",
+  /** A short written summary of a session from the AI coach (if it's set up). */
+  PRACTICE_COACH: "practice:coach",
+  /** The fastest verified solves on CubeMore, analyzed, to compare with. */
+  PRACTICE_TOP: "practice:top",
 
   /** The contact form. */
   CONTACT_SEND: "contact:send",
@@ -172,6 +190,9 @@ export type DailyStartPayload = z.input<typeof dailyStartSchema>;
 export type DailySubmitPayload = z.input<typeof dailySubmitSchema>;
 export type LeaderboardPayload = z.input<typeof leaderboardSchema>;
 export type ReplayPayload = z.input<typeof replaySchema>;
+export type PracticeSavePayload = z.input<typeof practiceSaveSchema>;
+export type PracticeSessionPayload = z.input<typeof practiceSessionSchema>;
+export type PracticeListPayload = z.input<typeof practiceListSchema>;
 export type EmptyPayload = Record<string, never>;
 
 // ---- Response data ----
@@ -220,6 +241,14 @@ export interface ClientRequests {
   /** available: false = no database, so no history to rank. */
   [ClientEvents.LEADERBOARD]: { payload: LeaderboardPayload; response: { rows: LeaderboardRow[]; available: boolean } };
   [ClientEvents.REPLAY]: { payload: ReplayPayload; response: { replay: Replay } };
+  [ClientEvents.PRACTICE_SCRAMBLE]: { payload: EmptyPayload; response: { scrambleId: string; scramble: string } };
+  [ClientEvents.PRACTICE_SAVE]: { payload: PracticeSavePayload; response: { solve: PracticeSolve; session: PracticeSessionInfo } };
+  /** coach: the AI summary is set up on this server. kept: solves are kept in a database (not just until a restart). */
+  [ClientEvents.PRACTICE_LIST]: { payload: PracticeListPayload; response: { sessions: PracticeSessionInfo[]; coach: boolean; kept: boolean } };
+  [ClientEvents.PRACTICE_SESSION]: { payload: PracticeSessionPayload; response: { session: PracticeSession } };
+  [ClientEvents.PRACTICE_DELETE]: { payload: PracticeSessionPayload; response: object };
+  [ClientEvents.PRACTICE_COACH]: { payload: PracticeSessionPayload; response: { text: string } };
+  [ClientEvents.PRACTICE_TOP]: { payload: EmptyPayload; response: { solves: TopSolve[] } };
   [ClientEvents.CONTACT_SEND]: { payload: ContactPayload; response: object };
   [ClientEvents.ADMIN_MESSAGES]: { payload: EmptyPayload; response: { messages: ContactMessage[] } };
   [ClientEvents.ADMIN_DELETE_MESSAGE]: { payload: ContactIdPayload; response: object };

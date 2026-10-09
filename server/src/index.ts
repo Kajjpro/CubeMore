@@ -4,6 +4,8 @@ import { MemoryContactStore, PostgresContactStore, type ContactStore } from "./c
 import { config } from "./config";
 import { MemoryDailyStore, PostgresDailyStore, type DailyStore } from "./daily/store";
 import { PostgresStore } from "./persistence/store";
+import { geminiCoach } from "./practice/coach";
+import { MemoryPracticeStore, PostgresPracticeStore, type PracticeStore } from "./practice/store";
 import { startServer } from "./server";
 
 // With a database (DATABASE_URL, e.g. Neon): rooms survive restarts, every match
@@ -11,6 +13,7 @@ import { startServer } from "./server";
 let dailyStore: DailyStore = new MemoryDailyStore();
 let store: PostgresStore | null = null;
 let contactStore: ContactStore = new MemoryContactStore();
+let practiceStore: PracticeStore = new MemoryPracticeStore();
 if (config.databaseUrl) {
   const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
   // Hosted databases close idle connections now and then. Without this
@@ -19,7 +22,8 @@ if (config.databaseUrl) {
   dailyStore = await PostgresDailyStore.open(pool);
   store = await PostgresStore.open(pool);
   contactStore = await PostgresContactStore.open(pool);
-  console.log("Rooms, match history and daily results are saved in Postgres");
+  practiceStore = await PostgresPracticeStore.open(pool);
+  console.log("Rooms, match history, daily results and analyzer solves are saved in Postgres");
 } else {
   console.log("Everything is kept in memory (set DATABASE_URL to keep rooms and history across restarts)");
 }
@@ -30,6 +34,10 @@ const restoredRooms = store ? await store.loadRooms() : [];
 const accounts = config.clerkSecretKey ? clerkAccounts(config.clerkSecretKey, config.clerkAuthorizedParties) : null;
 console.log(accounts ? "Accounts are on (Clerk)" : "Accounts are off (set CLERK_SECRET_KEY to let players sign in)");
 
+// The analyzer's AI coach (Google Gemini, free tier). Without a key, the analyzer's own suggestions still show.
+const coach = config.geminiApiKey ? geminiCoach(config.geminiApiKey, config.geminiModel) : null;
+console.log(coach ? `The analyzer's coach is on (${config.geminiModel})` : "The analyzer's coach is off (set GEMINI_API_KEY to turn it on)");
+
 const server = await startServer({
   dailyStore,
   store,
@@ -37,6 +45,8 @@ const server = await startServer({
   restoredRooms,
   accounts,
   contactStore,
+  practiceStore,
+  coach,
   adminUserIds: config.adminUserIds,
   siteUrl: config.siteUrl,
   weeklySchedule: config.weeklySchedule,

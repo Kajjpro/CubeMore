@@ -47,6 +47,9 @@ import {
   dailySubmitSchema,
   cubeMovesSchema,
   leaderboardSchema,
+  practiceListSchema,
+  practiceSaveSchema,
+  practiceSessionSchema,
   replaySchema,
   restartSchema,
   submitSolveSchema,
@@ -68,7 +71,8 @@ import * as logic from "./rooms/roomLogic";
 import { RoomStore } from "./rooms/roomStore";
 import type { ServerRoom } from "./rooms/types";
 import type { DailyService } from "./daily/daily";
-import { generateSetScrambles } from "./scrambles";
+import { generateScramble, generateSetScrambles } from "./scrambles";
+import { IssuedScrambles, PracticeError, type PracticeService } from "./practice/service";
 
 /** What the server remembers about each connection (browser tab). */
 interface SocketData {
@@ -83,6 +87,8 @@ interface SocketData {
   movesLimiter: RateLimiter;
   /** The signed-in account (checked when the connection opened), or null for a guest. */
   account: Account | null;
+  /** Analyzer scrambles given to this connection (a kept solve must use one). */
+  practiceScrambles: IssuedScrambles;
 }
 
 type NoEvents = Record<string, never>;
@@ -112,6 +118,8 @@ export interface SocketOptions {
   contact: ContactStore;
   /** Clerk user ids allowed to read them (the site owner). */
   adminUserIds: string[];
+  /** The analyzer: kept solves, the coach, the top solves. */
+  practice: PracticeService;
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -182,6 +190,7 @@ export function registerSocketHandlers(
       watching: null,
       movesLimiter: new RateLimiter(20, 12),
       account: socket.data?.account ?? null,
+      practiceScrambles: new IssuedScrambles(),
     };
 
     /**
@@ -375,6 +384,53 @@ export function registerSocketHandlers(
       const replay = reader ? await reader.replay(input.id) : null;
       return replay ? { ok: true, replay } : logic.fail("That solve isn't available.");
     });
+
+    // ---- The analyzer (/analyze) ----
+
+    const practice = options.practice;
+    const SIGN_IN_TO_KEEP = "Sign in to keep your solves. They're still analyzed here.";
+    /** Runs an analyzer request for the signed-in player; their mistakes become friendly errors. */
+    const forAccount = async (work: (userId: string) => Promise<AckResponse>): Promise<AckResponse> => {
+      const account = socket.data.account;
+      if (!account) return logic.fail(SIGN_IN_TO_KEEP);
+      try {
+        return await work(account.userId);
+      } catch (error) {
+        if (error instanceof PracticeError) return logic.fail(error.message);
+        throw error;
+      }
+    };
+
+    on(socket, ClientEvents.PRACTICE_SCRAMBLE, emptySchema, async () => {
+      const scramble = await generateScramble("333");
+      return { ok: true, scramble: scramble.text, scrambleId: socket.data.practiceScrambles.issue(scramble.text) };
+    });
+
+    on(socket, ClientEvents.PRACTICE_SAVE, practiceSaveSchema, (input) =>
+      forAccount(async (userId) => ({ ok: true, ...(await practice.save(userId, input, socket.data.practiceScrambles)) })),
+    );
+
+    on(socket, ClientEvents.PRACTICE_LIST, practiceListSchema, async (input) => {
+      const sessions = socket.data.account ? await practice.list(socket.data.account.userId, input.before) : [];
+      return { ok: true, sessions, coach: practice.coachAvailable, kept: practice.kept };
+    });
+
+    on(socket, ClientEvents.PRACTICE_SESSION, practiceSessionSchema, (input) =>
+      forAccount(async (userId) => ({ ok: true, session: await practice.get(userId, input.sessionId) })),
+    );
+
+    on(socket, ClientEvents.PRACTICE_DELETE, practiceSessionSchema, (input) =>
+      forAccount(async (userId) => {
+        await practice.delete(userId, input.sessionId);
+        return { ok: true };
+      }),
+    );
+
+    on(socket, ClientEvents.PRACTICE_COACH, practiceSessionSchema, (input) =>
+      forAccount(async (userId) => ({ ok: true, text: await practice.coachSummary(userId, input.sessionId) })),
+    );
+
+    on(socket, ClientEvents.PRACTICE_TOP, emptySchema, async () => ({ ok: true, solves: await practice.topSolves() }));
 
     /** "Race now": an open public room for this event, or null (the client then creates one). */
     on(socket, ClientEvents.QUICK_RACE, quickRaceSchema, (input) => ({

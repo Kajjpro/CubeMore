@@ -16,6 +16,9 @@ import { generateScramble } from "./scrambles";
 import type { AccountVerifier } from "./accounts";
 import { MemoryContactStore, type ContactStore } from "./contact";
 import { renderPage, sitemap } from "./seo";
+import type { Coach } from "./practice/coach";
+import { PracticeService } from "./practice/service";
+import { MemoryPracticeStore, type PracticeStore } from "./practice/store";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
 export interface StartOptions {
@@ -53,6 +56,10 @@ export interface StartOptions {
   adminUserIds?: string[];
   /** The site's public address ("https://cubemore.com") for search engines and link previews, or "". */
   siteUrl?: string;
+  /** Where analyzer solves are kept. Default: in memory. */
+  practiceStore?: PracticeStore;
+  /** The AI coach for analyzer summaries, or none. */
+  coach?: Coach | null;
 }
 
 export interface RunningServer {
@@ -103,6 +110,12 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     accounts: options.accounts ?? null,
     contact: options.contactStore ?? new MemoryContactStore(),
     adminUserIds: options.adminUserIds ?? [],
+    practice: new PracticeService(
+      options.practiceStore ?? new MemoryPracticeStore(),
+      options.reader ?? null,
+      options.coach ?? null,
+      Boolean(options.practiceStore && !(options.practiceStore instanceof MemoryPracticeStore)),
+    ),
   });
 
   /** A room's name and settings for its link preview ("Sunday practice: race on CubeMore"). Not while it's being set up. */

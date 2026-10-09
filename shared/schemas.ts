@@ -27,6 +27,7 @@ import {
 } from "./constants";
 import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
 import { SMART_SOLVE_LIMITS } from "./smartSolve";
+import { PRACTICE_KINDS } from "./practice";
 import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SCORING_MODES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -293,6 +294,27 @@ export const contactSchema = z.object({
 export const contactIdSchema = z.object({
   id: z.string().min(1).max(64),
 });
+
+// ---- The analyzer (practice) ----
+
+const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Invalid id.");
+
+/** Keep one analyzed smart cube solve. The scramble must be one the server gave this connection. */
+export const practiceSaveSchema = z.object({
+  scrambleId: uuidSchema,
+  /** Made by the browser when a session starts; the same for the 5 solves of an ao5. */
+  sessionId: uuidSchema,
+  kind: z.enum(PRACTICE_KINDS),
+  index: z.number().int().min(0).max(4),
+  timeMs: z.number().int().min(1).max(MAX_SOLVE_TIME_MS),
+  moves: z.array(z.string().max(3)).max(SMART_SOLVE_LIMITS.maxMoves),
+  times: z.array(z.number().int().min(0).max(MAX_SOLVE_TIME_MS)).max(SMART_SOLVE_LIMITS.maxMoves),
+});
+
+export const practiceSessionSchema = z.object({ sessionId: uuidSchema });
+
+/** The history, newest first; `before` (ms) for the next page. */
+export const practiceListSchema = z.object({ before: z.number().int().min(0).optional() });
 
 /** Turns zod's list of problems into one short message for the user. */
 export function describeProblem(error: z.ZodError): string {

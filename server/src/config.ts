@@ -63,6 +63,13 @@ export const config = {
     .split(",")
     .map((id) => id.trim())
     .filter(Boolean),
+  /**
+   * The analyzer's AI coach: a Google AI Studio key (aistudio.google.com, free tier).
+   * Empty = no coach; the analyzer's own suggestions still show.
+   */
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  /** Which Gemini model writes the summaries. */
+  geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   /** The weekly smart-cube race: day (0 = Sunday ... 6 = Saturday) and hour, in UTC. */
   weeklySchedule: {
     day: Math.min(6, numberFromEnv("WEEKLY_RACE_DAY", 6)),
