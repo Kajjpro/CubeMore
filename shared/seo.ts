@@ -65,7 +65,7 @@ export const HOME_META: PageMeta = {
   path: "/",
   title: "CubeMore: Online Speedcubing Races and Rubik's Cube Timer",
   description:
-    "CubeMore: race other cubers online in real time. The same scramble for everyone, a stackmat-style timer and WCA averages for 3x3, 2x2, Pyraminx, Skewb and all 17 WCA events. Free.",
+    "CubeMore: race other cubers online in real time, and analyze your smart cube solves. The same scramble for everyone, a stackmat-style timer, WCA averages for all 17 events, and a free CFOP solve analyzer.",
 };
 
 /** Every page search engines should know about (for the sitemap). */

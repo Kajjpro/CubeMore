@@ -27,6 +27,9 @@ export function SiteHeader({ children }: { children?: ReactNode }) {
       <Brand onClick={() => navigate("/")} />
       <span className="grow" />
       {children}
+      <Link to="/analyze" className="head-link">
+        Solve analyzer
+      </Link>
       <ThemeButton />
       <AccountButton />
     </header>

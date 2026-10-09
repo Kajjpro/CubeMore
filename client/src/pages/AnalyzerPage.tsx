@@ -83,10 +83,7 @@ export function AnalyzerPage() {
       <main className="analyzer">
         <div className="analyzer-title">
           <h1>Solve analyzer</h1>
-          <p className="muted">
-            Solve with your smart cube. Every solve is split into cross, F2L pairs, OLL and PLL, with the shortest cross, the cases you got
-            and what would save you the most time.
-          </p>
+          <p className="muted">Solve with your smart cube. See every stage timed, and what to practice next.</p>
         </div>
 
         <div className="analyzer-tabs" role="tablist" aria-label="Analyzer">

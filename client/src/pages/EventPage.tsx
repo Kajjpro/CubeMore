@@ -6,6 +6,7 @@ import { getCubeEvent, EVENT_PAGES, MIXED_EVENTS, type EventPage as EventPageInf
 import { useRacer, YouBar } from "../components/Racer";
 import { RoomCards, useRooms } from "../components/RoomList";
 import { Link, SiteFooter, SiteHeader } from "../components/Site";
+import { AnalyzerLine } from "../components/AnalyzerPromo";
 import { EventIcon, Icon } from "../components/ui";
 import { navigate } from "../router";
 
@@ -63,6 +64,8 @@ export function EventPage({ page, demoRooms }: { page: EventPageInfo; demoRooms?
             />
           </div>
         </section>
+
+        {(page.id === "333" || page.id === "333oh") && <AnalyzerLine />}
 
         <section className="about" aria-labelledby="how-title">
           <div className="about-block">

@@ -31,7 +31,7 @@ export function SmartHome() {
       >
         <span className="analyzer-cta-text">
           <strong>Analyze your solves</strong>
-          <span className="small muted">Cross, F2L, OLL and PLL times for every smart cube solve, the shortest cross, and what to practice next.</span>
+          <span className="small muted">Every stage timed, and what to practice next.</span>
         </span>
         <span className="analyzer-cta-go" aria-hidden>
           Open

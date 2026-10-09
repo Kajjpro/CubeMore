@@ -6563,3 +6563,100 @@ html.overlay-mode body {
 .link-button.danger {
   color: var(--red);
 }
+
+/* ---- The analyzer on the home page and event pages ---- */
+
+.head-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.head-link:hover {
+  color: var(--text);
+}
+
+/* Phones: the home page card and the footer link are enough. */
+@media (max-width: 560px) {
+  .head-link {
+    display: none;
+  }
+}
+
+.analyzer-promo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 20px;
+}
+
+.promo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.promo-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.promo-kicker .tag {
+  background: var(--text);
+  color: var(--surface);
+  border-color: var(--text);
+}
+
+.analyzer-promo h2 {
+  font-size: clamp(21px, 4vw, 26px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.promo-lead {
+  color: var(--text-2);
+}
+
+.promo-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* Solid, but not blue: "Create a room" stays the one blue button on the page. */
+.button-link.promo-go {
+  gap: 8px;
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.button-link.promo-go:hover {
+  background: var(--text-2);
+  border-color: var(--text-2);
+}
+
+.analyzer-line {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text-2);
+}
+
+.analyzer-line a {
+  font-weight: 650;
+}

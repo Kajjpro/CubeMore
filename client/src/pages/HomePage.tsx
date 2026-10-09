@@ -3,6 +3,7 @@ import { ClientEvents, EVENT_PAGES, ROOM_CODE_LENGTH, type DailyStatus, type Pub
 import { useRacer, YouBar } from "../components/Racer";
 import { RoomTabs, useRooms } from "../components/RoomList";
 import { Link, SiteFooter, SiteHeader } from "../components/Site";
+import { AnalyzerPromo } from "../components/AnalyzerPromo";
 import { SmartHome } from "../components/SmartHome";
 import { EventIcon, Icon } from "../components/ui";
 import { navigate } from "../router";
@@ -20,8 +21,8 @@ export interface HomeDemo {
 
 /**
  * The home page: the open rooms come first (Public | Private), with "Create a
- * room" and "Join with a code" right above them. Then the daily scramble,
- * contact, and smart cube racing.
+ * room" and "Join with a code" right above them. Then the solve analyzer, the
+ * daily scramble, contact, and smart cube racing.
  */
 export function HomePage({ demo }: { demo?: HomeDemo }) {
   const racer = useRacer(demo?.nickname);
@@ -100,6 +101,8 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           <RoomTabs rooms={rooms} connected={connected} onJoin={openRoom} initialTab={demo?.tab} />
         </section>
 
+        <AnalyzerPromo />
+
         <div className="home-cards">
           <DailyCard demo={demo?.daily} />
           <ContactCard />
@@ -161,6 +164,10 @@ function AboutCubeMore() {
           <dd>Create a room, set the event and format, open it and send the link. Private rooms need a PIN; the invite link includes it.</dd>
           <dt>Is it a csTimer alternative?</dt>
           <dd>It's a timer you share: the same scramble and a live race with other cubers, instead of timing alone. Your session ao5 and ao12 are there too.</dd>
+          <dt>Can CubeMore analyze my solves?</dt>
+          <dd>
+            Yes, with a smart cube. The <Link to="/analyze">solve analyzer</Link> times your cross, F2L, OLL and PLL and shows what to practice. Free.
+          </dd>
           <dt>Which events can I race?</dt>
           <dd>All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock.</dd>
         </dl>
@@ -178,6 +185,11 @@ function AboutCubeMore() {
           <dd>Тийм. Бүртгэлгүйгээр зочноор уралдаж болно.</dd>
           <dt>Найзуудтайгаа яаж уралдах вэ?</dt>
           <dd>Өрөө үүсгээд холбоосоо найзууддаа илгээгээрэй. Хувийн өрөөнд PIN код хэрэгтэй.</dd>
+          <dt>Шийдлээ шинжлүүлж болох уу?</dt>
+          <dd>
+            Тийм, ухаалаг шоогоор. <Link to="/analyze">Шийдлийн шинжээч</Link> cross, F2L, OLL, PLL-ийн хугацааг хэмжиж, юун дээр дасгал хийхийг
+            харуулна. Үнэгүй.
+          </dd>
           <dt>Цаг хэмжигч яаж ажилладаг вэ?</dt>
           <dd>Space товчийг (утсан дээр дэлгэцийг) дараад суллахад цаг эхэлнэ, дурын товч дарахад зогсоно. Хугацаагаа гараар оруулж ч болно.</dd>
         </dl>
