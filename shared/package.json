@@ -6,7 +6,9 @@
     ".": "./index.ts",
     "./schemas": "./schemas.ts",
     "./cube3": "./cube3.ts",
-    "./smartSolve": "./smartSolve.ts"
+    "./smartSolve": "./smartSolve.ts",
+    "./analysis": "./analysis/index.ts",
+    "./analysis/*": "./analysis/*.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

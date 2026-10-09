@@ -15,12 +15,12 @@ export type Facelets = string;
 
 export const SOLVED_FACELETS: Facelets = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
 
-const FACES = ["U", "R", "F", "D", "L", "B"] as const;
-type Face = (typeof FACES)[number];
-type Vec = [number, number, number];
+export const FACES = ["U", "R", "F", "D", "L", "B"] as const;
+export type Face = (typeof FACES)[number];
+export type Vec = [number, number, number];
 
 /** Each face's outward direction (x = right, y = up, z = front). */
-const NORMAL: Record<Face, Vec> = { U: [0, 1, 0], R: [1, 0, 0], F: [0, 0, 1], D: [0, -1, 0], L: [-1, 0, 0], B: [0, 0, -1] };
+export const NORMAL: Record<Face, Vec> = { U: [0, 1, 0], R: [1, 0, 0], F: [0, 0, 1], D: [0, -1, 0], L: [-1, 0, 0], B: [0, 0, -1] };
 
 /**
  * Where sticker 1..9 of each face is, looking at that face from outside in the
@@ -36,17 +36,17 @@ const LAYOUT: Record<Face, { first: Vec; right: Vec; down: Vec }> = {
 };
 
 const key = (p: Vec, n: Vec) => `${p.join(",")}|${n.join(",")}`;
-const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec, b: Vec): Vec => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 /** A clockwise quarter turn (seen from outside) about axis `a`: v' = a(a·v) − a×v. */
-const turn = (a: Vec, v: Vec): Vec => {
+export const turn = (a: Vec, v: Vec): Vec => {
   const c = cross(a, v);
   const d = dot(a, v);
   return [a[0] * d - c[0], a[1] * d - c[1], a[2] * d - c[2]];
 };
 
-/** Every sticker: its cubie position and the direction it faces. */
-const STICKERS: { p: Vec; n: Vec }[] = [];
+/** Every sticker: its cubie position and the direction it faces (index = facelet index). */
+export const STICKERS: { p: Vec; n: Vec }[] = [];
 for (const face of FACES) {
   const { first, right, down } = LAYOUT[face];
   for (let row = 0; row < 3; row++) {
@@ -57,6 +57,13 @@ for (const face of FACES) {
   }
 }
 const INDEX = new Map(STICKERS.map((s, i) => [key(s.p, s.n), i]));
+
+/** The facelet index of the sticker at cubie position `p` facing `n`. */
+export function stickerAt(p: Vec, n: Vec): number {
+  const index = INDEX.get(key(p, n));
+  if (index === undefined) throw new Error(`No sticker at ${key(p, n)}`);
+  return index;
+}
 
 /** For each face's clockwise quarter turn: new[i] = old[FROM[i]]. */
 const QUARTER: Record<Face, number[]> = {} as Record<Face, number[]>;
