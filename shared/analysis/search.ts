@@ -256,3 +256,10 @@ export function solvePair(state: Facelets, slot: number, keep: number[]): PairSo
   }
   return { moves: [], complete: false };
 }
+
+/** Builds the distance tables ahead of time (a fraction of a second), so the first analysis is quick. */
+export function warmUp(): void {
+  crossTableAll();
+  crossTableF2l();
+  for (let slot = 0; slot < 4; slot++) pairTable(slot);
+}

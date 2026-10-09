@@ -70,7 +70,7 @@ export const HOME_META: PageMeta = {
 
 /** Every page search engines should know about (for the sitemap). */
 export function indexablePaths(): string[] {
-  return ["/", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`)];
+  return ["/", "/analyze", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`)];
 }
 
 /**
@@ -85,6 +85,14 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
       path: clean,
       title: "Daily Scramble: One 3x3 Scramble a Day | CubeMore",
       description: "The same 3x3 Rubik's Cube scramble for everyone, every day. One attempt, then see where you rank on today's leaderboard.",
+    };
+  }
+  if (clean === "/analyze") {
+    return {
+      path: clean,
+      title: "Smart Cube Solve Analyzer: CFOP Splits, OLL and PLL | CubeMore",
+      description:
+        "Solve with your smart cube (GAN, GoCube, Giiker, QiYi) and see every stage: cross, F2L pairs, OLL and PLL times, the shortest cross, the cases you got and what to practice next. Free.",
     };
   }
   if (clean === "/contact") {

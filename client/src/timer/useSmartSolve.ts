@@ -31,6 +31,8 @@ interface Options {
   scramble: string;
   onStart: () => void;
   onStop: (timeMs: number, smart: SmartSolveData) => void;
+  /** Send the moves to the room as you solve, so others can watch (default: yes). */
+  broadcast?: boolean;
 }
 
 // The latest guide, for the scramble card.
@@ -53,7 +55,7 @@ export function useSmartGuide(scramble: string): FlowView | null {
   return current?.scramble === scramble ? current.view : null;
 }
 
-export function useSmartSolve({ active, scramble, onStart, onStop }: Options): FlowView | null {
+export function useSmartSolve({ active, scramble, onStart, onStop, broadcast = true }: Options): FlowView | null {
   const [view, setView] = useState<FlowView | null>(null);
   const latest = useRef({ onStart, onStop });
   latest.current = { onStart, onStop };
@@ -103,6 +105,10 @@ export function useSmartSolve({ active, scramble, onStart, onStop }: Options): F
     }, 50);
     const flush = setInterval(() => {
       if (outgoing.length === 0) return;
+      if (!broadcast) {
+        outgoing = [];
+        return;
+      }
       void request(ClientEvents.CUBE_MOVES, { moves: outgoing.splice(0, 30) });
     }, SEND_EVERY_MS);
 
@@ -116,7 +122,7 @@ export function useSmartSolve({ active, scramble, onStart, onStop }: Options): F
       setView(null);
       publish(null);
     };
-  }, [active, scramble]);
+  }, [active, scramble, broadcast]);
 
   return active ? view : null;
 }

@@ -38,6 +38,7 @@ export function SiteFooter() {
   return (
     <footer className="home-foot site-foot">
       <nav className="foot-links" aria-label="More">
+        <Link to="/analyze">Solve analyzer</Link>
         <Link to="/daily">Daily scramble</Link>
         <Link to="/contact">Contact</Link>
         <Link to="/privacy">Privacy</Link>

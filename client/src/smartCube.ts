@@ -152,6 +152,19 @@ export function disconnectSmartCube(): void {
   setInfo({ status: "off", kind: null, name: null, battery: null, askingMac: null });
 }
 
+/**
+ * Development only (?simcube=1): turns the connected keyboard cube by code, one
+ * move every `gapMs`, so screens can be tried without a real cube.
+ */
+if (import.meta.env.DEV && keyboardCubeAllowed) {
+  (window as unknown as { __cubemoreTurn: (moves: string[], gapMs: number) => Promise<void> }).__cubemoreTurn = async (moves, gapMs) => {
+    for (const move of moves) {
+      emitMove({ move, hostAt: performance.now(), cubeAt: null });
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+    }
+  };
+}
+
 // ---------------------------------------------------------------------------
 // GAN cubes (gan-web-bluetooth)
 

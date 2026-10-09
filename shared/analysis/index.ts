@@ -8,4 +8,5 @@ export { analyzeSolve, AnalysisError } from "./analyze";
 export { summarizeSession } from "./session";
 export { LEVELS, levelOf, nextLevel, typicalStageMs, type Level, type LevelId } from "./benchmarks";
 export { COLOR_NAMES } from "./frame";
+export { warmUp } from "./search";
 export * from "./types";

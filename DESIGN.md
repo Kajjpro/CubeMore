@@ -221,6 +221,21 @@ lines for people who join later. The feed follows new lines unless you scrolled 
 - Smart cube: a Menu section; a tiny accent 3x3 icon on a solver's row while their cube
   streams; the expanded row shows the live cube (132 px).
 
+**Analyzer** (`/analyze`). Title and one sentence, then tabs **Practice | Your sessions
+(signed in) | Top solves**. Practice: a card with the cube connection and `Single | Average
+of 5` (an ao5 shows five slots with the times); then the scramble (with the smart cube guide)
+and a large timer. A finished solve shows its **report**: the time with moves, turns per
+second and a level tag; one stage bar (each stage as wide as its time, the looking part
+hatched, labels hidden when a part is too narrow); the replay cube (real timing, a stage
+timeline you can tap, Start, Play, 0.5x/1x/2x) beside the stage table (Time, Looking,
+Moves, TPS, Typical; slower than typical is bold, never coloured; TPS hidden under 480 px);
+"What to practice" (numbered, the time it would save on the right, `Show on the cube`
+opens the moves on a small cube); then three cards: Cross, OLL, PLL with their algorithms.
+An ao5 adds the average, best/worst/spread, the five times (dropped ones in brackets),
+"What to work on" (three items) and the average stage table. The coach card (signed in, and
+only with `GEMINI_API_KEY`) comes last: plain sentences, a dash for each point, and a line
+saying an AI wrote it. Blue is only the stage being replayed. No emoji anywhere.
+
 ## Components
 
 `ui.tsx`: `Icon` (inline line icons, used sparingly on buttons), `Avatar`, `LogoMark`,

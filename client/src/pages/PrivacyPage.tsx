@@ -5,7 +5,7 @@
 import { Link, SiteFooter, SiteHeader } from "../components/Site";
 import { SITE } from "../site";
 
-const UPDATED = "October 7, 2026";
+const UPDATED = "October 9, 2026";
 
 export function PrivacyPage() {
   return (
@@ -40,6 +40,18 @@ export function PrivacyPage() {
             while the room is open, then deleted with it. Daily scramble results are kept for the leaderboard.
           </p>
 
+          <h2>The solve analyzer</h2>
+          <p>
+            The analyzer works out your stages, cases and suggestions in your browser. If you're signed in, each analyzed solve
+            (its scramble, moves, move times and analysis) is kept with your account so you can see it again under Your sessions,
+            until you delete it there. Guests' solves are not kept.
+          </p>
+          <p>
+            If you ask for a coach summary, the numbers of that session (times, stages, cases and suggestions, never your name,
+            username or email) are sent to Google's Gemini AI to write it. The summary is then kept with the session. Google may use
+            what it receives to improve its services, so only these solve statistics are ever sent.
+          </p>
+
           <h2>The contact form</h2>
           <p>
             Your name, email address and message (and your username, if you're signed in) are kept so we can reply, until we
@@ -48,7 +60,8 @@ export function PrivacyPage() {
 
           <h2>Who helps us run {SITE.name}</h2>
           <p>
-            Render (hosting), Neon (our database, in Singapore), Clerk (accounts) and Google (only if you sign in with Google).
+            Render (hosting), Neon (our database, in Singapore), Clerk (accounts) and Google (if you sign in with Google, and for
+            analyzer coach summaries you ask for).
             They process data for us to run the site, under their own privacy policies.
           </p>
 

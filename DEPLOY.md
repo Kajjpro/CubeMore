@@ -164,6 +164,27 @@ It needs a **domain you own** (Clerk adds DNS records to it), and for Google, yo
 Google OAuth client (Clerk's guide walks through it). Then swap in the `pk_live_…` /
 `sk_live_…` keys. Check Clerk's pricing page for the free plan's limits.
 
+# The solve analyzer (/analyze)
+
+The analyzer works with no setup: anyone with a smart cube gets every solve split into cross,
+F2L pairs, OLL and PLL, with suggestions. Two optional extras:
+
+- **Keeping solves** ("Your sessions"): needs accounts (above) and a database
+  (`DATABASE_URL`, see "Adding a database"). Without a database, signed-in players' sessions
+  are kept only until the server restarts.
+- **Coach summary** (a few sentences written by an AI from the analysis): free, with a Google
+  AI Studio key.
+  1. Go to https://aistudio.google.com, sign in with a Google account, click **Get API key** →
+     **Create API key**. No card is needed for the free tier.
+  2. On Render → your service → **Environment**: add `GEMINI_API_KEY` = that key. Optionally
+     `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; check Google's model list if it's ever
+     retired). Save; the server restarts by itself (no rebuild needed).
+  3. The server log says `The analyzer's coach is on`. Players see **Write a summary** after a
+     session (signed in only). Each session's summary is written once and kept; each player
+     can ask for 15 a day and the whole site for 400 a day, to stay under the free quota.
+  The free tier lets Google use what it receives to improve its products, so only solve
+  numbers are sent (never names or emails); the privacy page says so.
+
 # Going live as CubeMore: checklist
 
 1. **Your address.** Set `VITE_SITE_URL` to the site's public address (no slash at the
@@ -181,7 +202,7 @@ Google OAuth client (Clerk's guide walks through it). Then swap in the `pk_live_
 5. **Installable**: phones can "Add to Home Screen"; it opens full screen with the CubeMore icon.
 6. **Search engines.** With `VITE_SITE_URL` set, every page is sent with its own title,
    description and canonical address (`server/src/seo.ts`, texts in `shared/seo.ts`), rooms and
-   `/admin` are marked noindex, and `/sitemap.xml` lists the home page, Daily, Contact and the 17
+   `/admin` are marked noindex, and `/sitemap.xml` lists the home page, the analyzer, Daily, Contact and the 17
    event pages (`/race/3x3`, `/race/pyraminx`...). Then:
    - **Google Search Console** (search.google.com/search-console): add your domain, verify it
      (a DNS record), then **Sitemaps** → submit `sitemap.xml`. Use **URL inspection** on a page to

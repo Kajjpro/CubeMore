@@ -20,6 +20,23 @@ export function SmartHome() {
         <h2 id="smart-home-title">Smart cube racing</h2>
         <p className="small muted">Every solve is replayed move by move on the server: only real smart cube solves count, and anyone can watch the best ones.</p>
       </div>
+      <a
+        className="panel analyzer-cta"
+        href="/analyze"
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+          event.preventDefault();
+          navigate("/analyze");
+        }}
+      >
+        <span className="analyzer-cta-text">
+          <strong>Analyze your solves</strong>
+          <span className="small muted">Cross, F2L, OLL and PLL times for every smart cube solve, the shortest cross, and what to practice next.</span>
+        </span>
+        <span className="analyzer-cta-go" aria-hidden>
+          Open
+        </span>
+      </a>
       <div className="smart-home-grid">
         <WeeklyCard />
         <VerifiedLeaderboard />

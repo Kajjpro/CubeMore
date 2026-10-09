@@ -213,7 +213,7 @@ export function IdleHint() {
 }
 
 /** The 15 s inspection counting down (written every frame, like the running time). */
-function InspectionDigits({ endsAt }: { endsAt: number }) {
+export function InspectionDigits({ endsAt }: { endsAt: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let frame = 0;
@@ -232,7 +232,7 @@ function InspectionDigits({ endsAt }: { endsAt: number }) {
 }
 
 /** While solving with a smart cube: moves so far and turns per second, small. */
-function LiveTurns({ view }: { view: FlowView }) {
+export function LiveTurns({ view }: { view: FlowView }) {
   const elapsed = view.startedAt === null ? 0 : performance.now() - view.startedAt;
   return (
     <p className="turns-line mono" aria-hidden>

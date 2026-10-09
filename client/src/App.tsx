@@ -12,6 +12,9 @@ import { usePath } from "./router";
 
 // Development only: every screen and state with mock data. `import.meta.env.DEV`
 // is false in production builds, so this page isn't even included there.
+// The analyzer brings the analysis engine and the 3D cube: loaded only when opened.
+const AnalyzerPage = lazy(() => import("./pages/AnalyzerPage").then((m) => ({ default: m.AnalyzerPage })));
+
 const DevStates = import.meta.env.DEV ? lazy(() => import("./dev/DevStates").then((m) => ({ default: m.DevStates }))) : null;
 
 export function App() {
@@ -31,6 +34,13 @@ export function App() {
   }
 
   if (path === "/daily" || path === "/daily/") return <DailyPage />;
+  if (path === "/analyze" || path === "/analyze/") {
+    return (
+      <Suspense fallback={<div className="home" />}>
+        <AnalyzerPage />
+      </Suspense>
+    );
+  }
   if (path === "/contact" || path === "/contact/") return <ContactPage />;
   if (path === "/privacy" || path === "/privacy/") return <PrivacyPage />;
 

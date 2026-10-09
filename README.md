@@ -114,6 +114,13 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
 
 ## What makes it different
 
+- **Solve analyzer** (`/analyze`): solve with a smart cube (single or ao5) and see every
+  stage: cross, the four F2L pairs, OLL and PLL, with time spent looking and turning, the
+  shortest cross for the scramble, the shortest way for each pair, the OLL/PLL case and its
+  algorithm, a real-speed replay, and the suggestions that would save the most time. Signed-in
+  players keep their sessions; an optional AI coach writes a short summary. See "The solve
+  analyzer" in DEPLOY.md.
+
 - **Race now**: one tap puts you in an open public room for your event (or opens one for
   the next racer). The race starts 3 seconds after someone joins.
 - **Live clocks**: while others solve, their running time ticks in the standings, so you
@@ -195,6 +202,17 @@ shared/          Used by BOTH server and client
   cubeEvents.ts    the 17 WCA events
   cube3.ts         a 3x3 model in GAN's facelets format (smart cube guide + verification)
   smartSolve.ts    verifying a smart cube solve (shared, so both sides use the same rules)
+  practice.ts      the analyzer's sessions and solves (types)
+  analysis/        THE SOLVE ANALYZER (pure; the browser runs it, the server checks it)
+    analyze.ts       a solve -> CFOP stages for any cross colour, cases, shortest cross/pairs
+    state.ts         reading a state the CFOP way (cross, slots, oriented) for each face
+    algs.ts          the 57 OLL and 21 PLL cases with their algorithms (SpeedSolving wiki)
+    cases.ts         recognising a case by trying the algorithms
+    search.ts        shortest cross (exact table) and F2L pair (IDA*) searches
+    notation.ts      full notation (wide, slices, rotations) on the facelet model
+    frame.ts         holding the cube: cross on the bottom, converting move names
+    benchmarks.ts    typical numbers for each level (approximate)
+    advice.ts        ranked suggestions; session.ts: the ao5 summary
 
 server/src/
   index.ts              starts the server; graceful shutdown
@@ -214,6 +232,7 @@ server/src/
   persistence/history.ts      what's worth keeping when a room changes (set finished...)
   persistence/restore.ts      reopening a saved room after a restart
   weekly/                     the weekly smart-cube race: schedule, results
+  practice/                   the analyzer: kept sessions (memory/Postgres), the AI coach, top solves
   scrambles.ts          random-state WCA scrambles with cubing.js
   rateLimit.ts          token bucket per connection
   **/*.test.ts          unit tests
@@ -227,6 +246,7 @@ client/src/
   timer/useSmartSolve.ts  a solve timed by a smart cube
   smartCube.ts          the smart cube connection (gan-web-bluetooth, cubing.js)
   smart/                the scramble guide, the solve flow (inspection...), exact timing
+  analyzer/             the analyzer in a web worker, and one practice session's flow
   btTimer.ts            the Bluetooth timer connection (GAN)
   shareCard.ts          draws the result card image
   time.ts               formatting and typing times
