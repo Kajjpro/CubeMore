@@ -19,6 +19,8 @@ import { renderPage, sitemap } from "./seo";
 import type { Coach } from "./practice/coach";
 import { PracticeService } from "./practice/service";
 import { MemoryPracticeStore, type PracticeStore } from "./practice/store";
+import { SiteStatsService, type Activity } from "./stats/stats";
+import { MemoryVisitStore, type VisitStore } from "./stats/visits";
 import { registerSocketHandlers, type IoServer, type SocketOptions } from "./socketHandlers";
 
 export interface StartOptions {
@@ -60,6 +62,10 @@ export interface StartOptions {
   practiceStore?: PracticeStore;
   /** The AI coach for analyzer summaries, or none. */
   coach?: Coach | null;
+  /** Where visits are counted. Default: in memory. */
+  visitStore?: VisitStore;
+  /** Races, solves and analyzer sessions from the database, for the stats. */
+  activity?: () => Promise<Activity | null>;
 }
 
 export interface RunningServer {
@@ -116,6 +122,11 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       options.coach ?? null,
       Boolean(options.practiceStore && !(options.practiceStore instanceof MemoryPracticeStore)),
     ),
+    stats: new SiteStatsService(options.visitStore ?? new MemoryVisitStore(), {
+      kept: Boolean(options.visitStore && !(options.visitStore instanceof MemoryVisitStore)),
+      accounts: options.accounts?.count ? () => options.accounts!.count!() : undefined,
+      activity: options.activity,
+    }),
   });
 
   /** A room's name and settings for its link preview ("Sunday practice: race on CubeMore"). Not while it's being set up. */

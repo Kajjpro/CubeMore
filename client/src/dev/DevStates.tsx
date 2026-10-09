@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
+import { MockStats } from "./mockStats";
 import { AnalyzerState } from "./AnalyzerStates";
 import type { PublicRoomInfo, RoomSnapshot } from "@cube-racing/shared";
 import { RoomView, type RoomActions, type RoomDemo } from "../components/RoomView";
@@ -220,6 +221,7 @@ export const STATE_NAMES = [
   "pin-prompt",
   "pin-wrong",
   "join-error",
+  "admin-stats",
   "analyzer-report",
   "analyzer-ao5",
   ...Object.keys(ROOM_STATES),
@@ -251,6 +253,7 @@ function renderState(name: string): ReactNode {
   if (name === "overlay-lobby") return <OverlayView room={mockRoom({ phase: "lobby" }).room} />;
   if (name === "share-card") return <CardPreview />;
   if (name.startsWith("analyzer-")) return <AnalyzerState name={name} />;
+  if (name === "admin-stats") return <MockStats />;
   if (name === "join-error") return <JoinError code="ZZZZZZ" error="Room not found. Check the code, or the room may have closed." />;
   const state = ROOM_STATES[name];
   if (!state) return <p>Unknown state {name}</p>;

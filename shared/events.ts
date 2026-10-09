@@ -55,6 +55,7 @@ import type {
 } from "./schemas";
 import type { ChatMessage, ContactMessage, DailyStatus, Scramble, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
 import type { PracticeSession, PracticeSessionInfo, PracticeSolve, TopSolve } from "./practice";
+import type { SiteStats } from "./stats";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -126,6 +127,8 @@ export const ClientEvents = {
   ADMIN_MESSAGES: "admin:messages",
   /** The site owner deletes a contact message. */
   ADMIN_DELETE_MESSAGE: "admin:delete_message",
+  /** The site owner: visitors, people online, races (see stats.ts). */
+  ADMIN_STATS: "admin:stats",
 
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
@@ -252,6 +255,7 @@ export interface ClientRequests {
   [ClientEvents.CONTACT_SEND]: { payload: ContactPayload; response: object };
   [ClientEvents.ADMIN_MESSAGES]: { payload: EmptyPayload; response: { messages: ContactMessage[] } };
   [ClientEvents.ADMIN_DELETE_MESSAGE]: { payload: ContactIdPayload; response: object };
+  [ClientEvents.ADMIN_STATS]: { payload: EmptyPayload; response: { stats: SiteStats } };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 

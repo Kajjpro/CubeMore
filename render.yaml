@@ -30,6 +30,12 @@ services:
       # The site's public address, e.g. https://cubemore.com (link previews, sitemap).
       - key: VITE_SITE_URL
         sync: false
+      # Optional: Cloudflare Web Analytics token (countries, devices, where visitors come from).
+      - key: VITE_CF_ANALYTICS_TOKEN
+        sync: false
+      # Optional: the analyzer's AI coach (Google AI Studio key).
+      - key: GEMINI_API_KEY
+        sync: false
       - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
       - key: CLERK_SECRET_KEY

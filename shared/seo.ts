@@ -102,7 +102,7 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
     return {
       path: clean,
       title: "Privacy | CubeMore",
-      description: "What CubeMore keeps about you and why: no ads, no tracking, only what the races need.",
+      description: "What CubeMore keeps about you and why: no ads, no tracking cookies, only what the site needs.",
     };
   }
   const race = clean.match(/^\/race\/([\w-]+)$/);

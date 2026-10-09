@@ -185,6 +185,26 @@ F2L pairs, OLL and PLL, with suggestions. Two optional extras:
   The free tier lets Google use what it receives to improve its products, so only solve
   numbers are sent (never names or emails); the privacy page says so.
 
+# How many people use CubeMore (analytics)
+
+**Your own stats, on `/admin`** (no setup beyond accounts): sign in with an account listed in
+`ADMIN_USER_IDS` and open `/admin`. You see the people online now, visitors today, the last 7
+and 30 days and all time, new visitors, a chart of the last 30 days, the number of accounts,
+races and analyzer sessions. A visitor is one browser, counted once a day (the server keeps
+only a scrambled id). With `DATABASE_URL` the counts are kept; without it they restart with
+the server.
+
+**Cloudflare Web Analytics** (free, no cookies, so no cookie banner): page views, countries,
+devices and where visitors came from (Google, Facebook, Reddit...).
+1. Sign up at https://dash.cloudflare.com (free). Your domain can stay on Vercel's DNS.
+2. **Analytics & Logs → Web Analytics → Add a site**: enter `cubemore.xyz`, and choose to add
+   the JavaScript snippet yourself (not "via Cloudflare DNS").
+3. The snippet contains `"token": "…"`. Copy only that token.
+4. On Render → **Environment**: add `VITE_CF_ANALYTICS_TOKEN` = the token, save, then
+   **Manual Deploy → Deploy latest commit** (it's built into the website).
+5. Visits show on the Cloudflare dashboard within a few minutes. Ad blockers hide some
+   visitors from Cloudflare, so its numbers are a bit lower than the ones on `/admin`.
+
 # Going live as CubeMore: checklist
 
 1. **Your address.** Set `VITE_SITE_URL` to the site's public address (no slash at the

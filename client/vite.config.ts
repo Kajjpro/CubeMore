@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => {
   // One .env file for everything, in the project root (only VITE_* values reach the website).
   const env = loadEnv(mode, "..", "VITE_");
   return {
-    plugins: [react(), siteAddress(env.VITE_SITE_URL ?? "")],
+    plugins: [react(), siteAddress(env.VITE_SITE_URL ?? ""), cloudflareAnalytics(env.VITE_CF_ANALYTICS_TOKEN ?? "")],
     envDir: "..",
     server: {
       port: 5173,
@@ -33,6 +33,25 @@ function siteAddress(raw: string): Plugin {
       const sitemapLine = siteUrl ? `\nSitemap: ${siteUrl}/sitemap.xml\n` : "";
       this.emitFile({ type: "asset", fileName: "robots.txt", source: `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /dev\n${sitemapLine}` });
       // The sitemap itself is made by the server (server/src/seo.ts), from the same page list as the site.
+    },
+  };
+}
+
+/**
+ * Cloudflare Web Analytics (free, no cookies): page views, countries, devices and
+ * where visitors come from, on the Cloudflare dashboard. On only in the built
+ * website, and only when VITE_CF_ANALYTICS_TOKEN is set (see DEPLOY.md).
+ */
+function cloudflareAnalytics(raw: string): Plugin {
+  const token = raw.trim();
+  return {
+    name: "cubemore-cloudflare-analytics",
+    apply: "build",
+    transformIndexHtml(html) {
+      if (!/^[\w-]+$/.test(token)) return html;
+      // spa: counts each page of the single-page site, not just the first.
+      const beacon = JSON.stringify({ token, spa: true });
+      return html.replace("</body>", `  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='${beacon}'></script>\n  </body>`);
     },
   };
 }

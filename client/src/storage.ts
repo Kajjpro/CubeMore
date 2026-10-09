@@ -86,3 +86,21 @@ function makeUuid(): string {
   const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+const VISITOR_KEY = "cube-racing:visitor";
+
+/**
+ * A random id for counting visitors (the owner's stats), kept in this browser.
+ * Separate from your player id, and the server only keeps a scrambled form of it.
+ */
+export function visitorId(): string {
+  try {
+    const saved = localStorage.getItem(VISITOR_KEY);
+    if (saved) return saved;
+    const id = makeUuid();
+    localStorage.setItem(VISITOR_KEY, id);
+    return id;
+  } catch {
+    return makeUuid(); // storage blocked: counted as a new browser each visit
+  }
+}

@@ -8,6 +8,7 @@ import {
   type ServerToClientEvents,
 } from "@cube-racing/shared";
 import { sessionToken } from "./auth";
+import { visitorId } from "./storage";
 
 /**
  * Where the game server is. Set VITE_SERVER_URL when the website and the server
@@ -23,11 +24,11 @@ let freshToken = false;
 
 const options = {
   // Signed in: every (re)connect carries the current session token, so the
-  // server knows who we are. Guests send nothing.
+  // server knows who we are. Every browser also sends its visitor id (for counting visitors).
   auth: (callback: (data: object) => void) => {
     void sessionToken(freshToken).then((token) => {
       freshToken = false;
-      callback(token ? { token } : {});
+      callback(token ? { token, visitor: visitorId() } : { visitor: visitorId() });
     });
   },
 };

@@ -21,6 +21,9 @@ ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 # The site's public address, for link previews, robots.txt and the sitemap.
 ARG VITE_SITE_URL=""
 ENV VITE_SITE_URL=$VITE_SITE_URL
+# Cloudflare Web Analytics (optional): its token is written into the website.
+ARG VITE_CF_ANALYTICS_TOKEN=""
+ENV VITE_CF_ANALYTICS_TOKEN=$VITE_CF_ANALYTICS_TOKEN
 RUN npm run build
 
 # ---- Stage 2: the small image that actually runs ----

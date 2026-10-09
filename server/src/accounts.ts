@@ -25,6 +25,8 @@ export interface Account {
 export interface AccountVerifier {
   /** The account a session token belongs to, or null if the token isn't valid. */
   verify(token: string): Promise<Account | null>;
+  /** How many accounts there are (for the owner's stats). */
+  count?(): Promise<number>;
 }
 
 /**
@@ -58,7 +60,14 @@ export function clerkAccounts(secretKey: string, authorizedParties: string[]): A
     }
   }
 
+  let counted: { n: number; at: number } | null = null;
   return {
+    async count() {
+      // Asked at most every 5 minutes (it's a call to Clerk).
+      if (counted && Date.now() - counted.at < USERNAME_TTL_MS) return counted.n;
+      counted = { n: await clerk.users.getCount(), at: Date.now() };
+      return counted.n;
+    },
     async verify(token) {
       let userId: string;
       try {

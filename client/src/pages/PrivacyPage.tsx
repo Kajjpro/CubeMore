@@ -5,7 +5,7 @@
 import { Link, SiteFooter, SiteHeader } from "../components/Site";
 import { SITE } from "../site";
 
-const UPDATED = "October 9, 2026";
+const UPDATED = "October 10, 2026";
 
 export function PrivacyPage() {
   return (
@@ -16,8 +16,8 @@ export function PrivacyPage() {
           <h1 id="privacy-title">Privacy</h1>
           <p className="small muted">Last updated: {UPDATED}</p>
           <p className="intro">
-            {SITE.name} is a place to race other cubers. We keep only what the races need, we show no ads, use no analytics or
-            tracking, and never sell your data.
+            {SITE.name} is a place to race other cubers. We keep only what the site needs, we show no ads, use no cookies to
+            follow you, and never sell your data.
           </p>
 
           <h2>Racing as a guest</h2>
@@ -52,6 +52,17 @@ export function PrivacyPage() {
             what it receives to improve its services, so only these solve statistics are ever sent.
           </p>
 
+          <h2>Counting visitors</h2>
+          <p>
+            To know how many people use {SITE.name}, your browser keeps a random visitor id (separate from everything else) and sends it
+            when it connects. The server keeps only a scrambled form of it and the days it was seen, so it can count visitors per day
+            without knowing who they are.
+          </p>
+          <p>
+            We also use Cloudflare Web Analytics, which counts page views, countries, devices and the site that sent you here. It uses
+            no cookies and doesn't follow you to other sites.
+          </p>
+
           <h2>The contact form</h2>
           <p>
             Your name, email address and message (and your username, if you're signed in) are kept so we can reply, until we
@@ -60,8 +71,8 @@ export function PrivacyPage() {
 
           <h2>Who helps us run {SITE.name}</h2>
           <p>
-            Render (hosting), Neon (our database, in Singapore), Clerk (accounts) and Google (if you sign in with Google, and for
-            analyzer coach summaries you ask for).
+            Render (hosting), Neon (our database, in Singapore), Clerk (accounts), Cloudflare (visitor statistics) and Google (if you sign
+            in with Google, and for analyzer coach summaries you ask for).
             They process data for us to run the site, under their own privacy policies.
           </p>
 

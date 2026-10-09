@@ -73,6 +73,7 @@ import type { ServerRoom } from "./rooms/types";
 import type { DailyService } from "./daily/daily";
 import { generateScramble, generateSetScrambles } from "./scrambles";
 import { IssuedScrambles, PracticeError, type PracticeService } from "./practice/service";
+import type { SiteStatsService } from "./stats/stats";
 
 /** What the server remembers about each connection (browser tab). */
 interface SocketData {
@@ -120,6 +121,8 @@ export interface SocketOptions {
   adminUserIds: string[];
   /** The analyzer: kept solves, the coach, the top solves. */
   practice: PracticeService;
+  /** Visitors and people online, for the owner's /admin page. */
+  stats: SiteStatsService;
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -192,6 +195,8 @@ export function registerSocketHandlers(
       account: socket.data?.account ?? null,
       practiceScrambles: new IssuedScrambles(),
     };
+    // Counted for the site stats: the browser's own random id (not the player id), scrambled.
+    options.stats.connected(socket.id, socket.handshake.auth?.visitor, socket.data.account !== null);
 
     /**
      * Who this connection plays as: a signed-in account (the same player on
@@ -368,6 +373,13 @@ export function registerSocketHandlers(
       if (!isAdmin()) return logic.fail(NOT_ADMIN);
       await options.contact.remove(input.id);
       return { ok: true };
+    });
+
+    on(socket, ClientEvents.ADMIN_STATS, emptySchema, async () => {
+      if (!isAdmin()) return logic.fail("Only the site owner can see the stats. Sign in with that account.");
+      const open = rooms.all().filter((live) => !live.deleted).map((live) => live.state);
+      const racing = open.filter((room) => room.match !== null && room.match.phase !== "match_over").length;
+      return { ok: true, stats: await options.stats.stats({ total: open.length, racing }) };
     });
 
     // ---- Smart cubes: the weekly race, the verified leaderboard, replays ----
@@ -581,7 +593,10 @@ export function registerSocketHandlers(
 
     on(socket, ClientEvents.PING, emptySchema, () => ({ ok: true, serverTime: Date.now() }));
 
-    socket.on("disconnect", () => handleDisconnect(socket));
+    socket.on("disconnect", () => {
+      options.stats.disconnected(socket.id);
+      handleDisconnect(socket);
+    });
   });
 
   // Safety net: once a second, every room checks whether something is due.

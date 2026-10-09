@@ -6,6 +6,8 @@ import { MemoryDailyStore, PostgresDailyStore, type DailyStore } from "./daily/s
 import { PostgresStore } from "./persistence/store";
 import { geminiCoach } from "./practice/coach";
 import { MemoryPracticeStore, PostgresPracticeStore, type PracticeStore } from "./practice/store";
+import { databaseActivity } from "./stats/stats";
+import { MemoryVisitStore, PostgresVisitStore, type VisitStore } from "./stats/visits";
 import { startServer } from "./server";
 
 // With a database (DATABASE_URL, e.g. Neon): rooms survive restarts, every match
@@ -14,6 +16,8 @@ let dailyStore: DailyStore = new MemoryDailyStore();
 let store: PostgresStore | null = null;
 let contactStore: ContactStore = new MemoryContactStore();
 let practiceStore: PracticeStore = new MemoryPracticeStore();
+let visitStore: VisitStore = new MemoryVisitStore();
+let activity: (() => Promise<Awaited<ReturnType<ReturnType<typeof databaseActivity>>>>) | undefined;
 if (config.databaseUrl) {
   const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
   // Hosted databases close idle connections now and then. Without this
@@ -23,6 +27,8 @@ if (config.databaseUrl) {
   store = await PostgresStore.open(pool);
   contactStore = await PostgresContactStore.open(pool);
   practiceStore = await PostgresPracticeStore.open(pool);
+  visitStore = await PostgresVisitStore.open(pool);
+  activity = databaseActivity(pool);
   console.log("Rooms, match history, daily results and analyzer solves are saved in Postgres");
 } else {
   console.log("Everything is kept in memory (set DATABASE_URL to keep rooms and history across restarts)");
@@ -47,6 +53,8 @@ const server = await startServer({
   contactStore,
   practiceStore,
   coach,
+  visitStore,
+  activity,
   adminUserIds: config.adminUserIds,
   siteUrl: config.siteUrl,
   weeklySchedule: config.weeklySchedule,
