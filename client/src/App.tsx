@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect } from "react";
-import { eventPageBySlug, pageMeta } from "@cube-racing/shared";
+import { eventPageBySlug, isKnownPage, pageMeta } from "@cube-racing/shared";
 import { AdminPage } from "./pages/AdminPage";
 import { ContactPage } from "./pages/ContactPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { DailyPage } from "./pages/DailyPage";
 import { EventPage } from "./pages/EventPage";
 import { HomePage } from "./pages/HomePage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { OverlayPage } from "./pages/OverlayPage";
 import { RoomPage } from "./pages/RoomPage";
 import { usePath } from "./router";
@@ -61,5 +62,5 @@ export function App() {
     // key={code}: switching to another room starts the room page fresh.
     return <RoomPage key={code} code={code} />;
   }
-  return <HomePage />;
+  return isKnownPage(path) ? <HomePage /> : <NotFoundPage />;
 }

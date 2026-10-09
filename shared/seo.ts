@@ -119,5 +119,16 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
       description: room ? `${room.summary}. Join the race on CubeMore: the same scramble for everyone, live.` : HOME_META.description,
     };
   }
-  return { path: clean, noindex: true, title: SITE_NAME, description: HOME_META.description };
+  const title = isKnownPage(clean) ? SITE_NAME : `Page not found | ${SITE_NAME}`;
+  return { path: clean, noindex: true, title, description: HOME_META.description };
 }
+
+/** Pages that exist (everything else is a 404: still the app, but marked so search engines drop it). */
+export function isKnownPage(path: string): boolean {
+  const clean = path.replace(/\/+$/, "") || "/";
+  if (["/", "/analyze", "/daily", "/contact", "/privacy", "/admin", "/dev/states"].includes(clean)) return true;
+  if (/^\/room\/[A-Za-z0-9]+(\/overlay)?$/.test(clean)) return true;
+  const race = clean.match(/^\/race\/([\w-]+)$/);
+  return race ? eventPageBySlug(race[1]) !== undefined : false;
+}
+

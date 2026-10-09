@@ -15,7 +15,7 @@ import type { WeeklySchedule } from "./weekly/schedule";
 import { generateScramble } from "./scrambles";
 import type { AccountVerifier } from "./accounts";
 import { MemoryContactStore, type ContactStore } from "./contact";
-import { renderPage, sitemap } from "./seo";
+import { canonicalRedirect, isKnownPage, renderPage, sitemap } from "./seo";
 import type { Coach } from "./practice/coach";
 import { PracticeService } from "./practice/service";
 import { MemoryPracticeStore, type PracticeStore } from "./practice/store";
@@ -157,6 +157,14 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     // The built JS and CSS: their names contain a hash, so browsers may keep them for good.
     app.use("/assets", express.static(path.join(options.clientDist, "assets"), { maxAge: "1y", immutable: true }));
     const siteUrl = (options.siteUrl ?? "").trim().replace(/\/$/, "");
+    // One address per page: other hosts, trailing slashes and capitals are sent to it (301).
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+      const target = canonicalRedirect(req.headers.host, req.path, query, siteUrl);
+      if (target) return res.redirect(301, target);
+      next();
+    });
     // Every page search engines should know about (made here, so it always matches the pages).
     app.get("/sitemap.xml", (_req, res) => {
       if (!siteUrl) return void res.status(404).send("Set VITE_SITE_URL to get a sitemap.");
@@ -171,6 +179,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     const indexHtml = readFileSync(path.join(options.clientDist, "index.html"), "utf8");
     app.get(/.*/, (req, res) => {
       res.setHeader("Cache-Control", "no-cache");
+      // Addresses that aren't pages answer 404 (the app still shows, with a "not found" page).
+      res.status(isKnownPage(req.path) ? 200 : 404);
       res.type("html").send(renderPage(indexHtml, req.path, siteUrl, roomPreview(req.path)));
     });
   }

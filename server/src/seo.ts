@@ -9,7 +9,7 @@
  * structured data that tells search engines what CubeMore is.
  */
 
-import { indexablePaths, pageMeta, eventPageBySlug, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
+import { indexablePaths, pageMeta, eventPageBySlug, isKnownPage, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
 
 /** For HTML attributes and text: & < > " ' as entities. */
 function escape(text: string): string {
@@ -98,4 +98,27 @@ export function renderPage(indexHtml: string, path: string, siteUrl: string, roo
 export function sitemap(siteUrl: string): string {
   const urls = indexablePaths().map((path) => `  <url><loc>${escape(siteUrl + path)}</loc></url>`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
+}
+
+/**
+ * Where a request should be sent instead, or null when it's fine: one address
+ * per page, so search engines don't see the same page several times.
+ *   - another host (e.g. the onrender.com address) -> the site's own address
+ *   - a slash at the end -> without it ("/race/3x3/" -> "/race/3x3")
+ *   - capitals in an event page ("/RACE/3x3" -> "/race/3x3"); room codes keep theirs
+ */
+export { isKnownPage };
+
+export function canonicalRedirect(host: string | undefined, path: string, query: string, siteUrl: string): string | null {
+  let clean = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  if (/^\/race\//i.test(clean)) clean = clean.toLowerCase();
+  let siteHost = "";
+  try {
+    siteHost = siteUrl ? new URL(siteUrl).host : "";
+  } catch {
+    siteHost = "";
+  }
+  const otherHost = Boolean(siteHost && host && host !== siteHost && !host.startsWith("localhost") && !host.startsWith("127.0.0.1"));
+  if (!otherHost && clean === path) return null;
+  return `${otherHost ? siteUrl : ""}${clean}${query}`;
 }

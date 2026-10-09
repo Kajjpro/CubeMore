@@ -1,7 +1,11 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { EVENT_PAGES, socialLinks } from "@cube-racing/shared";
-import { renderPage, sitemap } from "./seo";
+import { canonicalRedirect, isKnownPage, renderPage, sitemap } from "./seo";
+import { startServer } from "./server";
 
 // The real index.html, with the site address filled in like a build does.
 const SITE = "https://cubemore.example";
@@ -60,5 +64,58 @@ describe("pages for search engines and link previews", () => {
     expect(xml).toContain(`<loc>${SITE}/</loc>`);
     expect(xml).toContain(`<loc>${SITE}/daily</loc>`);
     for (const page of EVENT_PAGES) expect(xml).toContain(`<loc>${SITE}/race/${page.slug}</loc>`);
+  });
+});
+
+describe("one address per page", () => {
+  it("knows which addresses are pages", () => {
+    for (const path of ["/", "/analyze", "/race/3x3", "/room/ABC234", "/room/ABC234/overlay", "/daily"]) expect(isKnownPage(path), path).toBe(true);
+    for (const path of ["/nope", "/race/no-such-event", "/room/", "/analyze/x"]) expect(isKnownPage(path), path).toBe(false);
+  });
+
+  it("sends other hosts, trailing slashes and capital letters to the one address", () => {
+    expect(canonicalRedirect("cubemore.example", "/race/3x3", "", SITE)).toBeNull();
+    expect(canonicalRedirect("cubemore.example", "/", "", SITE)).toBeNull();
+    expect(canonicalRedirect("cubits-orcn.onrender.com", "/race/3x3", "?x=1", SITE)).toBe(`${SITE}/race/3x3?x=1`);
+    expect(canonicalRedirect("cubemore.example", "/race/3x3/", "", SITE)).toBe("/race/3x3");
+    expect(canonicalRedirect("cubemore.example", "/RACE/3X3", "", SITE)).toBe("/race/3x3");
+    // Room codes keep their capitals; development addresses aren't sent anywhere.
+    expect(canonicalRedirect("cubemore.example", "/room/ABC234", "", SITE)).toBeNull();
+    expect(canonicalRedirect("localhost:3001", "/race/3x3", "", SITE)).toBeNull();
+    expect(canonicalRedirect("anything", "/race/3x3", "", "")).toBeNull();
+  });
+
+  it("over HTTP: unknown pages answer 404, other hosts and variants get a 301", async () => {
+    const dist = mkdtempSync(path.join(tmpdir(), "cubemore-dist-"));
+    writeFileSync(path.join(dist, "index.html"), INDEX);
+    const server = await startServer({ port: 0, timing: { solveReviewMs: 0, setResultMs: 100, submitGraceMs: 0 }, logs: false, clientDist: dist, siteUrl: SITE });
+    try {
+      // node:http, because fetch can't set the Host header.
+      const get = (p: string, host?: string) =>
+        new Promise<{ status: number; headers: { get(name: string): string | null }; text(): Promise<string> }>((resolve, reject) => {
+          const req = request({ port: server.port, path: p, headers: host ? { host } : {} }, (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () =>
+              resolve({ status: res.statusCode ?? 0, headers: { get: (name) => (res.headers[name] as string | undefined) ?? null }, text: async () => body }),
+            );
+          });
+          req.on("error", reject);
+          req.end();
+        });
+      expect((await get("/race/3x3")).status).toBe(200);
+      expect((await get("/nope")).status).toBe(404);
+      expect(await (await get("/nope")).text()).toContain("noindex");
+      const slash = await get("/race/3x3/");
+      expect(slash.status).toBe(301);
+      expect(slash.headers.get("location")).toBe("/race/3x3");
+      const other = await get("/analyze", "cubits-orcn.onrender.com");
+      expect(other.status).toBe(301);
+      expect(other.headers.get("location")).toBe(`${SITE}/analyze`);
+      // The uptime check works on any host.
+      expect((await get("/health", "cubits-orcn.onrender.com")).status).toBe(200);
+    } finally {
+      await server.close();
+    }
   });
 });
