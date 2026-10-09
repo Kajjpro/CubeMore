@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
 import { useNewScrambleAlert } from "../alerts";
+import { solveKey, useOutbox } from "../outbox";
 import { useLayout } from "../layout";
 import { canPickEvent, eventOf, scrambleFor } from "../mixed";
 import { setPref, usePrefs, type InputMode, type RunningDisplay } from "../prefs";
@@ -153,6 +154,14 @@ export function RoomView(props: RoomViewProps) {
   const match = room.match;
   const isHost = room.hostId === youId;
   const scramble = scrambleFor(room, youId);
+  // Your time for this solve is in (or stopped and on its way): the scramble you
+  // just solved is hidden while you wait for the others. The next one shows when it starts.
+  const outbox = useOutbox();
+  const doneThisSolve =
+    !!match &&
+    !!youId &&
+    (match.results[youId]?.[match.solveIndex] != null ||
+      !!(demo ? demo.timer?.pending : outbox.find((e) => solveKey(e) === solveKey({ roomCode: room.code, matchId: match.matchId, setIndex: match.setIndex, solveIndex: match.solveIndex }))));
   const me = room.players.find((p) => p.id === youId) ?? null;
   // Open and waiting alone (or still finishing a warm-up solve when someone
   // joins): the warm-up timer. Then the lobby and its countdown take over.
@@ -284,7 +293,7 @@ export function RoomView(props: RoomViewProps) {
                 </button>
               </div>
             )}
-            {scramble && (match.phase === "solving" || match.phase === "solve_review") && (
+            {scramble && match.phase === "solving" && !doneThisSolve && (
               <ScrambleBlock
                 scramble={scramble}
                 preview={prefs.preview}
