@@ -6,7 +6,10 @@
  *            through gan-web-bluetooth. The cube sends each move the moment it
  *            happens, stamped with its OWN clock, recovers moves Bluetooth lost,
  *            and reports its full state when asked: the most exact timing.
- *   "other"  GoCube, Giiker, QiYi, the first GAN 356i... through cubing.js
+ *   "qiyi"   QiYi cubes (QY-QYSC, X-Man Tornado V4 AI...) with our own driver
+ *            (smart/qiyi.ts): the cube's own clock, lost turns recovered, its
+ *            state with every turn.
+ *   "other"  GoCube, Giiker, the first GAN 356i... through cubing.js
  *            (moves are timed when they arrive).
  *   "keyboard"  development only (?simcube=1): turn the cube with keys.
  *
@@ -24,9 +27,10 @@ import {
   parseMoves,
   type Facelets,
 } from "@cube-racing/shared/cube3";
+import { connectQiyi } from "./smart/qiyi";
 import { ClockFit, type TimedMove } from "./smart/timing";
 
-export type CubeKind = "gan" | "other" | "keyboard";
+export type CubeKind = "gan" | "qiyi" | "other" | "keyboard";
 
 export interface SmartCubeInfo {
   status: "off" | "connecting" | "on";
@@ -34,8 +38,9 @@ export interface SmartCubeInfo {
   name: string | null;
   error: string | null;
   battery: number | null;
-  /** Waiting for the user to type the cube's MAC address (some GAN cubes need it). */
+  /** Waiting for the user to type the cube's MAC address (some GAN and QiYi cubes need it). */
   askingMac: string | null;
+  askingMacBrand?: "gan" | "qiyi";
 }
 
 type MoveListener = (move: TimedMove, state: Facelets) => void;
@@ -56,6 +61,17 @@ let answerMac: ((mac: string | null) => void) | null = null;
 function setInfo(next: Partial<SmartCubeInfo>): void {
   info = { ...info, ...next };
   infoListeners.forEach((listener) => listener());
+}
+
+/**
+ * Downloads the cube libraries ahead of time (called when the connect buttons
+ * show). Browsers only open the Bluetooth picker shortly after a tap (about 5 s
+ * in Chrome); downloading a library first on a slow phone could take longer, and
+ * the picker would then be refused.
+ */
+export function preloadCubeDrivers(): void {
+  void import("gan-web-bluetooth").catch(() => {});
+  void import("cubing/bluetooth").catch(() => {});
 }
 
 /** True if this browser can talk to Bluetooth cubes (Chrome / Edge on desktop and Android). */
@@ -132,17 +148,31 @@ export async function connectSmartCube(kind: CubeKind): Promise<void> {
   clock.reset();
   try {
     if (kind === "gan") await connectGan();
+    else if (kind === "qiyi") await connectQiyiCube();
     else await connectWithCubing(kind);
     setInfo({ status: "on" });
   } catch (error) {
     disconnectCube?.();
     disconnectCube = null;
     state = null;
-    // Closing the browser's device picker lands here too.
-    const message = error instanceof Error ? error.message : "";
-    const cancelled = /cancel|chosen/i.test(message);
-    setInfo({ status: "off", kind: null, askingMac: null, error: cancelled ? null : message || "Couldn't connect to the cube. Is it on and close by?" });
+    setInfo({ status: "off", kind: null, askingMac: null, error: connectErrorMessage(error) });
   }
+}
+
+/** What went wrong while connecting, in words a cuber can act on (null: they closed the picker). */
+function connectErrorMessage(error: unknown): string | null {
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (/cancel|chosen/i.test(message)) return null;
+  if (name === "NotFoundError" && /adapter|bluetooth/i.test(message)) return "Bluetooth is off. Turn it on and try again.";
+  if (name === "NotFoundError") return null; // the picker was closed
+  if (name === "SecurityError" || name === "NotAllowedError") {
+    return "The browser wasn't allowed to use Bluetooth. Allow it (and \"Nearby devices\" on Android), then try again.";
+  }
+  if (name === "NetworkError" || /gatt|disconnected/i.test(message)) {
+    return "The cube disconnected while connecting. Turn a face to wake it up, close the cube's own app if it's open, and try again.";
+  }
+  return message || "Couldn't connect to the cube. Is it on and close by?";
 }
 
 export function disconnectSmartCube(): void {
@@ -192,7 +222,7 @@ function saveMac(deviceName: string, mac: string | null): void {
 
 /** Shows the MAC address form in the menu and waits for the answer. */
 function askMac(deviceName: string): Promise<string | null> {
-  setInfo({ askingMac: deviceName });
+  setInfo({ askingMac: deviceName, askingMacBrand: /^(QY|XMD)/i.test(deviceName) ? "qiyi" : "gan" });
   return new Promise((resolve) => {
     answerMac = (mac) => {
       answerMac = null;
@@ -266,6 +296,43 @@ async function connectGan(): Promise<void> {
   saveMac(connection.deviceName, connection.deviceMAC);
   void connection.sendCubeCommand({ type: "REQUEST_BATTERY" }).catch(() => {});
   setInfo({ name: connection.deviceName });
+}
+
+// ---------------------------------------------------------------------------
+// QiYi cubes (smart/qiyi.ts)
+
+async function connectQiyiCube(): Promise<void> {
+  const connection = await connectQiyi(
+    {
+      move(move, cubeAt, recovered) {
+        emitMove({ move, hostAt: recovered ? null : performance.now(), cubeAt });
+      },
+      state(facelets) {
+        // The first state (the cube's hello) is where we start; later ones fix lost turns.
+        if (state === null) state = facelets;
+        else if (facelets !== state) emitState(facelets);
+      },
+      battery(level) {
+        if (info.battery !== level) setInfo({ battery: level });
+      },
+      disconnect() {
+        disconnectSmartCube();
+        setInfo({ error: "The cube disconnected." });
+      },
+    },
+    async (name, guess) => {
+      const saved = savedMacs()[name];
+      if (saved && saved !== guess) return saved;
+      const typed = await askMac(name);
+      if (!typed) return null;
+      if (!MAC_PATTERN.test(typed)) throw new Error("That MAC address doesn't look right. It's like AB:12:CD:34:EF:56.");
+      return typed;
+    },
+  );
+  disconnectCube = () => connection.disconnect();
+  if (state === null) state = SOLVED_FACELETS;
+  saveMac(connection.name, connection.mac);
+  setInfo({ name: connection.name });
 }
 
 // ---------------------------------------------------------------------------

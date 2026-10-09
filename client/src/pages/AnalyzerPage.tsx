@@ -24,7 +24,7 @@ import { InspectionDigits, LiveTurns, RunningDigits } from "../components/Timer"
 import { CoachCard, SessionReport, SolveReport } from "../components/analyzer/Report";
 import { Segmented } from "../components/ui";
 import { setPref, usePrefs } from "../prefs";
-import { bluetoothSupported, keyboardCubeAllowed, useSmartCube } from "../smartCube";
+import { keyboardCubeAllowed, useSmartCube } from "../smartCube";
 import { request, socket } from "../socket";
 import { useSmartSolve } from "../timer/useSmartSolve";
 
@@ -146,11 +146,7 @@ function Practice({ signedIn, loaded, abilities }: { signedIn: boolean; loaded: 
       <section className="panel practice-setup" aria-label="Your cube and the session">
         <div className="practice-cube">
           <h2 className="small-title">Your smart cube</h2>
-          {!bluetoothSupported && !keyboardCubeAllowed ? (
-            <p className="small muted">Smart cubes need Chrome or Edge with Bluetooth, on a computer or an Android phone. iPhones and Safari can't connect.</p>
-          ) : (
-            <SmartCubeControls />
-          )}
+          <SmartCubeControls />
         </div>
         <div className="practice-mode">
           <Segmented<PracticeKind>

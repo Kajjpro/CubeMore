@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   answerMacAddress,
   bluetoothSupported,
@@ -6,8 +6,16 @@ import {
   disconnectSmartCube,
   keyboardCubeAllowed,
   markSmartCubeSolved,
+  preloadCubeDrivers,
   useSmartCube,
 } from "../smartCube";
+
+/** iPhone or iPad (iPads can say they're a Mac): their browsers have no Bluetooth for websites. */
+const isAppleMobile =
+  typeof navigator !== "undefined" && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+const isAndroid = typeof navigator !== "undefined" && /Android/.test(navigator.userAgent);
+
+const BLUEFY_URL = "https://apps.apple.com/app/id1492822055";
 
 /**
  * Connect a smart cube, and what to do once it's connected. Used in the menu,
@@ -15,16 +23,30 @@ import {
  */
 export function SmartCubeControls() {
   const cube = useSmartCube();
+  // Ready before the tap: the browser opens its Bluetooth list only right after one.
+  useEffect(() => {
+    if (bluetoothSupported) preloadCubeDrivers();
+  }, []);
   if (!bluetoothSupported && !keyboardCubeAllowed) {
-    return <p className="tiny muted">Smart cubes need Chrome or Edge with Bluetooth (not on iPhone).</p>;
+    return isAppleMobile ? (
+      <p className="tiny muted">
+        iPhone and iPad browsers can't use Bluetooth. Open this page in the free{" "}
+        <a href={BLUEFY_URL} target="_blank" rel="noopener noreferrer">
+          Bluefy browser
+        </a>{" "}
+        to connect your cube.
+      </p>
+    ) : (
+      <p className="tiny muted">This browser can't use Bluetooth. Use Chrome or Edge on a computer or an Android phone.</p>
+    );
   }
-  if (cube.askingMac) return <MacForm deviceName={cube.askingMac} />;
+  if (cube.askingMac) return <MacForm deviceName={cube.askingMac} brand={cube.askingMacBrand ?? "gan"} />;
 
   if (cube.status === "on") {
     return (
       <>
         <p className="tiny muted">
-          {cube.name} connected{cube.battery !== null ? ` · battery ${cube.battery}%` : ""}. On 3x3, follow the
+          {cube.name} connected{cube.battery !== null ? `, battery ${cube.battery}%` : ""}. On 3x3, follow the
           scramble on your cube: 15 s of inspection start when it matches, your first turn starts the timer and
           solving stops it.
         </p>
@@ -41,18 +63,22 @@ export function SmartCubeControls() {
   }
 
   const connecting = cube.status === "connecting";
+  const label = (kind: "gan" | "qiyi" | "other", text: string) => (connecting && cube.kind === kind ? "Connecting…" : text);
   return (
     <>
-      <p className="tiny muted">Solve your cube before connecting.</p>
+      <p className="tiny muted">Solve your cube, then pick its brand.</p>
       {cube.error && <p className="error-text">{cube.error}</p>}
-      <div className="row">
+      <div className="row cube-brands">
         {bluetoothSupported && (
           <>
             <button type="button" className="grow" disabled={connecting} onClick={() => void connectSmartCube("gan")}>
-              {connecting && cube.kind === "gan" ? "Connecting…" : "GAN cube"}
+              {label("gan", "GAN")}
+            </button>
+            <button type="button" className="grow" disabled={connecting} onClick={() => void connectSmartCube("qiyi")}>
+              {label("qiyi", "QiYi")}
             </button>
             <button type="button" className="grow" disabled={connecting} onClick={() => void connectSmartCube("other")}>
-              {connecting && cube.kind === "other" ? "Connecting…" : "Other smart cube"}
+              {label("other", "GoCube, Giiker")}
             </button>
           </>
         )}
@@ -62,13 +88,17 @@ export function SmartCubeControls() {
           </button>
         )}
       </div>
-      <p className="tiny muted">GAN: 356 i3, i Carry 2, 12 ui, 14 ui… Other: GoCube, Giiker, QiYi, the first GAN 356i.</p>
+      {isAndroid && (
+        <p className="tiny muted">
+          Cube not in the list? Turn on Bluetooth and Location, allow Chrome to find nearby devices, and close the cube's own app.
+        </p>
+      )}
     </>
   );
 }
 
-/** Some GAN cubes encrypt their data with their MAC address, and Chrome can't always read it. */
-function MacForm({ deviceName }: { deviceName: string }) {
+/** Some GAN and QiYi cubes need their MAC address, and phones can't always read it. */
+function MacForm({ deviceName, brand }: { deviceName: string; brand: "gan" | "qiyi" }) {
   const [mac, setMac] = useState("");
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -88,8 +118,9 @@ function MacForm({ deviceName }: { deviceName: string }) {
         />
       </label>
       <p className="tiny muted">
-        Find it in the GAN app (cube settings), or open chrome://bluetooth-internals while the cube is on.
-        It's asked once, then remembered.
+        {brand === "gan" ? "Find it in the GAN app (cube settings). " : "Find it in the QiYi app (cube info). "}
+        Or let Chrome read it: open chrome://flags, turn on "Experimental Web Platform features", restart Chrome and connect
+        again. It's asked once, then remembered.
       </p>
       <div className="row">
         <button type="submit" className="grow primary" disabled={mac.trim().length < 17}>
