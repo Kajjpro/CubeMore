@@ -7002,3 +7002,47 @@ html.overlay-mode body {
 .analyzer-faq {
   margin-top: 12px;
 }
+
+/* ---- Your previous scramble (one), on request ---- */
+
+.previous-scramble {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.previous-scramble-toggle {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+
+.previous-scramble-toggle:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+.previous-scramble-action {
+  color: var(--accent);
+}
+
+.previous-scramble p {
+  padding: 0 12px 12px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* Out of the way while you hold or solve. */
+.room[data-focus="true"] .previous-scramble {
+  display: none;
+}

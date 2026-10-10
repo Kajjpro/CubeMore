@@ -162,6 +162,8 @@ export function RoomView(props: RoomViewProps) {
     !!youId &&
     (match.results[youId]?.[match.solveIndex] != null ||
       !!(demo ? demo.timer?.pending : outbox.find((e) => solveKey(e) === solveKey({ roomCode: room.code, matchId: match.matchId, setIndex: match.setIndex, solveIndex: match.solveIndex }))));
+  // The scramble of your last finished solve (only that one), to look at again on request.
+  const previous = usePreviousScramble(match ? `${match.matchId}/${match.setIndex}/${match.solveIndex}` : null, scramble?.text ?? null, doneThisSolve);
   const me = room.players.find((p) => p.id === youId) ?? null;
   // Open and waiting alone (or still finishing a warm-up solve when someone
   // joins): the warm-up timer. Then the lobby and its countdown take over.
@@ -301,6 +303,7 @@ export function RoomView(props: RoomViewProps) {
                 round={<RoundPips match={match} />}
               />
             )}
+            {previous && (match.phase === "solving" || match.phase === "solve_review") && <PreviousScramble text={previous} />}
             {match.phase === "solving" && match.solveDeadline !== null && room.settings.solveTimeLimit !== "off" && (
               <div className="limit-bar">
                 <span>{room.settings.solveTimeLimit} min limit</span>
@@ -496,6 +499,32 @@ function TimerTools(props: { inputMode: InputMode; smartOnly: boolean; awayCosts
           Watch
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The scramble of your last finished solve: remembered here when your time is
+ * in (the server only ever sends the current scramble). Only the last one.
+ */
+function usePreviousScramble(solve: string | null, text: string | null, done: boolean): string | null {
+  const [previous, setPrevious] = useState<{ solve: string; text: string } | null>(null);
+  useEffect(() => {
+    if (done && solve && text && previous?.solve !== solve) setPrevious({ solve, text });
+  }, [done, solve, text, previous]);
+  return previous?.text ?? null;
+}
+
+/** "Previous scramble", tap to see it. */
+function PreviousScramble({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="previous-scramble">
+      <button type="button" className="previous-scramble-toggle" aria-expanded={open} onClick={() => setOpen(!open)} data-dense>
+        <span>Previous scramble</span>
+        <span className="previous-scramble-action">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && <p className="mono">{text}</p>}
     </div>
   );
 }
