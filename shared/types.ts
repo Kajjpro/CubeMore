@@ -201,7 +201,7 @@ export interface RoomSnapshot {
   players: PlayerSnapshot[];
   /** null = the room is in the lobby. */
   match: MatchSnapshot | null;
-  /** Lobby only: when the race starts by itself (someone joined), or null. */
+  /** Lobby only: when the race starts by itself (only the weekly race does), or null. */
   autoStartAt: number | null;
   /** Best of can be changed until the first race starts, then it's fixed. */
   bestOfLocked: boolean;

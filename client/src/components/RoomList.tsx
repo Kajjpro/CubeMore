@@ -41,7 +41,7 @@ type RoomTab = "public" | "private";
 const EMPTY: Record<RoomTab, { title: string; hint: string }> = {
   public: {
     title: "No public rooms right now.",
-    hint: "Create one: it shows up here for everyone, and the race starts as soon as someone joins.",
+    hint: "Create one: it shows up here for everyone, and you start the race when people have joined.",
   },
   private: {
     title: "No private rooms right now.",

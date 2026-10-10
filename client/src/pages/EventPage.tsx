@@ -59,7 +59,7 @@ export function EventPage({ page, demoRooms }: { page: EventPageInfo; demoRooms?
               onJoin={openRoom}
               empty={{
                 title: `No ${page.short} rooms right now.`,
-                hint: "Create one: it's listed for everyone, and the race starts as soon as someone joins.",
+                hint: "Create one: it's listed for everyone, and you start the race when people have joined.",
               }}
             />
           </div>

@@ -1,7 +1,7 @@
 // Before the first race in a new room:
 //  1. RoomSetup: the host sets the room up. Nobody else can see or join it yet.
 //  2. WarmupRoom: the room is open; the host waits alone on the timer with
-//     warm-up solves (they don't count). The race starts when someone joins.
+//     warm-up solves (they don't count). The host starts the race when people have joined.
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ClientEvents, type CubeEventId, type PlayerSnapshot, type RoomSettings, type RoomSnapshot, type Scramble } from "@cube-racing/shared";
@@ -59,7 +59,7 @@ function sendTimerStatus(status: "solving" | "idle"): void {
 /**
  * Step 2: open, waiting alone. The invite (link, and code + PIN for a private
  * room) on one side; a warm-up timer with real scrambles of your event on the
- * other. If someone joins mid-solve, the race waits until you stop the timer.
+ * other. If someone joins mid-solve, the lobby shows once you stop the timer.
  */
 export function WarmupRoom(props: {
   room: RoomSnapshot;
@@ -98,7 +98,7 @@ export function WarmupRoom(props: {
           <JoinedNote names={others} />
         ) : (
           <p className="waiting-line">
-            Waiting for cubers to join. {isPrivate ? "Send them the invite link." : "Your room is on the home page, or send the link."} The race starts as soon as someone joins.
+            Waiting for cubers to join. {isPrivate ? "Send them the invite link." : "Your room is on the home page, or send the link."} You start the race when they're here.
           </p>
         )}
 
@@ -173,12 +173,12 @@ export function WarmupRoom(props: {
   );
 }
 
-/** "Anu joined. The race starts when you stop the timer." */
+/** "Anu joined. Stop your timer, then start the race." */
 function JoinedNote({ names }: { names: PlayerSnapshot[] }) {
   const who = names.length === 1 ? `${names[0].nickname} joined` : `${names.length} cubers joined`;
   return (
     <p className="waiting-line joined-line" role="status">
-      <b>{who}.</b> The race starts when you stop the timer.
+      <b>{who}.</b> Stop your timer, then start the race.
     </p>
   );
 }

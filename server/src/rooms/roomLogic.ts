@@ -183,11 +183,8 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
   const picking = room.settings.mixedEvents && !room.match && !room.scheduled;
   const joined = { ...newPlayer(player, now), pickingEvent: picking };
   const players = [...room.players, joined];
-  // Someone joins the host who was waiting alone in the lobby: the countdown to
-  // the race starts. (A lobby where people are already together, e.g. after
-  // "Back to lobby", waits for the host to press Start.)
-  const waitingAlone = racing(room.players).length === 1 && !joined.watching;
-  const countDown = !room.match && waitingAlone && room.autoStartAt === null && !room.scheduled;
+  // Nobody joining starts the race: the host presses Start when everyone is there.
+  // (Only the weekly race starts by itself, at its time.)
   return {
     ok: true,
     room: changeRoom(room, {
@@ -196,7 +193,7 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
       // The weekly race never has a host.
       hostId: room.scheduled ? null : (room.hostId ?? joined.publicId),
       emptySince: null,
-      autoStartAt: countDown ? now + AUTO_START_DELAY_MS : room.autoStartAt,
+      autoStartAt: room.autoStartAt,
     }),
   };
 }

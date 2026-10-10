@@ -100,10 +100,9 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   its open rooms and a Create button, made to be found by searches like "pyraminx race online".
 - **Creating a room**: a private setup first (event, format, Best of, public or private, name):
   nobody can see or join it yet. **Open room**, then wait on the timer with warm-up solves (they
-  don't count). When someone joins, the race starts 3 seconds later, but not in the middle of
-  your warm-up solve. Once people are together in the lobby (after a race), the host presses Start.
-- **Mixed rooms**: someone who joins picks their event first ("Ready with Pyra"); the race waits
-  for them, up to 30 seconds.
+  don't count). People join; nothing starts by itself: the host presses Start when everyone
+  is there. (Only the weekly race starts on its own, at its time.)
+- **Mixed rooms**: someone who joins picks their event first ("Ready with Pyra").
 - **Under the timer**: `Timer | Type in` and `Watch`, always in sight (also in the Menu).
 - **Step away**: Menu → "Step away, just watch" (or "Just watch" on your card in the lobby). You stay in
   the room and the chat, but nobody waits for you; mid-set, the rest of your set counts as DNF and your
@@ -122,7 +121,7 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   analyzer" in DEPLOY.md.
 
 - **Race now**: one tap puts you in an open public room for your event (or opens one for
-  the next racer). The race starts 3 seconds after someone joins.
+  the next racer). The room's host starts the race when people have joined.
 - **Live clocks**: while others solve, their running time ticks in the standings, so you
   know whether you're ahead before anyone stops.
 - **Finish line**: after each solve, a short replay: every bar runs at its player's speed

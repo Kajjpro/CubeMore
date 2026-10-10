@@ -38,7 +38,7 @@ const canShare = typeof navigator !== "undefined" && typeof navigator.share === 
 /**
  * Before a race. Alone, "Copy link" comes first (and for a private room, its
  * code and PIN; a public room is on the home page, so it needs no code). There's no
- * need to press Start: the race starts by itself 3 seconds after someone joins.
+ * The host presses Start when everyone is there: nothing starts by itself.
  */
 export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, chat }: Props) {
   const mixed = room.settings.mixedEvents;
@@ -271,7 +271,7 @@ function StartBar(props: {
     return (
       <>
         <p className="grow small muted">
-          Waiting for someone to join.<span className="hide-narrow"> The race starts by itself.</span>
+          Waiting for someone to join.<span className="hide-narrow"> Press Start when everyone is here.</span>
         </p>
         {startButton("Practise alone", false)}
       </>
@@ -280,7 +280,9 @@ function StartBar(props: {
   return (
     <>
       <p className="grow small muted">
-        {props.isHost ? playersLine(props.room) : "Waiting for the host to start the next race"}
+        {props.isHost
+          ? `${playersLine(props.room)}. Start when everyone is here.`
+          : `Waiting for the host to start the ${props.room.bestOfLocked ? "next race" : "race"}`}
       </p>
       {startButton("Start", true)}
     </>
