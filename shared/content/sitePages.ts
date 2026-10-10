@@ -21,7 +21,7 @@ export const HOME_FAQ: Faq[] = [
   { q: "How do I race my friends?", a: "Create a room, set the event and format, open it and send the link. Private rooms need a PIN; the invite link includes it." },
   { q: "Is it a csTimer alternative?", a: "It's a timer you share: the same scramble and a live race with other cubers, instead of timing alone. Your session ao5 and ao12 are there too." },
   { q: "Can CubeMore analyze my solves?", a: "Yes, with a smart cube. The solve analyzer times your cross, F2L, OLL and PLL and shows what to practice. Free." },
-  { q: "Which events can I race?", a: "All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock." },
+  { q: "Which events can I race?", a: "All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock. And FTO." },
 ];
 
 export const HOME_FAQ_MN: Faq[] = [

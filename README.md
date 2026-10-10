@@ -1,6 +1,6 @@
 # CubeMore
 
-Real-time speedcubing races with friends: rooms, all 17 WCA events, shared random-state
+Real-time speedcubing races with friends: rooms, all 17 WCA events and FTO, shared random-state
 scrambles with a picture, a stackmat-style timer (or type your times), OK / +2 / DNF,
 ao5 / ao12 averages, sets, points and best-of-N matches.
 
@@ -198,7 +198,7 @@ shared/          Used by BOTH server and client
   schemas.ts       zod schemas: the server checks every payload with these
   types.ts         RoomSnapshot, MatchSnapshot, SolveResult, settings...
   constants.ts     timings (30 s reconnect, 3 s review, 6 s set result...), limits
-  cubeEvents.ts    the 17 WCA events
+  cubeEvents.ts    the 17 WCA events and FTO
   cube3.ts         a 3x3 model in GAN's facelets format (smart cube guide + verification)
   smartSolve.ts    verifying a smart cube solve (shared, so both sides use the same rules)
   practice.ts      the analyzer's sessions and solves (types)

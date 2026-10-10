@@ -32,7 +32,7 @@ export function RoomSetup(props: {
       <section className="panel section setup-card">
         <div className="setup-head">
           <h1>Set up your room</h1>
-          <p className="small muted">Only you can see it for now. When it's ready, open it: then cubers can join, and the race starts as soon as someone does.</p>
+          <p className="small muted">Only you can see it for now. When it's ready, open it: then cubers can join, and you start the race when they're here.</p>
         </div>
         <LobbySettings settings={room.settings} pin={room.pin} bestOfLocked={room.bestOfLocked} onChange={props.onUpdateSettings} />
       </section>

@@ -1,7 +1,8 @@
-// The official WCA puzzle events.
+// The puzzle events: the 17 official WCA events, and FTO (not a WCA event, but
+// popular, with official-style random-state scrambles in cubing.js).
 // (Called "cube events" in the code, so they don't get mixed up with Socket.IO events.)
 //
-//   id     - the official WCA event id. The scramble library (cubing.js) uses the same ids.
+//   id     - the official WCA event id ("fto" for FTO). The scramble library (cubing.js) uses the same ids.
 //   name   - what the user sees.
 //   puzzle - which puzzle to draw for the scramble picture.
 
@@ -23,6 +24,7 @@ export const CUBE_EVENTS = [
   { id: "444bf", name: "4x4x4 Blindfolded", puzzle: "4x4x4" },
   { id: "555bf", name: "5x5x5 Blindfolded", puzzle: "5x5x5" },
   { id: "333mbf", name: "3x3x3 Multi-Blind", puzzle: "3x3x3" },
+  { id: "fto", name: "FTO (Face-Turning Octahedron)", puzzle: "fto" },
 ] as const;
 
 export type CubeEvent = (typeof CUBE_EVENTS)[number];

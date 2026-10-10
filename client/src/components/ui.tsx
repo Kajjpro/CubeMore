@@ -11,7 +11,8 @@ import { SITE } from "../site";
 
 /** A WCA event icon from @cubing/icons (decorative: always shown next to a text label). */
 export function EventIcon({ id }: { id: CubeEventId }) {
-  return <span className={`cubing-icon event-${id}`} aria-hidden />;
+  // FTO isn't a WCA event: its icon is among @cubing/icons' unofficial ones.
+  return <span className={`cubing-icon ${id === "fto" ? "unofficial-fto" : `event-${id}`}`} aria-hidden />;
 }
 
 /** The room's event icon; a mixed room (everyone picks their own) gets a plain cube. */

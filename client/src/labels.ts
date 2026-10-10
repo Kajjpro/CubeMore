@@ -19,6 +19,7 @@ export const EVENT_SHORT: Record<CubeEventId, string> = {
   "444bf": "4BLD",
   "555bf": "5BLD",
   "333mbf": "MBLD",
+  fto: "FTO",
 };
 
 export const FORMAT_LABELS: Record<RoomFormat, string> = {

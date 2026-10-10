@@ -169,7 +169,7 @@ function AboutCubeMore() {
             Yes, with a smart cube. The <Link to="/analyze">solve analyzer</Link> times your cross, F2L, OLL and PLL and shows what to practice. Free.
           </dd>
           <dt>Which events can I race?</dt>
-          <dd>All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock.</dd>
+          <dd>All 17 WCA events: 3x3, 2x2, 4x4 to 7x7, 3x3 one-handed, blindfolded, Fewest Moves, Megaminx, Pyraminx, Skewb, Square-1 and Clock. And FTO.</dd>
         </dl>
       </div>
 

@@ -56,6 +56,7 @@ export const EVENT_PAGES: readonly EventPage[] = [
   { id: "444bf", name: "4x4 Blindfolded (4BLD)", slug: "4x4-blindfolded", short: "4BLD", blurb: "4x4 blindfolded races online (4BLD) with WCA scrambles and a generous time limit.", guide: "The 4x4 blindfolded: memorize the centers, the edge wings and the corners, then solve without looking. WCA ranks the best of 3 attempts." },
   { id: "555bf", name: "5x5 Blindfolded (5BLD)", slug: "5x5-blindfolded", short: "5BLD", blurb: "5x5 blindfolded races online (5BLD): the same scramble for everyone, a timer and results like at a competition.", guide: "The 5x5 blindfolded, with long memorization of centers, wings, midges and corners. WCA ranks the best of 3 attempts." },
   { id: "333mbf", name: "3x3 Multi-Blind", slug: "multi-blind", short: "Multi-BLD", blurb: "Multi-blind practice online: everyone gets the same 3x3 scrambles and races the clock.", guide: "Solve as many 3x3s as you can blindfolded in one go, up to an hour. The score is cubes solved minus cubes unsolved." },
+  { id: "fto", name: "FTO (Face-Turning Octahedron)", slug: "fto", short: "FTO", blurb: "FTO races online: the Face-Turning Octahedron with random-state scrambles, a scramble picture, a live timer and ao5 averages. Race other FTO solvers.", guide: "An octahedron with eight triangular faces that turn like a cube's. Most solvers build the first faces like a cube's first layers, then finish with algorithms for the last centers and corners. It isn't a WCA event, but it has its own competitions and records; races here are an average of 5." },
 ];
 
 export function eventPageBySlug(slug: string): EventPage | undefined {
@@ -70,7 +71,7 @@ export const HOME_META: PageMeta = {
   path: "/",
   title: "CubeMore: Online Speedcubing Races and Rubik's Cube Timer",
   description:
-    "CubeMore: race other cubers online in real time, and analyze your smart cube solves. The same scramble for everyone, a stackmat-style timer, WCA averages for all 17 events, and a free CFOP solve analyzer.",
+    "CubeMore: race other cubers online in real time, and analyze your smart cube solves. The same scramble for everyone, a stackmat-style timer, WCA averages for all 17 WCA events and FTO, and a free CFOP solve analyzer.",
 };
 
 /**
