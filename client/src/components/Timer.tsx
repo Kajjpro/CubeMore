@@ -114,7 +114,13 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smart
           <SmartCubeControls />
         </div>
       ) : typing ? (
-        <TypeIn onSubmit={(timeMs, penalty) => addSolve({ ...solveId, timeMs, penalty })} />
+        <TypeIn
+          onSubmit={(timeMs, penalty) => {
+            // A typed time already says OK, +2 or DNF: send it now (no 5-second choice screen).
+            addSolve({ ...solveId, timeMs, penalty });
+            confirmSolve(key, penalty);
+          }}
+        />
       ) : (
         <div
           ref={setTouchArea}
