@@ -22,6 +22,7 @@ interface Props {
   isHost: boolean;
   starting: boolean;
   onStart: () => void;
+  onHoldStart: () => void;
   onKick: (player: PlayerSnapshot) => void;
   onUpdateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
   /** Mixed rooms: pick the event you race. */
@@ -38,9 +39,10 @@ const canShare = typeof navigator !== "undefined" && typeof navigator.share === 
 /**
  * Before a race. Alone, "Copy link" comes first (and for a private room, its
  * code and PIN; a public room is on the home page, so it needs no code). There's no
- * need to press Start: the race starts by itself 3 seconds after someone joins.
+ * need to press Start: the race starts by itself 3 seconds after someone joins,
+ * unless the host chose to start it (or pressed Wait during the countdown).
  */
-export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, chat }: Props) {
+export function Lobby({ room, youId, isHost, starting, onStart, onHoldStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, chat }: Props) {
   const mixed = room.settings.mixedEvents;
   const [copied, copy] = useCopy(room.code, room.pin);
   const alone = room.players.length === 1;
@@ -182,6 +184,7 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
             alone={alone}
             starting={starting}
             onStart={onStart}
+            onHold={onHoldStart}
             secondsLeft={secondsLeft}
             waitingFor={room.autoStartAt !== null ? waitingFor : null}
           />
@@ -217,6 +220,8 @@ function StartBar(props: {
   alone: boolean;
   starting: boolean;
   onStart: () => void;
+  /** Host: stop the countdown to wait for more people. */
+  onHold: () => void;
   secondsLeft: number | null;
   /** "Waiting for Anu to pick an event": the countdown starts once they're ready. */
   waitingFor: string | null;
@@ -257,12 +262,18 @@ function StartBar(props: {
   if (secondsLeft !== null) {
     return (
       <>
-        <span className="start-ring" aria-hidden>
+        <span className="start-ring" role="img" aria-label={`Race starts in ${secondsLeft}`}>
           <span key={secondsLeft}>{secondsLeft}</span>
         </span>
-        <p className="grow countdown" role="status">
+        {/* The host has two buttons here: on narrow phones the ring alone shows the seconds. */}
+        <p className={`grow countdown ${props.isHost ? "countdown-host" : ""}`} role="status">
           Race starts in <span className="mono">{secondsLeft}</span>
         </p>
+        {props.isHost && (
+          <button type="button" onClick={props.onHold} disabled={props.starting}>
+            Wait
+          </button>
+        )}
         {startButton("Start now", false)}
       </>
     );
@@ -271,7 +282,8 @@ function StartBar(props: {
     return (
       <>
         <p className="grow small muted">
-          Waiting for someone to join.<span className="hide-narrow"> The race starts by itself.</span>
+          Waiting for someone to join.
+          <span className="hide-narrow">{props.room.settings.autoStart === false ? " You start the race." : " The race starts by itself."}</span>
         </p>
         {startButton("Practise alone", false)}
       </>

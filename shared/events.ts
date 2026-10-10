@@ -73,6 +73,8 @@ export const ClientEvents = {
   WARMUP_SCRAMBLE: "room:warmup_scramble",
   KICK_PLAYER: "room:kick",
   START_MATCH: "room:start",
+  /** Host: stop the lobby countdown (someone joined) and start later with Start. */
+  HOLD_START: "room:hold_start",
   /** Every open room (public and private), for the list on the home page. */
   LIST_ROOMS: "rooms:list",
 
@@ -223,6 +225,7 @@ export interface ClientRequests {
   [ClientEvents.WARMUP_SCRAMBLE]: { payload: EmptyPayload; response: { scramble: Scramble } };
   [ClientEvents.KICK_PLAYER]: { payload: TargetPlayerPayload; response: object };
   [ClientEvents.START_MATCH]: { payload: EmptyPayload; response: object };
+  [ClientEvents.HOLD_START]: { payload: EmptyPayload; response: object };
   [ClientEvents.LIST_ROOMS]: { payload: EmptyPayload; response: { rooms: PublicRoomInfo[] } };
   [ClientEvents.SUBMIT_SOLVE]: { payload: SubmitSolvePayload; response: object };
   [ClientEvents.CHANGE_PENALTY]: { payload: ChangePenaltyPayload; response: object };

@@ -517,6 +517,10 @@ export function registerSocketHandlers(
 
     // ---- Match: host ----
 
+    on(socket, ClientEvents.HOLD_START, emptySchema, () =>
+      inMyRoom(socket, (live, playerId) => commitResult(live, logic.holdStart(live.state, playerId))),
+    );
+
     on(socket, ClientEvents.START_MATCH, emptySchema, () =>
       inMyRoom(socket, async (live, playerId) => {
         const error = logic.startMatchError(live.state, playerId);

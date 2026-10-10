@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   scoring: "fastest",
   smartOnly: false,
   mixedEvents: false,
+  autoStart: true,
 };
 
 /**

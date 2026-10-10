@@ -187,7 +187,8 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
   // the race starts. (A lobby where people are already together, e.g. after
   // "Back to lobby", waits for the host to press Start.)
   const waitingAlone = racing(room.players).length === 1 && !joined.watching;
-  const countDown = !room.match && waitingAlone && room.autoStartAt === null && !room.scheduled;
+  // ...unless the host chose to start it themselves (to wait for more people).
+  const countDown = !room.match && waitingAlone && room.autoStartAt === null && !room.scheduled && room.settings.autoStart !== false;
   return {
     ok: true,
     room: changeRoom(room, {
@@ -320,7 +321,13 @@ export function updateSettings(
   }
 
   // Changed while the countdown runs: everyone gets the full 3 seconds to see the new settings.
-  const autoStartAt = room.autoStartAt !== null && !room.scheduled ? Math.max(room.autoStartAt, now + AUTO_START_DELAY_MS) : room.autoStartAt;
+  // Switched to "the host starts": the countdown stops.
+  const autoStartAt =
+    settings.autoStart === false && !room.scheduled
+      ? null
+      : room.autoStartAt !== null && !room.scheduled
+        ? Math.max(room.autoStartAt, now + AUTO_START_DELAY_MS)
+        : room.autoStartAt;
   return { ok: true, room: changeRoom(room, { settings, pin: nextPin, autoStartAt }) };
 }
 
@@ -440,6 +447,13 @@ export function startMatch(room: ServerRoom, requesterId: string, start: MatchSt
     return fail(error);
   }
   return beginMatch(room, start, now);
+}
+
+/** Host: stop the lobby countdown, to wait for more people (then start with Start). */
+export function holdStart(room: ServerRoom, requesterId: string): LogicResult {
+  if (!isHost(room, requesterId)) return fail("Only the host can do that.");
+  if (room.match || room.scheduled) return fail("The race has already started.");
+  return { ok: true, room: room.autoStartAt === null ? room : changeRoom(room, { autoStartAt: null }) };
 }
 
 /** Host, after a match: play again with the same settings, points back to 0. */

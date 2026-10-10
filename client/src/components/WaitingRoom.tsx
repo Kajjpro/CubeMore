@@ -98,7 +98,8 @@ export function WarmupRoom(props: {
           <JoinedNote names={others} />
         ) : (
           <p className="waiting-line">
-            Waiting for cubers to join. {isPrivate ? "Send them the invite link." : "Your room is on the home page, or send the link."} The race starts as soon as someone joins.
+            Waiting for cubers to join. {isPrivate ? "Send them the invite link." : "Your room is on the home page, or send the link."}{" "}
+            {room.settings.autoStart === false ? "Press Start when everyone is here." : "The race starts as soon as someone joins."}
           </p>
         )}
 

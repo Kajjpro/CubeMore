@@ -51,6 +51,12 @@ export interface RoomSettings {
   scoring: ScoringMode;
   /** Smart cubes only: every solve must be a verified smart cube solve (3x3 events). */
   smartOnly: boolean;
+  /**
+   * The race starts by itself 3 seconds after someone joins the host (true), or
+   * only when the host presses Start (false: wait for more people). Rooms saved
+   * before this setting existed start by themselves.
+   */
+  autoStart?: boolean;
 }
 
 /** A scramble that every player on its event solves. Made by the server. */
