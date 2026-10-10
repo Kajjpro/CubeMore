@@ -143,3 +143,35 @@ describe("the algorithm pages", () => {
     expect(renderPage(INDEX, "/algorithms/oll/99-nothing", SITE)).toContain("noindex");
   });
 });
+
+describe("content in the HTML and the Mongolian page", () => {
+  it("the home, analyzer and event pages are sent with their text", () => {
+    const home = renderPage(INDEX, "/", SITE);
+    expect(home).toContain("<h1>CubeMore: online speedcubing races</h1>");
+    expect(home).toContain('href="/algorithms"');
+    const event = renderPage(INDEX, "/race/pyraminx", SITE);
+    expect(event).toContain("<h1>Pyraminx race online</h1>");
+    expect(event).toContain("L4E");
+    expect(renderPage(INDEX, "/analyze", SITE)).toContain("Which smart cubes work?");
+    // Rooms keep the plain app.
+    expect(renderPage(INDEX, "/room/ABC234", SITE)).toContain('<div id="root"></div>');
+  });
+
+  it("/mn is in Mongolian, and the English and Mongolian pages point to each other", () => {
+    const mn = renderPage(INDEX, "/mn", SITE);
+    expect(mn).toContain('<html lang="mn">');
+    expect(mn).toContain("<h1>Рубик шоогоор онлайн уралдаарай</h1>");
+    for (const html of [mn, renderPage(INDEX, "/", SITE)]) {
+      expect(html).toContain(`<link rel="alternate" hreflang="mn" href="${SITE}/mn" />`);
+      expect(html).toContain(`<link rel="alternate" hreflang="en" href="${SITE}/" />`);
+    }
+    expect(sitemap(SITE)).toContain(`<loc>${SITE}/mn</loc>`);
+    expect(mn).not.toContain("noindex");
+  });
+
+  it("every event page has its own guide", () => {
+    const guides = EVENT_PAGES.map((page) => page.guide);
+    expect(new Set(guides).size).toBe(EVENT_PAGES.length);
+    for (const guide of guides) expect(guide.length).toBeGreaterThan(60);
+  });
+});

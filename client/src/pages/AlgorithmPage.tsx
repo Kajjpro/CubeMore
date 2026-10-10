@@ -6,15 +6,17 @@
 
 import { useEffect, type MouseEvent } from "react";
 import { algorithmPageHtml, algorithmPageMeta } from "@cube-racing/shared/content/algorithmPages";
+import { sitePageHtml } from "@cube-racing/shared/content/sitePages";
 import { SiteFooter, SiteHeader } from "../components/Site";
 import { navigate } from "../router";
 
 export function AlgorithmPage({ path }: { path: string }) {
-  const html = algorithmPageHtml(path) ?? "";
+  const html = (path.startsWith("/algorithms") ? algorithmPageHtml(path) : sitePageHtml(path)) ?? "";
   useEffect(() => {
     window.scrollTo(0, 0);
-    const meta = algorithmPageMeta(path);
+    const meta = path.startsWith("/algorithms") ? algorithmPageMeta(path) : null;
     if (meta) document.title = meta.title;
+    document.documentElement.lang = path === "/mn" ? "mn" : "en";
   }, [path]);
 
   // Links in the page: move inside the app (new tab and outside links: the browser).

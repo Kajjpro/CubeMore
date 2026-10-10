@@ -39,7 +39,7 @@ export function App() {
   }
 
   if (path === "/daily" || path === "/daily/") return <DailyPage />;
-  if (path.startsWith("/algorithms") && isKnownPage(path)) {
+  if ((path.startsWith("/algorithms") || path === "/mn") && isKnownPage(path)) {
     return (
       <Suspense fallback={<div className="home" />}>
         <AlgorithmPage key={path} path={path.replace(/\/+$/, "")} />

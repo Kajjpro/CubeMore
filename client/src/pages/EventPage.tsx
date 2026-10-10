@@ -69,6 +69,10 @@ export function EventPage({ page, demoRooms }: { page: EventPageInfo; demoRooms?
 
         <section className="about" aria-labelledby="how-title">
           <div className="about-block">
+            <h2>About the {page.short}</h2>
+            <p>{page.guide}</p>
+          </div>
+          <div className="about-block">
             <h2 id="how-title">How a {page.short} race works</h2>
             <ol className="how-steps">
               <li>Create a room (or join one), and send the link to your friends.</li>

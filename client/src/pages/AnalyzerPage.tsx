@@ -9,7 +9,8 @@
  * Loaded only when someone opens the page (it brings the analyzer and the 3D cube).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ANALYZER_FAQ } from "@cube-racing/shared/content/sitePages";
 import { ClientEvents, PRACTICE_SIZE, formatTime, type PracticeKind, type PracticeSession, type PracticeSessionInfo, type TopSolve } from "@cube-racing/shared";
 import { summarizeSession, type SolveAnalysis } from "@cube-racing/shared/analysis";
 import { warmAnalyzer } from "../analyzer/analyze";
@@ -103,6 +104,18 @@ export function AnalyzerPage() {
         {tab === "practice" && <Practice signedIn={account.signedIn} loaded={account.loaded} abilities={abilities} />}
         {tab === "sessions" && account.signedIn && <Sessions sessions={sessions} abilities={abilities} onDeleted={(id) => setSessions((list) => list?.filter((s) => s.id !== id) ?? null)} />}
         {tab === "top" && <TopSolves />}
+
+        <section className="about-block faq analyzer-faq" aria-labelledby="analyzer-faq-title">
+          <h2 id="analyzer-faq-title">Questions</h2>
+          <dl>
+            {ANALYZER_FAQ.map((f) => (
+              <Fragment key={f.q}>
+                <dt>{f.q}</dt>
+                <dd>{f.a}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </section>
       </main>
       <SiteFooter />
     </div>

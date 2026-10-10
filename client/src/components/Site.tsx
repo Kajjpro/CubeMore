@@ -49,6 +49,13 @@ export function SiteFooter() {
         <Link to="/daily">Daily scramble</Link>
         <Link to="/contact">Contact</Link>
         <Link to="/privacy">Privacy</Link>
+        <a href="/mn" hrefLang="mn" lang="mn" onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+          event.preventDefault();
+          navigate("/mn");
+        }}>
+          Монгол
+        </a>
         {socials.map((social) => (
           <a key={social.key} href={social.url} target="_blank" rel="noopener noreferrer">
             {social.label}

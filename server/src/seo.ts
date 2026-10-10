@@ -10,6 +10,7 @@
  */
 
 import { algorithmCrumbs, algorithmPageHtml, algorithmPageMeta } from "@cube-racing/shared/content/algorithmPages";
+import { sitePageHtml } from "@cube-racing/shared/content/sitePages";
 import { indexablePaths, pageMeta, eventPageBySlug, isKnownPage, setExtraPageMeta, SITE_ALIASES, SITE_NAME, HOME_META, socialLinks, type PageMeta } from "@cube-racing/shared";
 
 // The algorithm pages' titles and descriptions (odds, moves...).
@@ -101,6 +102,13 @@ export function renderPage(indexHtml: string, path: string, siteUrl: string, roo
 
   const extra: string[] = [];
   if (meta.noindex) extra.push('<meta name="robots" content="noindex" />');
+  if (meta.lang) html = html.replace('<html lang="en">', `<html lang="${meta.lang}">`);
+  // The home page in English and in Mongolian: each says where the other is.
+  if (siteUrl && (meta.path === "/" || meta.path === "/mn")) {
+    extra.push(`<link rel="alternate" hreflang="en" href="${siteUrl}/" />`);
+    extra.push(`<link rel="alternate" hreflang="mn" href="${siteUrl}/mn" />`);
+    extra.push(`<link rel="alternate" hreflang="x-default" href="${siteUrl}/" />`);
+  }
   for (const data of structuredData(meta, siteUrl)) {
     // "<" escaped so the JSON can never close the script tag.
     extra.push(`<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`);
@@ -140,13 +148,20 @@ export function canonicalRedirect(host: string | undefined, path: string, query:
   return `${otherHost ? siteUrl : ""}${clean}${query}`;
 }
 
-/** The site's header and footer around prerendered content (the app draws its own once it starts). */
-function frame(main: string): string {
-  return `<div class="home static-page"><header class="site-head"><a class="brand" href="/">${SITE_NAME}</a><span class="grow"></span><a class="head-link" href="/analyze">Solve analyzer</a><a class="head-link" href="/algorithms">Algorithms</a></header><main class="static-main">${main}</main><footer class="home-foot site-foot"><nav class="foot-links" aria-label="More"><a href="/">Race now</a><a href="/analyze">Solve analyzer</a><a href="/algorithms">OLL and PLL algorithms</a><a href="/daily">Daily scramble</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a></nav></footer></div>`;
+/**
+ * The site's header and footer around prerendered content (the app draws its own once it starts).
+ * `shown`: the app shows this same HTML (algorithm pages, /mn, event pages), so it can be
+ * visible right away. Otherwise (the home page's rooms, the analyzer) the app's page looks
+ * different, and swapping would make the page jump: the text is there for search
+ * engines, but not drawn until the app replaces it.
+ */
+function frame(main: string, shown: boolean): string {
+  return `<div class="home static-page"${shown ? "" : ' style="visibility:hidden"'}><header class="site-head"><a class="brand" href="/">${SITE_NAME}</a><span class="grow"></span><a class="head-link" href="/analyze">Solve analyzer</a><a class="head-link" href="/algorithms">Algorithms</a></header><main class="static-main">${main}</main><footer class="home-foot site-foot"><nav class="foot-links" aria-label="More"><a href="/">Race now</a><a href="/analyze">Solve analyzer</a><a href="/algorithms">OLL and PLL algorithms</a><a href="/daily">Daily scramble</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a></nav></footer></div>`;
 }
 
 /** Prerendered content for a page, or null (the app alone). */
 export function pageBody(path: string): string | null {
-  const algorithms = path.startsWith("/algorithms") ? algorithmPageHtml(path) : null;
-  return algorithms ? frame(algorithms) : null;
+  const content = path.startsWith("/algorithms") ? algorithmPageHtml(path) : sitePageHtml(path);
+  const shown = path.startsWith("/algorithms") || path.startsWith("/race/") || path === "/mn";
+  return content ? frame(content, shown) : null;
 }

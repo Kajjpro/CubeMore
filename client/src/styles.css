@@ -6926,7 +6926,7 @@ html.overlay-mode body {
 .crumbs a {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 44px;
 }
 
 .alg-cta {
@@ -6968,4 +6968,37 @@ html.overlay-mode body {
 
 .case-diagram .st-D {
   fill: var(--sticker-0);
+}
+
+/* The FAQs and lists on static pages (/mn) and the analyzer, like the home page's. */
+.static-main dl,
+.analyzer-faq dl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.static-main dt,
+.analyzer-faq dt {
+  margin-top: 8px;
+  font-weight: 650;
+}
+
+.static-main dd,
+.analyzer-faq dd {
+  margin: 0;
+  color: var(--text-2);
+  max-width: 44em;
+}
+
+.static-main ul:not(.case-grid, .alg-list, .event-links),
+.static-main ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.analyzer-faq {
+  margin-top: 12px;
 }
