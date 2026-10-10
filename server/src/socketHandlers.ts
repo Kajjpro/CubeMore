@@ -57,7 +57,7 @@ import {
   timerStatusSchema,
   updateSettingsSchema,
 } from "@cube-racing/shared/schemas";
-import { accountPlayerId, type Account, type AccountVerifier } from "./accounts";
+import { accountPlayerId, isOwner, type Account, type AccountVerifier } from "./accounts";
 import { newContactMessage, type ContactStore } from "./contact";
 import type { MatchTiming } from "./match/types";
 import type { RoomPersistence } from "./persistence/persistence";
@@ -362,7 +362,7 @@ export function registerSocketHandlers(
       return { ok: true };
     });
 
-    const isAdmin = () => socket.data.account !== null && options.adminUserIds.includes(socket.data.account.userId);
+    const isAdmin = () => isOwner(socket.data.account, options.adminUserIds);
     const NOT_ADMIN = "Only the site owner can read the messages. Sign in with that account.";
 
     on(socket, ClientEvents.ADMIN_MESSAGES, emptySchema, async () =>

@@ -20,6 +20,8 @@ export interface Account {
   userId: string;
   /** Shown to everyone (the account's username). */
   username: string;
+  /** The account's verified email addresses, lowercase (to recognize the site owner). */
+  emails?: string[];
 }
 
 export interface AccountVerifier {
@@ -42,21 +44,24 @@ const USERNAME_TTL_MS = 5 * 60_000;
 
 export function clerkAccounts(secretKey: string, authorizedParties: string[]): AccountVerifier {
   const clerk = createClerkClient({ secretKey });
-  const usernames = new Map<string, { username: string; at: number }>();
+  const profiles = new Map<string, { username: string; emails: string[]; at: number }>();
 
-  async function usernameOf(userId: string): Promise<string | null> {
-    const cached = usernames.get(userId);
-    if (cached && Date.now() - cached.at < USERNAME_TTL_MS) return cached.username;
+  async function profileOf(userId: string): Promise<{ username: string; emails: string[] } | null> {
+    const cached = profiles.get(userId);
+    if (cached && Date.now() - cached.at < USERNAME_TTL_MS) return cached;
     try {
       const user = await clerk.users.getUser(userId);
+      const emails = user.emailAddresses
+        .filter((e) => e.verification?.status === "verified")
+        .map((e) => e.emailAddress.toLowerCase());
       // The app asks for a username right after sign-up. Until then (a moment), the
       // first name stands in, and isn't kept: the next connect picks up the username.
-      if (!user.username) return (user.firstName ?? "Cuber").slice(0, NICKNAME_MAX_LENGTH);
-      const username = user.username.slice(0, NICKNAME_MAX_LENGTH);
-      usernames.set(userId, { username, at: Date.now() });
-      return username;
+      if (!user.username) return { username: (user.firstName ?? "Cuber").slice(0, NICKNAME_MAX_LENGTH), emails };
+      const profile = { username: user.username.slice(0, NICKNAME_MAX_LENGTH), emails, at: Date.now() };
+      profiles.set(userId, profile);
+      return profile;
     } catch {
-      return cached?.username ?? null; // Clerk unreachable: the old name is better than none
+      return cached ?? null; // Clerk unreachable: the old name is better than none
     }
   }
 
@@ -76,8 +81,18 @@ export function clerkAccounts(secretKey: string, authorizedParties: string[]): A
       } catch {
         return null;
       }
-      const username = await usernameOf(userId);
-      return username ? { userId, username } : null;
+      const profile = await profileOf(userId);
+      return profile ? { userId, username: profile.username, emails: profile.emails } : null;
     },
   };
+}
+
+/**
+ * The site owner: the account's Clerk user id, or one of its verified email
+ * addresses, is in ADMIN_USER_IDS (ids and emails can be mixed).
+ */
+export function isOwner(account: Account | null, owners: string[]): boolean {
+  if (!account) return false;
+  const list = owners.map((o) => o.trim().toLowerCase());
+  return list.includes(account.userId.toLowerCase()) || (account.emails ?? []).some((email) => list.includes(email));
 }

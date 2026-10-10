@@ -56,8 +56,9 @@ export const config = {
    */
   siteUrl: (process.env.VITE_SITE_URL ?? "").trim().replace(/\/$/, ""),
   /**
-   * Who may read the contact form's messages on /admin: Clerk user ids
-   * ("user_2Rf..."), separated by commas. Find yours in the Clerk dashboard → Users.
+   * Who may open /admin (stats and contact messages): Clerk user ids ("user_2Rf...")
+   * or the account's email addresses, separated by commas. An email counts only
+   * once Clerk has verified it.
    */
   adminUserIds: (process.env.ADMIN_USER_IDS ?? "")
     .split(",")

@@ -214,8 +214,8 @@ devices and where visitors came from (Google, Facebook, Reddit...).
    Check a preview with https://www.opengraph.xyz or Facebook's Sharing Debugger.
 2. **Accounts**: see "Accounts" above (Clerk production instance on your own domain).
 3. **Contact.** Messages from `/contact` are kept in the database (`DATABASE_URL`; without
-   one they're lost on restart). To read them on `/admin`, set `ADMIN_USER_IDS` to your Clerk
-   user id (Clerk dashboard → Users → you → the id starting with `user_`) and sign in.
+   one they're lost on restart). To read them on `/admin`, set `ADMIN_USER_IDS` to your account's email address
+   (or Clerk user id) and sign in with that account.
    Each visitor can send 3 messages, then one every 5 minutes.
 4. **Email and social links**: fill them in at the top of `client/src/site.ts`. Empty ones
    aren't shown anywhere.

@@ -1,7 +1,7 @@
 import { io as connect, type Socket } from "socket.io-client";
 import { afterEach, describe, expect, it } from "vitest";
 import { ClientEvents, SIGN_IN_REFUSED, type CubeEventId, type RoomSnapshot, type Scramble } from "@cube-racing/shared";
-import type { AccountVerifier } from "./accounts";
+import { isOwner, type AccountVerifier } from "./accounts";
 import { startServer, type RunningServer } from "./server";
 
 /** Instead of Clerk: "token-anar" is Anar's account; anything else isn't valid. */
@@ -93,5 +93,16 @@ describe("accounts", () => {
     const socket = (await open(running, "token-anar")) as Socket;
     const created = await send(socket, ClientEvents.CREATE_ROOM, { playerId: GUEST, nickname: "Bat" });
     expect(created.room.players[0]).toMatchObject({ nickname: "Bat", guest: true });
+  });
+});
+
+describe("the site owner", () => {
+  it("is recognized by user id or by a verified email, in any case", () => {
+    const owner = { userId: "user_ABC", username: "khaliun", emails: ["owner@example.com"] };
+    expect(isOwner(owner, ["user_ABC"])).toBe(true);
+    expect(isOwner(owner, ["Owner@Example.com"])).toBe(true);
+    expect(isOwner(owner, ["someone@example.com", "user_XYZ"])).toBe(false);
+    expect(isOwner({ userId: "user_X", username: "x" }, ["owner@example.com"])).toBe(false);
+    expect(isOwner(null, ["owner@example.com"])).toBe(false);
   });
 });
