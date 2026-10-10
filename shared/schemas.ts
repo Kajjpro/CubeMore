@@ -90,7 +90,6 @@ export const settingsChangesSchema = z.object({
   scoring: z.enum(SCORING_MODES).optional(),
   smartOnly: z.boolean().optional(),
   mixedEvents: z.boolean().optional(),
-  autoStart: z.boolean().optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */

@@ -44,8 +44,6 @@ import { Icon, ProgressBar } from "./ui";
 export interface RoomActions {
   leave: () => void;
   start: () => void;
-  /** Host: stop the lobby countdown and start later. */
-  holdStart: () => void;
   /** In the lobby. `pin` is sent when the room becomes private or its PIN changes. */
   updateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
   /** Mixed rooms: the event you race. */
@@ -275,7 +273,6 @@ export function RoomView(props: RoomViewProps) {
           isHost={isHost}
           starting={props.starting}
           onStart={actions.start}
-          onHoldStart={actions.holdStart}
           onKick={actions.kick}
           onUpdateSettings={actions.updateSettings}
           onChooseEvent={actions.chooseEvent}

@@ -7002,16 +7002,3 @@ html.overlay-mode body {
 .analyzer-faq {
   margin-top: 12px;
 }
-
-/* The lobby countdown for the host (Wait + Start now): on narrow phones the ring shows
-   the seconds, and the two buttons share the width. */
-@media (max-width: 480px) {
-  .start-bar .countdown.countdown-host {
-    display: none;
-  }
-
-  .start-bar .inner:has(.countdown-host) button {
-    min-width: 0;
-    flex: 1 1 0;
-  }
-}

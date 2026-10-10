@@ -289,20 +289,6 @@ export function LobbySettings(props: {
           onCommit={(name) => onChange({ name })}
         />
         <Segmented
-          label="Start the race"
-          value={settings.autoStart === false ? "host" : "auto"}
-          options={[
-            { value: "auto", label: "When someone joins" },
-            { value: "host", label: "When I press Start" },
-          ]}
-          onChange={(value) => onChange({ autoStart: value === "auto" })}
-        />
-        <p className="tiny muted">
-          {settings.autoStart === false
-            ? "Wait for everyone, then press Start."
-            : "The race starts 3 seconds after the first person joins you."}
-        </p>
-        <Segmented
           label="Who can join"
           value={settings.visibility}
           options={[

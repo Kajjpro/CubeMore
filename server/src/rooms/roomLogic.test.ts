@@ -14,7 +14,6 @@ import {
   chooseEvent,
   createRoom as createSetupRoom,
   endMatch,
-  holdStart,
   joinRoom,
   kickPlayer,
   leaveRoom,
@@ -440,33 +439,6 @@ describe("the race starts by itself", () => {
     const started = ok(startMatch(counting, alice.playerId, matchStart(), START + 1500));
     expect(started.autoStartAt).toBeNull();
     expect(autoStartDue(started, START + 60_000)).toBe(false);
-  });
-
-  it("with \"the host starts\", nobody joining starts a countdown; the host starts when ready", () => {
-    let room = createRoom("ABC234", { ...DEFAULT_SETTINGS, autoStart: false }, alice, START);
-    room = ok(joinRoom(room, bob, START + 1000));
-    room = ok(joinRoom(room, carol, START + 2000));
-    expect(room.autoStartAt).toBeNull();
-    expect(autoStartDue(room, START + 60_000)).toBe(false);
-    room = ok(startMatch(room, alice.playerId, matchStart(), START + 5000));
-    expect(room.match!.roster).toHaveLength(3);
-  });
-
-  it("the host can stop a running countdown and wait (others can't)", () => {
-    let room = ok(joinRoom(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), bob, START + 1000));
-    expect(holdStart(room, bob.playerId).ok).toBe(false);
-    room = ok(holdStart(room, alice.playerId));
-    expect(room.autoStartAt).toBeNull();
-    // Someone else joining later doesn't start it again: the host starts.
-    room = ok(joinRoom(room, carol, START + 3000));
-    expect(room.autoStartAt).toBeNull();
-  });
-
-  it("turning \"the host starts\" on during the countdown stops it", () => {
-    let room = ok(joinRoom(createRoom("ABC234", DEFAULT_SETTINGS, alice, START), bob, START + 1000));
-    room = ok(updateSettings(room, alice.playerId, { autoStart: false }, undefined, START + 1500));
-    expect(room.autoStartAt).toBeNull();
-    expect(room.settings.autoStart).toBe(false);
   });
 
   it("someone joining during a match doesn't start a countdown", () => {

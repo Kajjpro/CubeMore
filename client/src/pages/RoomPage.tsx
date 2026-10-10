@@ -90,7 +90,6 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
         navigate("/");
       },
       start: () => void withStarting(() => send(ClientEvents.START_MATCH, {})),
-      holdStart: () => void send(ClientEvents.HOLD_START, {}),
       rematch: (settings = {}) => void withStarting(() => send(ClientEvents.REMATCH, { settings })),
       backToLobby: () => void send(ClientEvents.BACK_TO_LOBBY, {}),
       updateSettings: (settings, pin) => void send(ClientEvents.UPDATE_SETTINGS, { settings, ...(pin ? { pin } : {}) }),

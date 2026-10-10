@@ -39,7 +39,6 @@ const ROOMS: PublicRoomInfo[] = [
 const actions: RoomActions = {
   leave: noop,
   start: noop,
-  holdStart: noop,
   updateSettings: noop,
   chooseEvent: noop,
   setWatching: noop,
