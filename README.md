@@ -122,6 +122,8 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
 
 - **Race now**: one tap puts you in an open public room for your event (or opens one for
   the next racer). The room's host starts the race when people have joined.
+- **Voice and video**: everyone in a room can join its call (up to 8), with mic and
+  camera buttons; voices keep playing while you race. Browser to browser (WebRTC).
 - **Live clocks**: while others solve, their running time ticks in the standings, so you
   know whether you're ahead before anyone stops.
 - **Finish line**: after each solve, a short replay: every bar runs at its player's speed

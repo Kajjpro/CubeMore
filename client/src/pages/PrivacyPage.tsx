@@ -52,6 +52,14 @@ export function PrivacyPage() {
             what it receives to improve its services, so only these solve statistics are ever sent.
           </p>
 
+          <h2>Voice and video calls</h2>
+          <p>
+            Your microphone and camera turn on only when you join a room's call, and off when you leave it. The sound and the
+            picture go straight between the browsers in the call; {SITE.name} doesn't receive, record or keep them. When two
+            browsers can't reach each other directly, an encrypted relay may pass them along, without being able to see or hear
+            them. The room only sees who's in the call and whether their mic and camera are on.
+          </p>
+
           <h2>Counting visitors</h2>
           <p>
             To know how many people use {SITE.name}, your browser keeps a random visitor id (separate from everything else) and sends it

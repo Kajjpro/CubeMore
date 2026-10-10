@@ -26,6 +26,7 @@ import { useSessionStats } from "../session";
 import type { TimerPhase } from "../timer/useSpeedTimer";
 import type { CubeMoves } from "../useRoom";
 import { useWakeLock } from "../wakeLock";
+import { CallAudio, CallPanel } from "./Call";
 import { ChatPanel } from "./ChatPanel";
 import { ConfirmButton } from "./ConfirmButton";
 import { DEBUG, DebugPanel } from "./DebugPanel";
@@ -207,11 +208,13 @@ export function RoomView(props: RoomViewProps) {
       connected={props.connected}
       active={chatVisible}
       onSend={actions.sendChat}
+      call={demo ? undefined : <CallPanel />}
     />
   );
 
   return (
     <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={focus}>
+      {!demo && <CallAudio />}
       <TopBar
         code={room.code}
         pin={room.pin}

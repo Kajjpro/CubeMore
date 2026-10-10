@@ -44,6 +44,12 @@ console.log(accounts ? "Accounts are on (Clerk)" : "Accounts are off (set CLERK_
 const coach = config.geminiApiKey ? geminiCoach(config.geminiApiKey, config.geminiModel) : null;
 console.log(coach ? `The analyzer's coach is on (${config.geminiModel})` : "The analyzer's coach is off (set GEMINI_API_KEY to turn it on)");
 
+// Voice / video calls: public STUN, plus TURN when it's set up (TURN_URLS...).
+const iceServers = [
+  { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] },
+  ...(config.turn.urls.length ? [{ urls: config.turn.urls, username: config.turn.username, credential: config.turn.credential }] : []),
+];
+
 const server = await startServer({
   dailyStore,
   store,
@@ -55,6 +61,7 @@ const server = await startServer({
   coach,
   visitStore,
   activity,
+  iceServers,
   adminUserIds: config.adminUserIds,
   siteUrl: config.siteUrl,
   weeklySchedule: config.weeklySchedule,

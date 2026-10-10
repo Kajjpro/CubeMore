@@ -71,6 +71,15 @@ export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   /** Which Gemini model writes the summaries. */
   geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+  /**
+   * Voice / video calls: a TURN server for players whose network blocks direct
+   * connections (some mobile networks). Optional; see DEPLOY.md. Comma-separated URLs.
+   */
+  turn: {
+    urls: (process.env.TURN_URLS ?? "").split(",").map((u) => u.trim()).filter(Boolean),
+    username: process.env.TURN_USERNAME ?? "",
+    credential: process.env.TURN_CREDENTIAL ?? "",
+  },
   /** The weekly smart-cube race: day (0 = Sunday ... 6 = Saturday) and hour, in UTC. */
   weeklySchedule: {
     day: Math.min(6, numberFromEnv("WEEKLY_RACE_DAY", 6)),

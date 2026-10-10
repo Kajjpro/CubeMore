@@ -5,7 +5,10 @@ import path from "node:path";
 import compression from "compression";
 import express from "express";
 import { Server } from "socket.io";
-import { getCubeEvent, ServerEvents } from "@cube-racing/shared";
+import { getCubeEvent, ServerEvents, type IceServer } from "@cube-racing/shared";
+
+/** Free public STUN servers: enough for most networks. TURN (config) helps the rest. */
+const DEFAULT_ICE_SERVERS: IceServer[] = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }];
 import { DailyService } from "./daily/daily";
 import { MemoryDailyStore, type DailyStore } from "./daily/store";
 import type { MatchTiming } from "./match/types";
@@ -62,6 +65,8 @@ export interface StartOptions {
   practiceStore?: PracticeStore;
   /** The AI coach for analyzer summaries, or none. */
   coach?: Coach | null;
+  /** How browsers in a voice / video call reach each other. Default: public STUN only. */
+  iceServers?: IceServer[];
   /** Where visits are counted. Default: in memory. */
   visitStore?: VisitStore;
   /** Races, solves and analyzer sessions from the database, for the stats. */
@@ -92,8 +97,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   // Socket.IO shares the same HTTP server and handles the live connections.
   const io: IoServer = new Server(httpServer, {
-    // Messages bigger than 10 KB are rejected. Our messages are tiny.
-    maxHttpBufferSize: 10_000,
+    // Messages bigger than 64 KB are rejected. Ours are small; the largest are a call's
+    // connection descriptions (a few KB with video).
+    maxHttpBufferSize: 64_000,
     // Check every 5 seconds that each client is still there. If a phone loses
     // signal, we notice within about 10 seconds (the defaults take ~45 seconds).
     pingInterval: 5_000,
@@ -122,6 +128,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       options.coach ?? null,
       Boolean(options.practiceStore && !(options.practiceStore instanceof MemoryPracticeStore)),
     ),
+    iceServers: options.iceServers ?? DEFAULT_ICE_SERVERS,
     stats: new SiteStatsService(options.visitStore ?? new MemoryVisitStore(), {
       kept: Boolean(options.visitStore && !(options.visitStore instanceof MemoryVisitStore)),
       accounts: options.accounts?.count ? () => options.accounts!.count!() : undefined,

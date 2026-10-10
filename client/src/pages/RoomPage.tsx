@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { resetCall } from "../call/call";
 import { ClientEvents, NICKNAME_MAX_LENGTH, PIN_LENGTH, type ClientRequests, type MatchSnapshot } from "@cube-racing/shared";
 import { useAccount } from "../auth";
 import { GuestHint } from "../components/Account";
@@ -58,6 +59,8 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
   useEffect(() => {
     if (room?.pin && pin === room.pin) saveRoomPin(code, pin);
   }, [room?.pin, pin, code]);
+  // Leaving the room page ends your part in its call.
+  useEffect(() => () => resetCall(), [code]);
   const connected = useIsConnected();
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);

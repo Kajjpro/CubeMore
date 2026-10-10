@@ -19,12 +19,14 @@ import type { z } from "zod";
 import {
   ClientEvents,
   DEFAULT_SETTINGS,
+  MAX_CALL_SIZE,
   ServerEvents,
   SIGN_IN_REFUSED,
   type AckResponse,
   type ClientRequests,
   type ClientToServerEvents,
   type ServerToClientEvents,
+  type IceServer,
   type WeeklyRow,
   type WeeklyStatus,
 } from "@cube-racing/shared";
@@ -47,6 +49,8 @@ import {
   dailySubmitSchema,
   cubeMovesSchema,
   leaderboardSchema,
+  callMediaSchema,
+  callSignalSchema,
   practiceListSchema,
   practiceSaveSchema,
   practiceSessionSchema,
@@ -66,6 +70,7 @@ import type { HistoryReader, SavedRoom } from "./persistence/store";
 import { rankWeekly } from "./weekly/results";
 import { currentWeeklyRace, previousWeeklyRace, WEEKLY_SETTINGS, type WeeklySchedule } from "./weekly/schedule";
 import { RateLimiter } from "./rateLimit";
+import { CallRegistry } from "./calls";
 import { LiveRoom, type RestoredChat } from "./rooms/liveRoom";
 import * as logic from "./rooms/roomLogic";
 import { RoomStore } from "./rooms/roomStore";
@@ -90,6 +95,8 @@ interface SocketData {
   account: Account | null;
   /** Analyzer scrambles given to this connection (a kept solve must use one). */
   practiceScrambles: IssuedScrambles;
+  /** Call connection messages have their own limit (a burst of network candidates is normal). */
+  signalLimiter: RateLimiter;
 }
 
 type NoEvents = Record<string, never>;
@@ -123,6 +130,8 @@ export interface SocketOptions {
   practice: PracticeService;
   /** Visitors and people online, for the owner's /admin page. */
   stats: SiteStatsService;
+  /** How browsers in a call reach each other (STUN, and TURN when set up). */
+  iceServers?: IceServer[];
 }
 
 const NOT_IN_ROOM_ERROR = "You are not in a room.";
@@ -141,6 +150,16 @@ export function registerSocketHandlers(
   options: SocketOptions,
 ): { rooms: RoomStore; stop: () => void; flush: () => Promise<void> } {
   const rooms = new RoomStore();
+  const calls = new CallRegistry();
+  const iceServers = options.iceServers ?? [];
+
+  /** Everyone in the room gets the new call list. */
+  const sendCallState = (roomCode: string) => io.to(roomCode).emit(ServerEvents.CALL_STATE, { participants: calls.participants(roomCode) });
+
+  /** This tab leaves its room's call (if it was in it). */
+  const leaveCall = (socket: IoSocket, roomCode: string | null) => {
+    if (roomCode && calls.leave(roomCode, socket.id)) sendCallState(roomCode);
+  };
   const { log } = options;
   const persistence = options.persistence ?? null;
   const reader = options.reader ?? null;
@@ -194,6 +213,7 @@ export function registerSocketHandlers(
       movesLimiter: new RateLimiter(20, 12),
       account: socket.data?.account ?? null,
       practiceScrambles: new IssuedScrambles(),
+      signalLimiter: new RateLimiter(120, 40),
     };
     // Counted for the site stats: the browser's own random id (not the player id), scrambled.
     options.stats.connected(socket.id, socket.handshake.auth?.visitor, socket.data.account !== null);
@@ -397,6 +417,40 @@ export function registerSocketHandlers(
       return replay ? { ok: true, replay } : logic.fail("That solve isn't available.");
     });
 
+    // ---- Voice and video calls (the sound and picture go browser to browser) ----
+
+    on(socket, ClientEvents.CALL_JOIN, callMediaSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => {
+        const player = logic.findPlayer(live.state, playerId);
+        if (!player) return logic.fail("You're not in this room.");
+        const joined = calls.join(live.code, { peerId: socket.id, playerId: player.publicId, name: player.nickname, audio: input.audio, video: input.video });
+        if (!joined) return logic.fail(`The call is full (${MAX_CALL_SIZE} people).`);
+        sendCallState(live.code);
+        return { ok: true, peerId: socket.id, iceServers, participants: calls.participants(live.code) };
+      }),
+    );
+
+    on(socket, ClientEvents.CALL_LEAVE, emptySchema, () => {
+      leaveCall(socket, socket.data.roomCode);
+      return { ok: true };
+    });
+
+    on(socket, ClientEvents.CALL_MEDIA, callMediaSchema, (input) => {
+      const roomCode = socket.data.roomCode;
+      if (!roomCode || !calls.setMedia(roomCode, socket.id, input.audio, input.video)) return logic.fail("You're not in the call.", "NOT_CURRENT");
+      sendCallState(roomCode);
+      return { ok: true };
+    });
+
+    on(socket, ClientEvents.CALL_SIGNAL, callSignalSchema, (input) => {
+      const roomCode = socket.data.roomCode;
+      // Only between two browsers in the same room's call.
+      if (!roomCode || !calls.together(roomCode, socket.id, input.to)) return logic.fail("Not in this call.", "NOT_CURRENT");
+      if (!socket.data.signalLimiter.tryTake()) return logic.fail("Too many messages.", "RATE_LIMITED");
+      io.to(input.to).emit(ServerEvents.CALL_SIGNAL, { from: socket.id, description: input.description, candidate: input.candidate });
+      return { ok: true };
+    });
+
     // ---- The analyzer (/analyze) ----
 
     const practice = options.practice;
@@ -505,6 +559,7 @@ export function registerSocketHandlers(
         // BEFORE broadcasting, so they stop getting this room's updates.
         for (const kicked of target ? socketsOfPlayer(live.code, target.playerId) : []) {
           kicked.emit(ServerEvents.KICKED, { code: live.code });
+          leaveCall(kicked, live.code);
           kicked.leave(live.code);
           kicked.data.roomCode = null;
           kicked.data.playerId = null;
@@ -748,6 +803,8 @@ export function registerSocketHandlers(
     socket.join(code);
     socket.data.roomCode = code;
     socket.data.playerId = playerId;
+    // Who's already in the room's call.
+    socket.emit(ServerEvents.CALL_STATE, { participants: calls.participants(code) });
   }
 
   /** Removes this socket's player from their current room (if any). */
@@ -757,6 +814,7 @@ export function registerSocketHandlers(
     socket.data.playerId = null;
     if (!roomCode || !playerId) return;
 
+    leaveCall(socket, roomCode);
     socket.leave(roomCode);
     const live = rooms.get(roomCode);
     if (!live) return;
@@ -771,6 +829,7 @@ export function registerSocketHandlers(
 
   function handleDisconnect(socket: IoSocket): void {
     const { roomCode, playerId } = socket.data;
+    leaveCall(socket, roomCode);
     const live = roomCode ? rooms.get(roomCode) : undefined;
     if (!live || !playerId) return;
 
@@ -821,7 +880,7 @@ export function registerSocketHandlers(
 
       let response: AckResponse;
       // Smart cube moves have their own, higher limit (see CUBE_MOVES).
-      const limited = event !== ClientEvents.CUBE_MOVES && !socket.data.limiter.tryTake();
+      const limited = event !== ClientEvents.CUBE_MOVES && event !== ClientEvents.CALL_SIGNAL && !socket.data.limiter.tryTake();
       if (limited) {
         response = logic.fail("Too many requests. Slow down a little.", "RATE_LIMITED");
       } else {

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CHAT_MAX_LENGTH, type ChatMessage } from "@cube-racing/shared";
 import { Icon, playerColor } from "./ui";
 
@@ -12,6 +12,8 @@ interface Props {
   active?: boolean;
   /** Returns an error to show, or null when sent. */
   onSend: (text: string) => Promise<string | null>;
+  /** The voice and video call, above the messages. */
+  call?: ReactNode;
 }
 
 /** "14:02" in the viewer's own time. */
@@ -23,7 +25,7 @@ function clock(at: number): string {
  * The room chat: a compact feed (player messages and system notices like
  * "Anu joined the room") and a slim input. Messages are plain text.
  */
-export function ChatPanel({ messages, youId, online, connected, active = true, onSend }: Props) {
+export function ChatPanel({ messages, youId, online, connected, active = true, onSend, call }: Props) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -68,6 +70,7 @@ export function ChatPanel({ messages, youId, online, connected, active = true, o
           {online} online
         </span>
       </div>
+      {call}
 
       <ol className="chat-feed" ref={feed} aria-live="polite" aria-label="Chat messages">
         {messages.length === 0 && <li className="chat-empty">No messages yet. Say hi!</li>}

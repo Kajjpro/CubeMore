@@ -44,6 +44,8 @@ import type {
   joinRoomSchema,
   leaderboardSchema,
   practiceListSchema,
+  callMediaSchema,
+  callSignalSchema,
   practiceSaveSchema,
   practiceSessionSchema,
   replaySchema,
@@ -56,6 +58,7 @@ import type {
 import type { ChatMessage, ContactMessage, DailyStatus, Scramble, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
 import type { PracticeSession, PracticeSessionInfo, PracticeSolve, TopSolve } from "./practice";
 import type { SiteStats } from "./stats";
+import type { CallParticipant, CallSignal, IceServer } from "./call";
 
 /** Event names the CLIENT sends. */
 export const ClientEvents = {
@@ -130,6 +133,14 @@ export const ClientEvents = {
   /** The site owner: visitors, people online, races (see stats.ts). */
   ADMIN_STATS: "admin:stats",
 
+  /** Voice and video: join the room's call (with mic / camera on or off). */
+  CALL_JOIN: "call:join",
+  CALL_LEAVE: "call:leave",
+  /** Your mic or camera turned on or off. */
+  CALL_MEDIA: "call:media",
+  /** A connection message for one other browser in the call. */
+  CALL_SIGNAL: "call:signal",
+
   /** Just answers { ok: true, serverTime }. Used to measure latency. */
   PING: "ping",
 } as const;
@@ -144,6 +155,10 @@ export const ServerEvents = {
   NOTICE: "server:notice",
   /** One new chat line (a player's message, or a notice like "Anu joined the room"). */
   CHAT: "chat:message",
+  /** Who's in the room's call, and their mic / camera (sent to the whole room on every change). */
+  CALL_STATE: "call:state",
+  /** A connection message from another browser in the call. */
+  CALL_SIGNAL: "call:signal",
   /** A player's smart cube moves during the current solve (not part of the room state). */
   CUBE_MOVES: "match:cube_moves",
 } as const;
@@ -196,6 +211,8 @@ export type ReplayPayload = z.input<typeof replaySchema>;
 export type PracticeSavePayload = z.input<typeof practiceSaveSchema>;
 export type PracticeSessionPayload = z.input<typeof practiceSessionSchema>;
 export type PracticeListPayload = z.input<typeof practiceListSchema>;
+export type CallMediaPayload = z.input<typeof callMediaSchema>;
+export type CallSignalPayload = z.input<typeof callSignalSchema>;
 export type EmptyPayload = Record<string, never>;
 
 // ---- Response data ----
@@ -256,6 +273,10 @@ export interface ClientRequests {
   [ClientEvents.ADMIN_MESSAGES]: { payload: EmptyPayload; response: { messages: ContactMessage[] } };
   [ClientEvents.ADMIN_DELETE_MESSAGE]: { payload: ContactIdPayload; response: object };
   [ClientEvents.ADMIN_STATS]: { payload: EmptyPayload; response: { stats: SiteStats } };
+  [ClientEvents.CALL_JOIN]: { payload: CallMediaPayload; response: { peerId: string; iceServers: IceServer[]; participants: CallParticipant[] } };
+  [ClientEvents.CALL_LEAVE]: { payload: EmptyPayload; response: object };
+  [ClientEvents.CALL_MEDIA]: { payload: CallMediaPayload; response: object };
+  [ClientEvents.CALL_SIGNAL]: { payload: CallSignalPayload; response: object };
   [ClientEvents.PING]: { payload: EmptyPayload; response: { serverTime: number } };
 }
 
@@ -274,4 +295,6 @@ export interface ServerToClientEvents {
   [ServerEvents.NOTICE]: (info: { message: string }) => void;
   [ServerEvents.CHAT]: (message: ChatMessage) => void;
   [ServerEvents.CUBE_MOVES]: (batch: { playerId: string; solveKey: string; moves: string[] }) => void;
+  [ServerEvents.CALL_STATE]: (state: { participants: CallParticipant[] }) => void;
+  [ServerEvents.CALL_SIGNAL]: (signal: CallSignal & { from: string }) => void;
 }

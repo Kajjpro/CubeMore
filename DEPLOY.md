@@ -185,6 +185,20 @@ F2L pairs, OLL and PLL, with suggestions. Two optional extras:
   The free tier lets Google use what it receives to improve its products, so only solve
   numbers are sent (never names or emails); the privacy page says so.
 
+# Voice and video calls in rooms
+
+Players in a room can join its call (up to 8 people): the sound and picture go
+straight between their browsers, and the server only passes the connection messages
+along. It works without setup for most players, using free public STUN servers.
+
+Some networks (often mobile carriers) don't allow direct connections. For those
+players, add a TURN relay (optional):
+1. Get TURN credentials, e.g. from Metered's Open Relay (metered.ca), which has a free
+   monthly allowance (check their current limits), or any TURN provider.
+2. On Render → **Environment**: `TURN_URLS` (the TURN addresses, comma-separated, e.g.
+   `turn:a.relay.metered.ca:80,turn:a.relay.metered.ca:443?transport=tcp`),
+   `TURN_USERNAME` and `TURN_CREDENTIAL`. Save; no rebuild needed.
+
 # How many people use CubeMore (analytics)
 
 **Your own stats, on `/admin`** (no setup beyond accounts): sign in with an account listed in

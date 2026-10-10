@@ -316,6 +316,27 @@ export const practiceSessionSchema = z.object({ sessionId: uuidSchema });
 /** The history, newest first; `before` (ms) for the next page. */
 export const practiceListSchema = z.object({ before: z.number().int().min(0).optional() });
 
+// ---- Voice and video calls ----
+
+export const callMediaSchema = z.object({ audio: z.boolean(), video: z.boolean() });
+
+/** A WebRTC offer / answer or network candidate for one other peer (relayed as is). */
+export const callSignalSchema = z
+  .object({
+    to: z.string().min(1).max(64),
+    description: z.object({ type: z.enum(["offer", "answer"]), sdp: z.string().max(60_000) }).optional(),
+    candidate: z
+      .object({
+        candidate: z.string().max(2000),
+        sdpMid: z.string().max(64).nullable().optional(),
+        sdpMLineIndex: z.number().int().min(0).max(64).nullable().optional(),
+        usernameFragment: z.string().max(256).nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine((s) => s.description !== undefined || s.candidate !== undefined, { message: "Nothing to send." });
+
 /** Turns zod's list of problems into one short message for the user. */
 export function describeProblem(error: z.ZodError): string {
   const issue = error.issues[0];
