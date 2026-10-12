@@ -54,6 +54,8 @@ import {
   practiceListSchema,
   practiceSaveSchema,
   practiceSessionSchema,
+  trainerSaveSchema,
+  trainerScrambleSchema,
   replaySchema,
   restartSchema,
   submitSolveSchema,
@@ -78,6 +80,7 @@ import type { ServerRoom } from "./rooms/types";
 import type { DailyService } from "./daily/daily";
 import { generateScramble, generateSetScrambles } from "./scrambles";
 import { IssuedScrambles, PracticeError, type PracticeService } from "./practice/service";
+import { caseScramble } from "./practice/trainer";
 import type { SiteStatsService } from "./stats/stats";
 
 /** What the server remembers about each connection (browser tab). */
@@ -97,6 +100,8 @@ interface SocketData {
   practiceScrambles: IssuedScrambles;
   /** Call connection messages have their own limit (a burst of network candidates is normal). */
   signalLimiter: RateLimiter;
+  /** Case trainer scrambles and saves (a drill asks for one every few seconds). */
+  trainerLimiter: RateLimiter;
 }
 
 type NoEvents = Record<string, never>;
@@ -214,6 +219,7 @@ export function registerSocketHandlers(
       account: socket.data?.account ?? null,
       practiceScrambles: new IssuedScrambles(),
       signalLimiter: new RateLimiter(120, 40),
+      trainerLimiter: new RateLimiter(30, 1),
     };
     // Counted for the site stats: the browser's own random id (not the player id), scrambled.
     options.stats.connected(socket.id, socket.handshake.auth?.visitor, socket.data.account !== null);
@@ -497,6 +503,27 @@ export function registerSocketHandlers(
     );
 
     on(socket, ClientEvents.PRACTICE_TOP, emptySchema, async () => ({ ok: true, solves: await practice.topSolves() }));
+
+    // ---- The case trainer (/train) ----
+
+    on(socket, ClientEvents.TRAINER_SCRAMBLE, trainerScrambleSchema, async (input) => {
+      if (!socket.data.trainerLimiter.tryTake()) return logic.fail("Too many scrambles. Wait a few seconds.", "RATE_LIMITED");
+      const scramble = await caseScramble(input.caseId, input.cross);
+      if (!scramble) return logic.fail("Unknown case.");
+      return { ok: true, scramble };
+    });
+
+    on(socket, ClientEvents.TRAINER_TIMES, emptySchema, () =>
+      forAccount(async (userId) => ({ ok: true, times: await practice.caseTimes(userId), kept: practice.kept })),
+    );
+
+    on(socket, ClientEvents.TRAINER_SAVE, trainerSaveSchema, (input) =>
+      forAccount(async (userId) => {
+        if (!socket.data.trainerLimiter.tryTake()) return logic.fail("Too many requests. Wait a few seconds.", "RATE_LIMITED");
+        await practice.saveCaseTimes(userId, input.times);
+        return { ok: true };
+      }),
+    );
 
     /** "Race now": an open public room for this event, or null (the client then creates one). */
     on(socket, ClientEvents.QUICK_RACE, quickRaceSchema, (input) => ({

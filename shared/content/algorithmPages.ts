@@ -57,7 +57,7 @@ function caseCard(c: CaseInfo): string {
   return `<li class="case-tile"><a href="${c.path}">${caseDiagram(c, 88)}<span class="case-tile-name">${esc(title(c))}</span></a><span class="mono tiny alg">${esc(c.alg)}</span></li>`;
 }
 
-const analyzerLine = `<p class="alg-cta small">Have a smart cube? The <a href="/analyze">solve analyzer</a> recognizes your OLL and PLL in every solve and shows how long each one took.</p>`;
+const analyzerLine = `<p class="alg-cta small">Drill any case with real scrambles in the <a href="/train">OLL and PLL trainer</a>. Have a smart cube? The <a href="/analyze">solve analyzer</a> recognizes your OLL and PLL in every solve and shows how long each one took.</p>`;
 
 /** /algorithms: what OLL and PLL are, 2-look first, then the full sets. */
 function indexPage(): string {
@@ -126,6 +126,7 @@ function casePage(c: CaseInfo): string {
   <h2>How to practice it</h2>
   <p>Do the algorithm slowly five times, saying the moves, then faster without looking at it. To set the case up on a solved cube, do this first:</p>
   <p class="mono alg">${esc(setup)}</p>
+  <p><a class="button-link" href="/train?case=${encodeURIComponent(c.id)}">Drill this case</a> Real scrambles for it, timed, in the trainer.</p>
   ${twoLook}
   ${related.length ? `<h2>Similar cases</h2><ul class="case-grid">${related.map(caseCard).join("")}</ul>` : ""}
   <nav class="case-nav small"><a href="${prev.path}">Previous: ${esc(title(prev))}</a><a href="${next.path}">Next: ${esc(title(next))}</a></nav>

@@ -98,6 +98,25 @@ for (const [name, makeStore] of [
       expect(await service.list("user_a")).toHaveLength(0);
     });
 
+    it("case trainer times: from kept solves and from drills, each player their own", async () => {
+      const service = new PracticeService(await makeStore(), null, null, true);
+      const { scrambles, input } = issued(5);
+      const { solve } = await service.save("user_a", { ...input, sessionId: SESSION, kind: "single", index: 0 }, scrambles);
+      const drill = { caseId: "PLL T", at: Date.now() + 60_000, source: "drill" as const, recognitionMs: 400, executionMs: 1300, moves: 14, looks: 1 as const, missed: false };
+      await service.saveCaseTimes("user_a", [drill, { ...drill, at: 1000, caseId: "OLL 27", missed: true, recognitionMs: null }]);
+      const times = await service.caseTimes("user_a");
+      const fromSolve = times.filter((t) => t.source === "solve");
+      expect(fromSolve.map((t) => t.caseId)).toEqual([solve.analysis.oll.caseId, solve.analysis.pll.caseId].filter(Boolean));
+      const drills = times.filter((t) => t.source === "drill");
+      expect(drills.map((t) => [t.caseId, t.missed, t.recognitionMs])).toEqual([
+        ["OLL 27", true, null],
+        ["PLL T", false, 400],
+      ]);
+      // A time from the future is kept as now.
+      expect(drills[1].at).toBeLessThanOrEqual(Date.now());
+      expect(await service.caseTimes("user_b")).toEqual([]);
+    });
+
     it("the coach writes once per session, then it's kept", async () => {
       const coach = fakeCoach();
       const service = new PracticeService(await makeStore(), null, coach, true);
@@ -188,6 +207,23 @@ describe("over the socket", () => {
   afterEach(async () => {
     for (const socket of sockets.splice(0)) socket.disconnect();
     for (const server of servers.splice(0)) await server.close().catch(() => {});
+  });
+
+  it("case trainer scrambles land on the case; guests keep their times in the browser", async () => {
+    const server = await startServer({ port: 0, timing: { solveReviewMs: 0, setResultMs: 100, submitGraceMs: 0 }, logs: false });
+    servers.push(server);
+    const socket = connect(`http://localhost:${server.port}`, { transports: ["websocket"] });
+    sockets.push(socket);
+    const ask = <T>(event: string, payload: object) => new Promise<T>((resolve) => socket.emit(event, payload, resolve));
+    const { stateAfter, caseOfState } = await import("@cube-racing/shared/analysis/trainer");
+    const { parseMoves } = await import("@cube-racing/shared/cube3");
+    for (const [caseId, cross] of [["PLL Gb", "U"], ["OLL 38", "D"], ["OLL 1", "F"]] as const) {
+      const r = await ask<{ ok: boolean; scramble: string }>(ClientEvents.TRAINER_SCRAMBLE, { caseId, cross });
+      expect(r.ok).toBe(true);
+      expect(caseOfState(stateAfter(parseMoves(r.scramble)), cross)).toBe(caseId);
+    }
+    expect((await ask<{ ok: boolean }>(ClientEvents.TRAINER_SCRAMBLE, { caseId: "PLL X", cross: "U" })).ok).toBe(false);
+    expect((await ask<{ ok: boolean }>(ClientEvents.TRAINER_TIMES, {})).ok).toBe(false);
   });
 
   it("anyone gets scrambles; guests are asked to sign in to keep solves", async () => {

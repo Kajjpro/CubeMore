@@ -55,3 +55,30 @@ export interface TopSolve {
   times: number[];
   analysis: SolveAnalysis;
 }
+
+// ---------------------------------------------------------------------------
+// The case trainer (/train): OLL and PLL times, from analyzer solves and drills.
+
+export type TrainerStep = "oll" | "pll";
+
+/** One timed go at an OLL or PLL case. */
+export interface CaseTime {
+  /** "OLL 27", "PLL T". */
+  caseId: string;
+  at: number;
+  /** "solve": seen in an analyzed smart cube solve. "drill": practised on its own in the trainer. */
+  source: "solve" | "drill";
+  /** The pause before the first move (smart cube only). */
+  recognitionMs: number | null;
+  /** From the first move to done (smart cube), or the whole time on a timer. */
+  executionMs: number;
+  /** Moves (smart cube only). */
+  moves: number | null;
+  /** 2 when it was done in two algorithms (2-look). */
+  looks: 1 | 2;
+  /** Drill: "I didn't know it", or lost on the way. */
+  missed: boolean;
+}
+
+/** Times sent to the server in one go (a drill sends as it goes; a guest's times once, on sign-in). */
+export const TRAINER_SAVE_MAX = 200;

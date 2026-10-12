@@ -8,8 +8,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { PRACTICE_SIZE, type PracticeKind, type PracticeSession, type PracticeSessionInfo, type PracticeSolve, type TopSolve } from "@cube-racing/shared";
+import { PRACTICE_SIZE, type CaseTime, type PracticeKind, type PracticeSession, type PracticeSessionInfo, type PracticeSolve, type TopSolve } from "@cube-racing/shared";
 import { analyzeSolve, summarizeSession } from "@cube-racing/shared/analysis";
+import { caseTimesFromAnalysis } from "@cube-racing/shared/analysis/trainer";
 import { verifySmartSolve } from "@cube-racing/shared/smartSolve";
 import type { HistoryReader } from "../persistence/store";
 import type { Coach } from "./coach";
@@ -21,6 +22,9 @@ const LIST_PAGE = 30;
 /** Coach summaries per account per day, and for the whole site (under the free AI quota). */
 export const COACH_PER_USER_PER_DAY = 15;
 export const COACH_PER_DAY = 400;
+/** The case trainer reads this many of your newest kept solves, and of your newest drill times. */
+const TRAINER_SOLVES = 500;
+const TRAINER_TIMES = 3000;
 /** The top solves are analyzed again at most this often. */
 const TOP_TTL_MS = 10 * 60_000;
 
@@ -157,6 +161,19 @@ export class PracticeService {
     const mine = this.coachCount.get(userId) ?? 0;
     if (mine >= COACH_PER_USER_PER_DAY) throw new PracticeError(`That's ${COACH_PER_USER_PER_DAY} coach summaries today. More tomorrow.`);
     this.coachCount.set(userId, mine + 1);
+  }
+
+  /** Every OLL and PLL time of the user: from their kept analyzer solves, and their drills. */
+  async caseTimes(userId: string): Promise<CaseTime[]> {
+    const [analyses, drills] = await Promise.all([this.store.recentAnalyses(userId, TRAINER_SOLVES), this.store.listCaseTimes(userId, TRAINER_TIMES)]);
+    const fromSolves = analyses.flatMap(({ at, analysis }) => caseTimesFromAnalysis(analysis, at));
+    return [...fromSolves, ...drills].sort((a, b) => a.at - b.at);
+  }
+
+  /** Keeps drill times (and a guest's times, on sign-in). Times from the future are moved to now. */
+  async saveCaseTimes(userId: string, times: CaseTime[]): Promise<void> {
+    const now = this.now();
+    await this.store.addCaseTimes(userId, times.map((t) => ({ ...t, at: Math.min(t.at, now) })));
   }
 
   /** The fastest verified 3x3 smart cube singles on CubeMore, analyzed (cached for a few minutes). */

@@ -86,7 +86,7 @@ export function setExtraPageMeta(fn: (path: string) => PageMeta | null): void {
 
 /** Every page search engines should know about (for the sitemap). */
 export function indexablePaths(): string[] {
-  return ["/", "/mn", "/analyze", "/algorithms", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`), ...algorithmPaths().slice(1)];
+  return ["/", "/mn", "/analyze", "/train", "/algorithms", "/daily", "/contact", "/privacy", ...EVENT_PAGES.map((page) => `/race/${page.slug}`), ...algorithmPaths().slice(1)];
 }
 
 /**
@@ -122,6 +122,14 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
         "Solve with your smart cube (GAN, GoCube, Giiker, QiYi) and see every stage: cross, F2L pairs, OLL and PLL times, the shortest cross, the cases you got and what to practice next. Free.",
     };
   }
+  if (clean === "/train") {
+    return {
+      path: clean,
+      title: "OLL and PLL Trainer: Drill Your Slowest Cases | CubeMore",
+      description:
+        "Find the OLL and PLL cases that slow you down and drill them with real scrambles. Works with any cube and a timer, a Stackmat, or a smart cube that also times your recognition. Free.",
+    };
+  }
   if (clean === "/contact") {
     return { path: clean, title: "Contact | CubeMore", description: "Questions, ideas or a bug? Write to the CubeMore team." };
   }
@@ -153,7 +161,7 @@ export function pageMeta(path: string, room?: { name: string; summary: string } 
 /** Pages that exist (everything else is a 404: still the app, but marked so search engines drop it). */
 export function isKnownPage(path: string): boolean {
   const clean = path.replace(/\/+$/, "") || "/";
-  if (["/", "/mn", "/analyze", "/daily", "/contact", "/privacy", "/admin", "/dev/states"].includes(clean)) return true;
+  if (["/", "/mn", "/analyze", "/train", "/daily", "/contact", "/privacy", "/admin", "/dev/states"].includes(clean)) return true;
   if (/^\/room\/[A-Za-z0-9]+(\/overlay)?$/.test(clean)) return true;
   if (clean.startsWith("/algorithms")) return algorithmPaths().includes(clean);
   const race = clean.match(/^\/race\/([\w-]+)$/);

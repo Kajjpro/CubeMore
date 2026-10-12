@@ -7132,3 +7132,244 @@ html.overlay-mode body {
 .call-leave {
   color: var(--red);
 }
+
+/* ---------------------------------------------------------------------------
+   The OLL and PLL trainer (/train)
+   --------------------------------------------------------------------------- */
+
+.trainer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.cross-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cross-select select {
+  min-height: 44px;
+}
+
+.trainer-focus,
+.trainer-cases,
+.drill-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.trainer-focus-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trainer-focus-row,
+.last-case {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trainer-focus-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.trainer-focus-row:last-child {
+  border-bottom: 0;
+}
+
+.last-case {
+  padding: 14px 16px;
+}
+
+.trainer-case-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trainer-case-title {
+  font-weight: 650;
+  color: var(--text);
+}
+
+a.trainer-case-title {
+  text-decoration: none;
+}
+
+a.trainer-case-title:hover {
+  text-decoration: underline;
+}
+
+.alg-line {
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+}
+
+.case-pic {
+  display: inline-flex;
+  flex: none;
+}
+
+.case-pic svg {
+  display: block;
+}
+
+.trainer-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.trainer-cases-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.trainer-grid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.trainer-case {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: var(--r);
+  font-weight: 400;
+}
+
+.trainer-case[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-soft);
+}
+
+.trainer-case-name {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* Picked cases: the bar stays at the bottom of the screen. */
+.drill-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.18));
+}
+
+.drill-tools {
+  padding: 0;
+}
+
+.drill-tools > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.drill-tools[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.drill .practice-timer[data-phase="holding"] .timer-digits {
+  color: var(--red);
+}
+
+.drill .practice-timer[data-phase="ready"] .timer-digits {
+  color: var(--green);
+}
+
+.drill .practice-timer {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.drill-answer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.drill-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Connecting a real timer (room menu and trainer). */
+.timer-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timer-connect-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timer-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ok-text {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.warn-text {
+  color: var(--amber);
+}
+
+.case-page .button-link {
+  margin-right: 10px;
+}

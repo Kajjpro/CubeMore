@@ -19,7 +19,7 @@ import { useAccount, AUTH_ENABLED } from "../auth";
 import { GuestHint } from "../components/Account";
 import { ConfirmButton } from "../components/ConfirmButton";
 import { ScrambleBlock } from "../components/Scramble";
-import { SiteFooter, SiteHeader } from "../components/Site";
+import { Link, SiteFooter, SiteHeader } from "../components/Site";
 import { SmartCubeControls } from "../components/SmartCube";
 import { InspectionDigits, LiveTurns, RunningDigits } from "../components/Timer";
 import { CoachCard, SessionReport, SolveReport } from "../components/analyzer/Report";
@@ -210,6 +210,11 @@ function Practice({ signedIn, loaded, abilities }: { signedIn: boolean; loaded: 
       {complete && state.kind === "ao5" && !summary && <p className="small muted">Analyzing…</p>}
 
       {shown && <LocalReport solve={shown} title={state.kind === "ao5" ? `Solve ${state.solves.indexOf(shown) + 1} of ${size}` : undefined} />}
+      {state.solves.some((s) => s.analysis) && (
+        <p className="small muted">
+          Your OLL and PLL times go to the <Link to="/train">trainer</Link>: drill the slow cases there.
+        </p>
+      )}
 
       {complete && (
         <LiveCoach sessionId={state.sessionId} solves={state.solves} signedIn={signedIn} abilities={abilities} key={state.sessionId} />

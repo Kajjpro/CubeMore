@@ -35,10 +35,10 @@ interface Options {
   broadcast?: boolean;
 }
 
-// The latest guide, for the scramble card.
+// The latest guide, for the scramble card (the case trainer publishes its own too).
 let shared: { scramble: string; view: FlowView } | null = null;
 const sharedListeners = new Set<() => void>();
-function publish(next: typeof shared): void {
+export function publish(next: typeof shared): void {
   shared = next;
   sharedListeners.forEach((listener) => listener());
 }

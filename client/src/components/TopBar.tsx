@@ -2,8 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { getCubeEvent, type RoomSettings } from "@cube-racing/shared";
 import { FORMAT_LABELS, roomEventShort, WIN_CONDITION_LABELS } from "../labels";
 import { setPref, usePrefs, type Prefs } from "../prefs";
-import { connectBtTimer, disconnectBtTimer, useBtTimer } from "../btTimer";
-import { bluetoothSupported } from "../smartCube";
+import { CompetitionTimerControls } from "./CompetitionTimer";
 import { ConfirmButton } from "./ConfirmButton";
 import { SmartCubeControls } from "./SmartCube";
 import { Icon, LogoMark, RoomEventIcon, Segmented } from "./ui";
@@ -318,33 +317,12 @@ function OverlaySection({ code, pin }: { code: string; pin: string | null }) {
   );
 }
 
-/** Bluetooth timer: a GAN Smart Timer or Halo times your solves, like at a competition. */
+/** A real timer (Stackmat or GAN) times your solves, like at a competition. */
 function BtTimerSection() {
-  const timer = useBtTimer();
   return (
     <div className="section">
-      <h3>Bluetooth timer <span className="tag">beta</span></h3>
-      {!bluetoothSupported ? (
-        <p className="tiny muted">Needs Chrome or Edge with Bluetooth (not on iPhone).</p>
-      ) : timer.status === "on" ? (
-        <>
-          <p className="tiny muted">
-            {timer.name} connected. Hands on to get ready, lift to start, stop it like at a competition: the time is the
-            timer's own.
-          </p>
-          <button type="button" onClick={disconnectBtTimer}>
-            Disconnect
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="tiny muted">GAN Smart Timer and GAN Halo Smart Timer.</p>
-          {timer.error && <p className="error-text">{timer.error}</p>}
-          <button type="button" disabled={timer.status === "connecting"} onClick={() => void connectBtTimer()}>
-            {timer.status === "connecting" ? "Connecting…" : "Connect timer"}
-          </button>
-        </>
-      )}
+      <h3>Competition timer <span className="tag">beta</span></h3>
+      <CompetitionTimerControls />
     </div>
   );
 }

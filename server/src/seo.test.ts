@@ -69,7 +69,7 @@ describe("pages for search engines and link previews", () => {
 
 describe("one address per page", () => {
   it("knows which addresses are pages", () => {
-    for (const path of ["/", "/analyze", "/race/3x3", "/room/ABC234", "/room/ABC234/overlay", "/daily"]) expect(isKnownPage(path), path).toBe(true);
+    for (const path of ["/", "/analyze", "/train", "/race/3x3", "/room/ABC234", "/room/ABC234/overlay", "/daily"]) expect(isKnownPage(path), path).toBe(true);
     for (const path of ["/nope", "/race/no-such-event", "/room/", "/analyze/x"]) expect(isKnownPage(path), path).toBe(false);
   });
 
@@ -153,6 +153,8 @@ describe("content in the HTML and the Mongolian page", () => {
     expect(event).toContain("<h1>Pyraminx race online</h1>");
     expect(event).toContain("L4E");
     expect(renderPage(INDEX, "/analyze", SITE)).toContain("Which smart cubes work?");
+    expect(renderPage(INDEX, "/train", SITE)).toContain("How does it find my slow cases?");
+    expect(renderPage(INDEX, "/train", SITE)).toContain("OLL and PLL Trainer");
     // Rooms keep the plain app.
     expect(renderPage(INDEX, "/room/ABC234", SITE)).toContain('<div id="root"></div>');
   });
