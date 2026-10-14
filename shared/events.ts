@@ -30,6 +30,7 @@ import type {
   changePenaltySchema,
   chatSchema,
   chooseEventSchema,
+  chooseTeamSchema,
   watchSchema,
   contactIdSchema,
   contactSchema,
@@ -70,6 +71,10 @@ export const ClientEvents = {
   UPDATE_SETTINGS: "room:update_settings",
   /** Mixed rooms: pick the event you race. */
   CHOOSE_EVENT: "room:choose_event",
+  /** Team rooms: race for the other team. */
+  CHOOSE_TEAM: "room:choose_team",
+  /** Host, team rooms: split everyone into two even teams (by their times in the room). */
+  BALANCE_TEAMS: "room:balance_teams",
   /** Step away and only watch, or race again (from the next set). */
   SET_WATCHING: "room:set_watching",
   /** Host: setup is done, open the room (listed, joinable). */
@@ -199,6 +204,7 @@ export type CreateRoomPayload = z.input<typeof createRoomSchema>;
 export type JoinRoomPayload = z.input<typeof joinRoomSchema>;
 export type UpdateSettingsPayload = z.input<typeof updateSettingsSchema>;
 export type ChooseEventPayload = z.input<typeof chooseEventSchema>;
+export type ChooseTeamPayload = z.input<typeof chooseTeamSchema>;
 export type WatchPayload = z.input<typeof watchSchema>;
 export type ContactPayload = z.input<typeof contactSchema>;
 export type ContactIdPayload = z.input<typeof contactIdSchema>;
@@ -246,6 +252,8 @@ export interface ClientRequests {
   [ClientEvents.LEAVE_ROOM]: { payload: EmptyPayload; response: object };
   [ClientEvents.UPDATE_SETTINGS]: { payload: UpdateSettingsPayload; response: object };
   [ClientEvents.CHOOSE_EVENT]: { payload: ChooseEventPayload; response: object };
+  [ClientEvents.CHOOSE_TEAM]: { payload: ChooseTeamPayload; response: object };
+  [ClientEvents.BALANCE_TEAMS]: { payload: EmptyPayload; response: object };
   [ClientEvents.SET_WATCHING]: { payload: WatchPayload; response: object };
   [ClientEvents.OPEN_ROOM]: { payload: EmptyPayload; response: object };
   [ClientEvents.WARMUP_SCRAMBLE]: { payload: EmptyPayload; response: { scramble: Scramble } };

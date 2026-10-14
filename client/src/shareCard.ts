@@ -2,7 +2,7 @@
 // Drawn on a canvas in the browser (nothing is uploaded), then handed to the
 // phone's share sheet, or downloaded where sharing files isn't supported.
 
-import type { MatchSnapshot, RoomSettings } from "@cube-racing/shared";
+import { TEAM_IDS, teamName, type MatchSnapshot, type RoomSettings, type TeamId } from "@cube-racing/shared";
 import { FORMAT_LABELS, roomEventShort, WIN_CONDITION_LABELS, nameList } from "./labels";
 import { SITE } from "./site";
 import { formatMark } from "./time";
@@ -76,6 +76,12 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   ctx.font = `500 22px ${SANS}`;
   ctx.fillText(`${window.location.host}, ${new Date().toLocaleDateString()}`, W - 64, 84);
   ctx.textAlign = "left";
+
+  // Team matches: the two teams, with their players.
+  if (match.teams) {
+    drawTeams(ctx, match, settings, nameOf);
+    return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No image"))), "image/png"));
+  }
 
   // Headline: who won, and the score.
   const ranking = Object.entries(match.points).sort(([, a], [, b]) => b - a);
@@ -155,6 +161,48 @@ export async function shareResultCard(data: CardData): Promise<"shared" | "downl
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return "downloaded";
+}
+
+const TEAM_COLORS: Record<TeamId, string> = { A: STICKERS[0], B: STICKERS[1] };
+
+/** The card of a team match: "Blue team wins 2–1", then a row per team with its players. */
+function drawTeams(ctx: CanvasRenderingContext2D, match: MatchSnapshot, settings: RoomSettings, nameOf: (id: string) => string): void {
+  const teams = match.teams!;
+  const order = [...TEAM_IDS].sort((a, b) => teams.points[b] - teams.points[a]);
+  const [high, low] = order.map((t) => teams.points[t]);
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLORS.text;
+  ctx.font = `700 64px ${SANS}`;
+  const headline = teams.winners.length === 1 ? `${teamName(teams.winners[0])} wins ${high}–${low}` : `Team match, ${high}–${low}`;
+  ctx.fillText(fit(ctx, headline, W - 128), 64, 174);
+  ctx.fillStyle = COLORS.text2;
+  ctx.font = `500 28px ${MONO}`;
+  ctx.fillText(`${roomEventShort(settings)}, ${FORMAT_LABELS[settings.format]}, ${WIN_CONDITION_LABELS[settings.winCondition]}, Teams`, 64, 226);
+
+  const rowH = 132;
+  const top = 272;
+  order.forEach((team, i) => {
+    const y = top + i * (rowH + 16);
+    const won = teams.winners.includes(team);
+    ctx.fillStyle = COLORS.surface;
+    roundRect(ctx, 48, y, W - 96, rowH, 14);
+    ctx.fill();
+    ctx.fillStyle = TEAM_COLORS[team];
+    roundRect(ctx, 72, y + 30, 28, 28, 6);
+    ctx.fill();
+    ctx.textAlign = "left";
+    ctx.fillStyle = won ? COLORS.gold : COLORS.text;
+    ctx.font = `700 36px ${SANS}`;
+    ctx.fillText(teamName(team), 118, y + 56);
+    const members = Object.keys(teams.of).filter((id) => teams.of[id] === team).map(nameOf);
+    ctx.fillStyle = COLORS.text2;
+    ctx.font = `500 26px ${SANS}`;
+    ctx.fillText(fit(ctx, members.join(", "), W - 360), 118, y + 100);
+    ctx.textAlign = "right";
+    ctx.fillStyle = COLORS.text;
+    ctx.font = `700 56px ${MONO}`;
+    ctx.fillText(String(teams.points[team]), W - 88, y + 84);
+  });
 }
 
 /** Shortens text with "…" until it fits `width`. */

@@ -352,3 +352,91 @@ describe("mixed events", () => {
     expect(match.finishedSets[0].winnerIds).toEqual(["b"]);
   });
 });
+
+describe("team matches", () => {
+  const teamPicks = { a: "A", b: "A", c: "B", d: "B" } as const;
+  function teamMatch(mode: "all" | "fastest", overrides: Partial<RoomSettings> = {}): Match {
+    const settings = { ...DEFAULT_SETTINGS, teams: mode, format: "single" as const, ...overrides };
+    const roster = ["a", "b", "c", "d"];
+    return createMatch({ matchId: "t1", settings, timing, roster, picks: samePicks(roster, settings), teamPicks, scrambles: scramblesFor(settings), now: 0 });
+  }
+
+  it("everyone counts: the team with the better mean wins the set, and all its players get the point", () => {
+    // Blue: 10 and 14 (mean 12). Red: 9 and 16 (mean 12.5). Red has the fastest player, Blue wins.
+    const match = playSet(teamMatch("all"), { a: 10_000, b: 14_000, c: 9_000, d: 16_000 });
+    const set = match.finishedSets[0];
+    expect(set.teams).toEqual({ standings: { A: { result: 12_000, best: 12_000 }, B: { result: 12_500, best: 12_500 } }, winners: ["A"] });
+    expect(set.winnerIds).toEqual(["a", "b"]);
+    expect(match.teams!.points).toEqual({ A: 1, B: 0 });
+    expect(match.points).toEqual({ a: 1, b: 1, c: 0, d: 0 });
+  });
+
+  it("fastest counts: the best player of each team", () => {
+    const match = playSet(teamMatch("fastest"), { a: 10_000, b: 14_000, c: 9_000, d: 16_000 });
+    expect(match.finishedSets[0].teams!.winners).toEqual(["B"]);
+    expect(match.points).toEqual({ a: 0, b: 0, c: 1, d: 1 });
+  });
+
+  it("a DNF sinks the team when everyone counts, but not when the fastest counts", () => {
+    let all = teamMatch("all");
+    for (const [id, t] of Object.entries({ a: 8_000, c: 12_000, d: 12_000 })) all = submit(all, id, t);
+    all = submit(all, "b", 9_000, "DNF");
+    all = tickMatch(all, all.phaseEndsAt!, ["a", "b", "c", "d"]);
+    expect(all.finishedSets[0].teams!.winners).toEqual(["B"]);
+
+    let fastest = teamMatch("fastest");
+    for (const [id, t] of Object.entries({ a: 8_000, c: 12_000, d: 12_000 })) fastest = submit(fastest, id, t);
+    fastest = submit(fastest, "b", 9_000, "DNF");
+    fastest = tickMatch(fastest, fastest.phaseEndsAt!, ["a", "b", "c", "d"]);
+    expect(fastest.finishedSets[0].teams!.winners).toEqual(["A"]);
+  });
+
+  it("a teammate who leaves doesn't count; the team plays on", () => {
+    let match = teamMatch("all");
+    match = removeFromMatch(match, "b", 500);
+    match = playSolve(match, { a: 10_000, c: 11_000, d: 11_000 }, ["a", "c", "d"]);
+    expect(match.finishedSets[0].teams!.standings.A).toEqual({ result: 10_000, best: 10_000 });
+    expect(match.finishedSets[0].teams!.winners).toEqual(["A"]);
+  });
+
+  it("ao5: the team times make the team's average", () => {
+    let match = teamMatch("all", { format: "ao5" });
+    const solves = [
+      { a: 10_000, b: 12_000, c: 11_000, d: 11_000 }, // A 11.00, B 11.00
+      { a: 9_000, b: 9_000, c: 10_000, d: 10_000 }, // A 9.00, B 10.00
+      { a: 20_000, b: 20_000, c: 10_000, d: 10_000 }, // A 20.00, B 10.00
+      { a: 10_000, b: 10_000, c: 12_000, d: 12_000 }, // A 10.00, B 12.00
+      { a: 11_000, b: 11_000, c: 13_000, d: 13_000 }, // A 11.00, B 13.00
+    ];
+    for (const times of solves) match = playSolve(match, times);
+    // A: drop 9 and 20 -> (11 + 10 + 11) / 3 = 10.67. B: drop 10 and 13 -> (11 + 10 + 12) / 3 = 11.00.
+    expect(match.finishedSets[0].teams!.standings).toEqual({ A: { result: 10_670, best: 9_000 }, B: { result: 11_000, best: 10_000 } });
+  });
+
+  it("the first team to the target wins the match; everyone who raced for it is a winner", () => {
+    let match = teamMatch("all", { winCondition: "bo3" });
+    const present = ["a", "b", "c", "d"];
+    match = playSet(match, { a: 10_000, b: 10_000, c: 11_000, d: 11_000 });
+    match = nextSet(match, present);
+    match = playSet(match, { a: 10_000, b: 10_000, c: 11_000, d: 11_000 });
+    match = tickMatch(match, match.phaseEndsAt!, present);
+    expect(match.phase).toBe("match_over");
+    expect(match.teams!.winners).toEqual(["A"]);
+    expect(match.winnerIds).toEqual(["a", "b"]);
+  });
+
+  it("someone new mid-match joins the smaller team (or their pick) and keeps it", () => {
+    let match = playSet(teamMatch("all"), { a: 10_000, b: 10_000, c: 11_000, d: 11_000 });
+    match = tickMatch(match, match.phaseEndsAt!, ["a", "b", "c"]);
+    // d left; e joins with no pick: Red has fewer.
+    match = ok(startNextSet(match, ["a", "b", "c", "e"], samePicks(["a", "b", "c", "e"], match.settings), scramblesFor(match.settings), match.phaseEndsAt!));
+    expect(match.teams!.of).toMatchObject({ a: "A", b: "A", c: "B", e: "B" });
+  });
+
+  it("the host ends it: the team with more points wins", () => {
+    const match = playSet(teamMatch("fastest", { winCondition: "unlimited" }), { a: 10_000, b: 10_000, c: 11_000, d: 11_000 });
+    const ended = ok(endMatch(match, ["a", "b", "c", "d"]));
+    expect(ended.teams!.winners).toEqual(["A"]);
+    expect(ended.winnerIds).toEqual(["a", "b"]);
+  });
+});

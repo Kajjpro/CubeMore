@@ -29,18 +29,21 @@ const noop = () => {};
 const MIXED = { name: "Pyra vs 2x2 vs Skewb", cubeEvent: "222", mixedEvents: true } as const;
 
 const ROOMS: PublicRoomInfo[] = [
-  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public", smartOnly: false, mixedEvents: false },
-  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private", smartOnly: false, mixedEvents: false },
-  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public", smartOnly: false, mixedEvents: false },
-  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public", smartOnly: false, mixedEvents: false },
-  { code: "M1XD42", name: "Pyra vs 2x2 vs Skewb", cubeEvent: "222", mixedEvents: true, format: "ao5", winCondition: "bo3", players: 3, maxPlayers: 10, racing: false, hostName: "Bilguun", visibility: "public", smartOnly: false },
-  { code: "T2CKW7", name: "Verified 3x3", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "public", smartOnly: true, mixedEvents: false },
+  { code: "PHZ3DJ", name: "Sunday practice", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 6, maxPlayers: 50, racing: true, hostName: "Nomin", visibility: "public", smartOnly: false, mixedEvents: false, teams: false },
+  { code: "K7M2QX", name: "OH only, all levels welcome", cubeEvent: "333oh", format: "ao12", winCondition: "unlimited", players: 3, maxPlayers: 20, racing: false, hostName: "Bat", visibility: "private", smartOnly: false, mixedEvents: false, teams: false },
+  { code: "W4ZT9P", name: "Pyra sub-5 club", cubeEvent: "pyram", format: "ao5", winCondition: "bo5", players: 12, maxPlayers: 12, racing: true, hostName: "Saraa", visibility: "public", smartOnly: false, mixedEvents: false, teams: false },
+  { code: "R8NDE3", name: "Megaminx", cubeEvent: "minx", format: "single", winCondition: "bo1", players: 2, maxPlayers: 50, racing: false, hostName: "Anu", visibility: "public", smartOnly: false, mixedEvents: false, teams: false },
+  { code: "M1XD42", name: "Pyra vs 2x2 vs Skewb", cubeEvent: "222", mixedEvents: true, format: "ao5", winCondition: "bo3", players: 3, maxPlayers: 10, racing: false, hostName: "Bilguun", visibility: "public", smartOnly: false, teams: false },
+  { code: "T2CKW7", name: "Verified 3x3", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: false, hostName: "Khulan", visibility: "public", smartOnly: true, mixedEvents: false, teams: false },
+  { code: "TM2V2X", name: "2 vs 2 Friday", cubeEvent: "333", format: "ao5", winCondition: "bo3", players: 4, maxPlayers: 8, racing: true, hostName: "Tuya", visibility: "public", smartOnly: false, mixedEvents: false, teams: true },
 ];
 const actions: RoomActions = {
   leave: noop,
   start: noop,
   updateSettings: noop,
   chooseEvent: noop,
+  chooseTeam: noop,
+  balanceTeams: noop,
   setWatching: noop,
   openRoom: noop,
   kick: noop,
@@ -66,7 +69,78 @@ interface RoomState {
 
 const SOLVING: MockRoomOptions = { phase: "solving", times: AO5_TIMES, points: [0, 1, 0, 0, 1, 0], solving: [2, 4], hostIndex: 1 };
 
+const TEAMS = { name: "2 vs 2 Friday", teams: "all" } as const;
+const TEAM_NAMES4 = NAMES.slice(0, 4);
+const TEAM_SOLVING: MockRoomOptions = {
+  names: TEAM_NAMES4,
+  phase: "solving",
+  settings: TEAMS,
+  times: [
+    [10_420, 9_870, null],
+    [8_910, 9_650, 9_120],
+    [12_340, 11_980, 12_100],
+    [10_050, 10_990, null],
+  ],
+  solving: [3],
+  teamPoints: { A: 1, B: 0 },
+  points: [1, 0, 1, 0],
+};
+const TEAM_FULL: MockRoomOptions = {
+  ...TEAM_SOLVING,
+  times: [
+    [10_420, 9_870, 10_870, 9_540, 11_020],
+    [8_910, 9_650, 9_120, 10_230, 8_870],
+    [12_340, 11_980, 12_100, 12_560, 13_020],
+    [10_050, 10_990, 9_990, 10_560, 11_400],
+  ],
+  solveIndex: 4,
+  solving: [],
+};
+/** In the call: you (p0), Nomin talking, Bat muted. */
+const IN_CALL = {
+  call: {
+    status: "on" as const,
+    peerId: "s0",
+    participants: [
+      { peerId: "s0", playerId: "p0", name: NAMES[0], audio: true, video: false, teamOnly: false },
+      { peerId: "s1", playerId: "p1", name: NAMES[1], audio: true, video: false, teamOnly: false },
+      { peerId: "s2", playerId: "p2", name: NAMES[2], audio: false, video: false, teamOnly: false },
+    ],
+    mics: [
+      { id: "a", label: "MacBook microphone" },
+      { id: "b", label: "AirPods" },
+    ],
+    micId: "a",
+  },
+  speaking: new Set(["s1"]),
+};
+const OTHERS_IN_CALL = { call: { participants: IN_CALL.call.participants.slice(1) } };
+
 const ROOM_STATES: Record<string, RoomState> = {
+  "team-lobby": { mock: { names: TEAM_NAMES4, phase: "lobby", settings: TEAMS }, demo: { call: OTHERS_IN_CALL } },
+  "team-lobby-one-side": { mock: { names: NAMES.slice(0, 3), phase: "lobby", settings: TEAMS, teamOf: ["A", "A", "A"] } },
+  "team-lobby-guest": { mock: { names: TEAM_NAMES4, phase: "lobby", settings: { ...TEAMS, teams: "fastest" }, meIndex: 1 } },
+  "team-solving": { mock: TEAM_SOLVING, demo: { call: IN_CALL } },
+  "team-standings": { mock: TEAM_SOLVING, demo: { sheetOpen: true, call: IN_CALL } },
+  "team-set-result": { mock: { ...TEAM_FULL, phase: "set_result" } },
+  "team-match-over": { mock: { ...TEAM_FULL, phase: "match_over", teamPoints: { A: 2, B: 1 } } },
+  "team-match-over-lost": { mock: { ...TEAM_FULL, phase: "match_over", teamPoints: { A: 1, B: 2 } } },
+  "call-in": { mock: SOLVING, demo: { call: IN_CALL } },
+  "call-muted": { mock: SOLVING, demo: { call: { ...IN_CALL, call: { ...IN_CALL.call, audio: false } } } },
+  "call-team-only": {
+    mock: TEAM_SOLVING,
+    demo: {
+      call: {
+        ...IN_CALL,
+        call: {
+          ...IN_CALL.call,
+          teamOnly: true,
+          participants: IN_CALL.call.participants.map((p) => (p.peerId === "s0" ? { ...p, teamOnly: true } : p)),
+        },
+      },
+    },
+  },
+  "call-others": { mock: { phase: "lobby" }, demo: { call: OTHERS_IN_CALL } },
   "lobby-alone": { mock: { names: ["Temuulen"], phase: "lobby" } },
   "lobby-private-alone": { mock: { names: ["Temuulen"], phase: "lobby", pin: "4821" } },
   "lobby-private-players": { mock: { phase: "lobby", pin: "4821" } },

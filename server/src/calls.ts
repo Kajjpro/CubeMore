@@ -24,12 +24,13 @@ export class CallRegistry {
     return true;
   }
 
-  /** Mic / camera on or off. False when the peer isn't in the call. */
-  setMedia(roomCode: string, peerId: string, audio: boolean, video: boolean): boolean {
+  /** Mic / camera on or off, and who hears them (teamOnly). False when the peer isn't in the call. */
+  setMedia(roomCode: string, peerId: string, audio: boolean, video: boolean, teamOnly = false): boolean {
     const peer = this.calls.get(roomCode)?.get(peerId);
     if (!peer) return false;
     peer.audio = audio;
     peer.video = video;
+    peer.teamOnly = teamOnly;
     return true;
   }
 

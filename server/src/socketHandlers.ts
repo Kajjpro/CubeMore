@@ -34,6 +34,7 @@ import {
   changePenaltySchema,
   chatSchema,
   chooseEventSchema,
+  chooseTeamSchema,
   watchSchema,
   contactIdSchema,
   contactSchema,
@@ -429,7 +430,7 @@ export function registerSocketHandlers(
       inMyRoom(socket, (live, playerId) => {
         const player = logic.findPlayer(live.state, playerId);
         if (!player) return logic.fail("You're not in this room.");
-        const joined = calls.join(live.code, { peerId: socket.id, playerId: player.publicId, name: player.nickname, audio: input.audio, video: input.video });
+        const joined = calls.join(live.code, { peerId: socket.id, playerId: player.publicId, name: player.nickname, audio: input.audio, video: input.video, teamOnly: input.teamOnly ?? false });
         if (!joined) return logic.fail(`The call is full (${MAX_CALL_SIZE} people).`);
         sendCallState(live.code);
         return { ok: true, peerId: socket.id, iceServers, participants: calls.participants(live.code) };
@@ -443,7 +444,7 @@ export function registerSocketHandlers(
 
     on(socket, ClientEvents.CALL_MEDIA, callMediaSchema, (input) => {
       const roomCode = socket.data.roomCode;
-      if (!roomCode || !calls.setMedia(roomCode, socket.id, input.audio, input.video)) return logic.fail("You're not in the call.", "NOT_CURRENT");
+      if (!roomCode || !calls.setMedia(roomCode, socket.id, input.audio, input.video, input.teamOnly ?? false)) return logic.fail("You're not in the call.", "NOT_CURRENT");
       sendCallState(roomCode);
       return { ok: true };
     });
@@ -548,6 +549,14 @@ export function registerSocketHandlers(
 
     on(socket, ClientEvents.CHOOSE_EVENT, chooseEventSchema, (input) =>
       inMyRoom(socket, (live, playerId) => commitResult(live, logic.chooseEvent(live.state, playerId, input.cubeEvent, Date.now()))),
+    );
+
+    on(socket, ClientEvents.CHOOSE_TEAM, chooseTeamSchema, (input) =>
+      inMyRoom(socket, (live, playerId) => commitResult(live, logic.chooseTeam(live.state, playerId, input.team))),
+    );
+
+    on(socket, ClientEvents.BALANCE_TEAMS, emptySchema, () =>
+      inMyRoom(socket, (live, playerId) => commitResult(live, logic.balanceTeams(live.state, playerId))),
     );
 
     /** Host: done setting up; the room is listed and others can join. */

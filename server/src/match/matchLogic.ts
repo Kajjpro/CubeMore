@@ -21,7 +21,19 @@
  * too late or twice is harmless: it can never skip a solve.
  */
 
-import type { CubeEventId, ErrorCode, RoomSettings, SetStanding, SolveResult } from "@cube-racing/shared";
+import {
+  setWinnersOfTeams,
+  TEAM_IDS,
+  teamMembers,
+  teamStandings,
+  type CubeEventId,
+  type ErrorCode,
+  type RoomSettings,
+  type SetStanding,
+  type SetTeams,
+  type SolveResult,
+  type TeamId,
+} from "@cube-racing/shared";
 import {
   findMatchWinner,
   handicapWinners,
@@ -68,11 +80,13 @@ export interface NewMatch {
   roster: string[];
   /** The event each roster player picked (see setEvents). */
   picks: Record<string, CubeEventId>;
+  /** Team matches: the team each player is on. */
+  teamPicks?: Record<string, TeamId>;
   scrambles: SetScrambles;
   now: number;
 }
 
-export function createMatch({ matchId, settings, timing, roster, picks, scrambles, now }: NewMatch): Match {
+export function createMatch({ matchId, settings, timing, roster, picks, teamPicks = {}, scrambles, now }: NewMatch): Match {
   const empty: Match = {
     matchId,
     phase: "solving",
@@ -89,9 +103,10 @@ export function createMatch({ matchId, settings, timing, roster, picks, scramble
     phaseEndsAt: null,
     solveDeadline: null,
     winnerIds: [],
+    teams: settings.teams === "off" ? null : { mode: settings.teams, of: {}, points: { A: 0, B: 0 }, winners: [] },
     replays: {},
   };
-  return beginSet(empty, 0, roster, picks, scrambles, now);
+  return beginSet(empty, 0, roster, picks, scrambles, now, teamPicks);
 }
 
 /** Starts the next set (after set_result). The roster is whoever is in the room right now. */
@@ -101,11 +116,27 @@ export function startNextSet(
   picks: Record<string, CubeEventId>,
   scrambles: SetScrambles,
   now: number,
+  teamPicks: Record<string, TeamId> = {},
 ): MatchUpdate {
   if (match.phase !== "set_result") {
     return fail("The next set can only start after a set result.");
   }
-  return ok(beginSet(match, match.setIndex + 1, roster, picks, scrambles, now));
+  return ok(beginSet(match, match.setIndex + 1, roster, picks, scrambles, now, teamPicks));
+}
+
+/**
+ * Team matches: everyone's team for a set. Players keep their team for the whole
+ * match; someone new brings their pick (or, without one, joins the smaller team).
+ */
+export function setTeams(match: Pick<Match, "teams">, roster: string[], teamPicks: Record<string, TeamId>): Record<string, TeamId> {
+  if (!match.teams) return {};
+  const of = { ...match.teams.of };
+  for (const id of roster) {
+    if (of[id]) continue;
+    const size = (team: TeamId) => roster.filter((other) => of[other] === team).length;
+    of[id] = teamPicks[id] ?? (size("A") <= size("B") ? "A" : "B");
+  }
+  return of;
 }
 
 /**
@@ -150,6 +181,7 @@ function beginSet(
   picks: Record<string, CubeEventId>,
   scrambles: SetScrambles,
   now: number,
+  teamPicks: Record<string, TeamId> = {},
 ): Match {
   const thisSet = setEvents(match, roster, picks);
   if (roster.some((id) => !thisSet[id]) || !scramblesFit(match.settings, thisSet, scrambles)) {
@@ -168,7 +200,8 @@ function beginSet(
   }
 
   const events = { ...match.events, ...thisSet };
-  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, events, results, points, replays: {} }, 0, now);
+  const teams = match.teams && { ...match.teams, of: setTeams(match, roster, teamPicks) };
+  return startSolve({ ...match, setIndex, roster: [...roster], scrambles, events, results, points, teams, replays: {} }, 0, now);
 }
 
 function startSolve(match: Match, solveIndex: number, now: number): Match {
@@ -355,6 +388,12 @@ function tickOnce(match: Match, now: number, presentIds: string[]): Match {
 
     case "set_result": {
       if (match.phaseEndsAt === null || now < match.phaseEndsAt) return match;
+      if (match.teams) {
+        const team = findMatchWinner(match.teams.points, presentTeams(match, presentIds), targetPoints(match.settings.winCondition));
+        if (team) return finishTeamMatch(match, [team as TeamId]);
+        if (presentIds.length === 0) return finishMatch(match, []);
+        return match;
+      }
       const winner = findMatchWinner(match.points, presentIds, targetPoints(match.settings.winCondition));
       if (winner) return finishMatch(match, [winner]);
       if (presentIds.length === 0) return finishMatch(match, []);
@@ -400,20 +439,31 @@ function finishSet(match: Match, now: number): Match {
   }
 
   // Handicap: each player's pace going into this set; whoever beats theirs by the most wins.
-  const paces = match.settings.scoring === "handicap" ? currentPaces(match) : null;
-  const winnerIds = paces ? handicapWinners(standings, paces) : setWinners(standings);
+  const paces = match.settings.scoring === "handicap" && !match.teams ? currentPaces(match) : null;
+  // Team matches: the better team wins the set, and everyone on it gets the point.
+  const teamResult = match.teams ? finishedTeams(match) : null;
+  const winnerIds = teamResult
+    ? match.roster.filter((id) => teamResult.winners.includes(match.teams!.of[id]))
+    : paces
+      ? handicapWinners(standings, paces)
+      : setWinners(standings);
   const points = { ...match.points };
   for (const id of winnerIds) {
     points[id] += 1;
   }
+  const teams = match.teams && teamResult && {
+    ...match.teams,
+    points: Object.fromEntries(TEAM_IDS.map((t) => [t, match.teams!.points[t] + (teamResult.winners.includes(t) ? 1 : 0)])) as Record<TeamId, number>,
+  };
 
   return {
     ...match,
     phase: "set_result",
     points,
+    teams,
     finishedSets: [
       ...match.finishedSets,
-      { setIndex: match.setIndex, roster: match.roster, results, standings, winnerIds, paces },
+      { setIndex: match.setIndex, roster: match.roster, results, standings, winnerIds, paces, teams: teamResult },
     ],
     phaseEndsAt: now + match.timing.setResultMs,
     solveDeadline: null,
@@ -429,11 +479,43 @@ export function endMatch(match: Match, presentIds: string[]): MatchUpdate {
   if (match.phase === "match_over") {
     return fail("The match is already over.");
   }
+  if (match.teams) {
+    return ok(finishTeamMatch(match, pointLeaders(match.teams.points, presentTeams(match, presentIds)) as TeamId[]));
+  }
   return ok(finishMatch(match, pointLeaders(match.points, presentIds)));
 }
 
 function finishMatch(match: Match, winnerIds: string[]): Match {
   return { ...match, phase: "match_over", winnerIds, phaseEndsAt: null, solveDeadline: null };
+}
+
+/** A team match ends: everyone who raced for the winning team(s) wins. */
+function finishTeamMatch(match: Match, teams: TeamId[]): Match {
+  const of = match.teams!.of;
+  const winnerIds = Object.keys(of).filter((id) => teams.includes(of[id]));
+  return { ...finishMatch(match, winnerIds), teams: { ...match.teams!, winners: teams } };
+}
+
+/** The teams that still have someone in the room (only they can win the match). */
+function presentTeams(match: Match, presentIds: string[]): TeamId[] {
+  return TEAM_IDS.filter((team) => presentIds.some((id) => match.teams?.of[id] === team));
+}
+
+/** The finished set of a team match: each team's result and the winner(s). */
+function finishedTeams(match: Match): SetTeams {
+  const standings = currentTeamStandings(match) as Partial<Record<TeamId, SetStanding>>;
+  return { standings, winners: setWinnersOfTeams(standings) };
+}
+
+/** Team matches: each team's set result so far (null until the set is done for it). */
+export function currentTeamStandings(match: Match): Partial<Record<TeamId, SetStanding | null>> {
+  if (!match.teams) return {};
+  return teamStandings(match.teams.mode, match.settings.format, match.roster, match.teams.of, match.results, solvesPerSet(match.settings.format));
+}
+
+/** Team matches: the members of a team in the current set. */
+export function teamRoster(match: Match, team: TeamId): string[] {
+  return match.teams ? teamMembers(team, match.roster, match.teams.of) : [];
 }
 
 // ---------------------------------------------------------------------------

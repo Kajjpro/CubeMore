@@ -14,13 +14,18 @@
  */
 
 import {
-  PLUS_TWO_MS,
-  type Mark,
+  bestOf,
+  compareMarks,
+  standingOfMarks,
+  scoredTime,
   type RoomFormat,
   type SetStanding,
   type SolveResult,
   type WinCondition,
 } from "@cube-racing/shared";
+
+// The mark maths itself lives in shared/marks.ts (the client shows team times with it).
+export { bestOf, compareMarks, roundHalfUpDivide, scoredTime, trimmedAverage } from "@cube-racing/shared";
 
 export function solvesPerSet(format: RoomFormat): number {
   return { single: 1, ao5: 5, ao12: 12 }[format];
@@ -31,47 +36,9 @@ export function targetPoints(winCondition: WinCondition): number | null {
   return { bo1: 1, bo3: 2, bo5: 3, unlimited: null }[winCondition];
 }
 
-/** The time used for scoring: truncated to hundredths, plus 2 s for +2, or "DNF". */
-export function scoredTime(result: SolveResult): Mark {
-  if (result.penalty === "DNF") return "DNF";
-  const truncated = Math.floor(result.timeMs / 10) * 10;
-  return result.penalty === "+2" ? truncated + PLUS_TWO_MS : truncated;
-}
-
-/** For sorting: negative if `a` is better than `b`. DNF is worse than any time. */
-export function compareMarks(a: Mark, b: Mark): number {
-  if (a === "DNF" && b === "DNF") return 0;
-  if (a === "DNF") return 1;
-  if (b === "DNF") return -1;
-  return a - b;
-}
-
-export function bestOf(marks: Mark[]): Mark {
-  return [...marks].sort(compareMarks)[0] ?? "DNF";
-}
-
-/** `sum / count`, rounded to the nearest whole number with halves going up. Whole-number maths only. */
-export function roundHalfUpDivide(sum: number, count: number): number {
-  return Math.floor((2 * sum + count) / (2 * count));
-}
-
-/** Drops `trim` best and `trim` worst, then averages the rest (in hundredths). */
-export function trimmedAverage(marks: Mark[], trim: number): Mark {
-  const kept = [...marks].sort(compareMarks).slice(trim, marks.length - trim);
-  if (kept.includes("DNF")) return "DNF";
-
-  // Every mark is a multiple of 10 ms, so dividing by 10 gives exact whole hundredths.
-  const hundredths = kept.map((mark) => (mark as number) / 10);
-  const sum = hundredths.reduce((total, value) => total + value, 0);
-  return roundHalfUpDivide(sum, kept.length) * 10;
-}
-
 /** A player's result for a finished set: the single or the average, plus their best single. */
 export function setStanding(results: SolveResult[], format: RoomFormat): SetStanding {
-  const marks = results.map(scoredTime);
-  const best = bestOf(marks);
-  const result = format === "single" ? marks[0] : trimmedAverage(marks, 1);
-  return { result, best };
+  return standingOfMarks(results.map(scoredTime), format);
 }
 
 /**

@@ -6,12 +6,16 @@ import {
   type PlayerSnapshot,
   type RoomSettings,
   type RoomSnapshot,
+  type TeamId,
+  TEAM_IDS,
+  teamName,
 } from "@cube-racing/shared";
 import { serverNow } from "../clock";
 import { EVENT_SHORT, nameList, settingsSummary } from "../labels";
 import { SITE } from "../site";
 import { eventOf } from "../mixed";
 import { PlayerList } from "./RoomPanels";
+import { TeamSeats } from "./Teams";
 import { LobbySettings, MixedEventPicker } from "./SettingsForm";
 import { roomLink, useCopy } from "./TopBar";
 import { RoomEventIcon } from "./ui";
@@ -28,6 +32,10 @@ interface Props {
   onChooseEvent: (cubeEvent: CubeEventId) => void;
   /** Just watch the next race, or race. */
   onSetWatching: (watching: boolean) => void;
+  /** Team rooms: race for this team. */
+  onChooseTeam: (team: TeamId) => void;
+  /** Host, team rooms: even teams. */
+  onBalanceTeams: () => void;
   /** The room chat (built by RoomView). */
   chat: ReactNode;
 }
@@ -40,7 +48,8 @@ const canShare = typeof navigator !== "undefined" && typeof navigator.share === 
  * code and PIN; a public room is on the home page, so it needs no code). There's no
  * The host presses Start when everyone is there: nothing starts by itself.
  */
-export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, chat }: Props) {
+export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdateSettings, onChooseEvent, onSetWatching, onChooseTeam, onBalanceTeams, chat }: Props) {
+  const teams = room.settings.teams !== "off";
   const mixed = room.settings.mixedEvents;
   const [copied, copy] = useCopy(room.code, room.pin);
   const alone = room.players.length === 1;
@@ -144,21 +153,33 @@ export function Lobby({ room, youId, isHost, starting, onStart, onKick, onUpdate
       <div className="lobby-col">
         <section className="panel section players-card" style={{ gridArea: "players" }}>
           <h2 className="card-title">
-            Racers
+            {teams ? "Teams" : "Racers"}
             <span className="count-pill">
               {room.players.length}/{room.settings.maxPlayers}
             </span>
           </h2>
           {mixed && youId && <MixedEventPicker value={eventOf(room, youId)} onChange={onChooseEvent} />}
-          <PlayerList
-            players={room.players}
-            hostId={room.hostId}
-            youId={youId}
-            onKick={isHost ? onKick : undefined}
-            onSetWatching={onSetWatching}
-            seats
-            showEvents={mixed}
-          />
+          {teams ? (
+            <TeamSeats
+              room={room}
+              youId={youId}
+              isHost={isHost}
+              onChooseTeam={onChooseTeam}
+              onBalance={onBalanceTeams}
+              onKick={isHost ? onKick : undefined}
+              onSetWatching={onSetWatching}
+            />
+          ) : (
+            <PlayerList
+              players={room.players}
+              hostId={room.hostId}
+              youId={youId}
+              onKick={isHost ? onKick : undefined}
+              onSetWatching={onSetWatching}
+              seats
+              showEvents={mixed}
+            />
+          )}
         </section>
 
         <section className="panel lobby-chat" style={{ gridArea: "chat" }} aria-label="Room chat">
@@ -267,6 +288,15 @@ function StartBar(props: {
       </>
     );
   }
+  const teamProblem = teamsMissing(props.room);
+  if (teamProblem && !props.alone) {
+    return (
+      <>
+        <p className="grow small muted">{teamProblem}</p>
+        {startButton("Start", false)}
+      </>
+    );
+  }
   if (props.alone) {
     return (
       <>
@@ -287,6 +317,14 @@ function StartBar(props: {
       {startButton("Start", true)}
     </>
   );
+}
+
+/** Team rooms: "The Red team has nobody yet." when a team is empty, else null. */
+function teamsMissing(room: RoomSnapshot): string | null {
+  if (room.settings.teams === "off") return null;
+  const racing = room.players.filter((p) => !p.watching);
+  const empty = TEAM_IDS.find((team) => !racing.some((p) => p.team === team));
+  return empty ? `The ${teamName(empty)} has nobody yet.` : null;
 }
 
 /** "4 players in the room", or with people just watching: "2 racing, 2 watching". */

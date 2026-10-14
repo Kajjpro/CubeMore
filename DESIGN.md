@@ -98,6 +98,14 @@ links in `client/src/site.ts`, they show in a side panel (two columns from 960 p
   the word "offline" while disconnected, `Menu`.
 - The Menu starts with the room name, code / PIN and `Copy link`, then smart cube, streamer
   overlay, preferences, keyboard shortcuts (as keycaps) and `Leave room`.
+- **The call** sits in the header between the format and the status pill: the faces of
+  everyone in it (a green ring while they talk, a crossed mic when muted, their team's square
+  in a team match), then `Mute` (red while muted, so nobody talks into a muted mic; M toggles
+  it), `Camera`, `Everyone` / `Team only` (team matches), the microphone list, `Leave`. Not in
+  the call: "Voice chat" (or the faces of who's in it), `Join` (blue when someone's waiting)
+  and `With camera`. Button labels show from 1280 px, names from 1200 px; below that, icons
+  and faces (names in tooltips and aria-labels). On portrait phones the header wraps and the
+  call is its own full-width row. Like the rest of the header, it fades while you solve.
 - Slim banners under the header (reconnecting, server notice, errors); never a modal.
 
 **New room.** *Setup* (host only, nothing else can reach it): "Set up your room", the full
@@ -106,6 +114,14 @@ the *warm-up*: the invite card (name, summary, Public/Private, code and PIN for 
 `Copy link` / `Share`, "Race settings" folded away), a warm-up scramble ("Warm-up, doesn't count")
 and timer, your last warm-up times with ao5 / ao12, and the chat (two columns from 960 px: warm-up
 left). Someone joining mid-solve: "Anu joined. The race starts when you stop the timer."
+**Team matches.** Blue and Red, the cube's colours, shown only as a small square next to the
+team's name (the name is always written). Lobby: a column per team (a 3 px top edge in its
+colour; yours has the accent border and a "you" tag), each with `Join`; under them `Just watch`
+and, for the host, `Balance teams`. During the match: the score above the standings
+("Blue 1 – 0 Red", the leader bold, "Solve 2: Red by 0.61, first to 2 wins"), and the
+standings grouped by team: a grey team row (its time for each solve, its average, its points)
+above its players. Set result: a team table, then everyone's results. Match over: the two
+teams side by side, the winners' card the solid one with "Winner".
 In a mixed room, a newcomer gets a *Pick your event* card over the lobby (the event tiles,
 `Ready with Pyra`); everyone else's start bar says "Waiting for Bilguun to pick an event".
 
@@ -247,7 +263,8 @@ saying an AI wrote it. Blue is only the stage being replayed. No emoji anywhere.
 meter, `PenaltyChoices`, type-in), `Standings`, `RoundPips` (the "Set 2, solve 3 of 5"
 label), `SessionStrip`, `FinishLine`,
 `Podium`, `SetResult`, `MatchOver`, `HostPanel`, `SessionPanel`, `RoomView` (layout; pure
-props, used by the real room and by `/dev/states`).
+props, used by the real room and by `/dev/states`). `CallBar`, `CallAudio` (Call.tsx);
+`TeamSeats`, `TeamScoreboard`, `TeamSetResult`, `TeamFinal` (Teams.tsx).
 
 ## Cuber conventions
 

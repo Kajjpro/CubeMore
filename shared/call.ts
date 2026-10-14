@@ -17,6 +17,8 @@ export interface CallParticipant {
   name: string;
   audio: boolean;
   video: boolean;
+  /** In a team match: their voice only goes to their own team. */
+  teamOnly: boolean;
 }
 
 /** A description (offer / answer) or a network candidate, between two peers. */

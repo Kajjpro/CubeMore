@@ -3,6 +3,7 @@
 // on both sides that needs updating.
 
 import type { CubeEventId } from "./cubeEvents";
+import type { TeamId, TeamMode } from "./teams";
 
 export const ROOM_FORMATS = ["single", "ao5", "ao12"] as const;
 export type RoomFormat = (typeof ROOM_FORMATS)[number];
@@ -51,6 +52,8 @@ export interface RoomSettings {
   scoring: ScoringMode;
   /** Smart cubes only: every solve must be a verified smart cube solve (3x3 events). */
   smartOnly: boolean;
+  /** Team match (two teams, see teams.ts): how a team's time is counted, or "off". */
+  teams: TeamMode;
 }
 
 /** A scramble that every player on its event solves. Made by the server. */
@@ -129,6 +132,8 @@ export interface PlayerSnapshot {
    * room's event. (In a running match, MatchSnapshot.events says what they race now.)
    */
   cubeEvent: CubeEventId;
+  /** Team rooms: the team they race for (fixed during a match they're in), else null. */
+  team: TeamId | null;
 }
 
 /**
@@ -144,6 +149,24 @@ export interface SetSummary {
   standings: Record<string, SetStanding>;
   /** Handicap only: each player's pace going into this set (ms), null = no pace yet. */
   paces: Record<string, number | null> | null;
+  /** Team matches: each team's set result, and the team(s) that won it. */
+  teams: SetTeams | null;
+}
+
+/** A finished set of a team match. A team with nobody in the set has no standing. */
+export interface SetTeams {
+  standings: Partial<Record<TeamId, SetStanding>>;
+  winners: TeamId[];
+}
+
+/** A team match, as everyone sees it. */
+export interface MatchTeams {
+  mode: Exclude<TeamMode, "off">;
+  /** The team of everyone who has raced in this match (fixed until it ends). */
+  of: Record<string, TeamId>;
+  points: Record<TeamId, number>;
+  /** The team(s) that won the match, once it's over. */
+  winners: TeamId[];
 }
 
 export interface MatchSnapshot {
@@ -178,8 +201,10 @@ export interface MatchSnapshot {
   finishedSets: SetSummary[];
   /** Handicap only: each roster player's pace for the current set (ms), null = no pace yet. */
   paces: Record<string, number | null> | null;
-  /** Filled in when the match is over. Empty = nobody won. */
+  /** Filled in when the match is over. Empty = nobody won. (Team matches: everyone on the winning team.) */
   winnerIds: string[];
+  /** Team matches, else null. Each team's current set result comes from teamStandings() (teams.ts). */
+  teams: MatchTeams | null;
 }
 
 /**
@@ -250,6 +275,8 @@ export interface PublicRoomInfo {
   visibility: RoomVisibility;
   /** Smart cubes only. */
   smartOnly: boolean;
+  /** A team match room. */
+  teams: boolean;
   hostName: string | null;
 }
 

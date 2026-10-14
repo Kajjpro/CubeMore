@@ -121,7 +121,7 @@ describe("reading the history", () => {
       kind: "set_finished",
       matchId,
       events: Object.fromEntries(players.map((p) => [p[0], "333" as const])),
-      set: { setIndex: 0, roster: players.map((p) => p[0]), results, standings, winnerIds: [], paces: null },
+      set: { setIndex: 0, roster: players.map((p) => p[0]), results, standings, winnerIds: [], paces: null, teams: null },
       scrambles: { "333": [SCRAMBLE] },
       replays,
       at: 2,

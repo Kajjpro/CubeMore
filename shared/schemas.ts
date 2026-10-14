@@ -29,6 +29,7 @@ import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
 import { SMART_SOLVE_LIMITS } from "./smartSolve";
 import { PRACTICE_KINDS, TRAINER_SAVE_MAX } from "./practice";
 import { FACES } from "./cube3";
+import { TEAM_IDS, TEAM_MODES } from "./teams";
 import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SCORING_MODES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -91,6 +92,7 @@ export const settingsChangesSchema = z.object({
   scoring: z.enum(SCORING_MODES).optional(),
   smartOnly: z.boolean().optional(),
   mixedEvents: z.boolean().optional(),
+  teams: z.enum(TEAM_MODES).optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */
@@ -141,6 +143,11 @@ export const watchSchema = z.object({
 /** Mixed rooms: the event you race (from the next match, or the next set if you're new). */
 export const chooseEventSchema = z.object({
   cubeEvent: cubeEventSchema,
+});
+
+/** Team rooms: the team you race for. */
+export const chooseTeamSchema = z.object({
+  team: z.enum(TEAM_IDS),
 });
 
 /**
@@ -339,7 +346,8 @@ export const trainerSaveSchema = z.object({ times: z.array(caseTimeSchema).min(1
 
 // ---- Voice and video calls ----
 
-export const callMediaSchema = z.object({ audio: z.boolean(), video: z.boolean() });
+/** Mic and camera on or off; `teamOnly`: in a team match, your voice only goes to your team. */
+export const callMediaSchema = z.object({ audio: z.boolean(), video: z.boolean(), teamOnly: z.boolean().optional() });
 
 /** A WebRTC offer / answer or network candidate for one other peer (relayed as is). */
 export const callSignalSchema = z

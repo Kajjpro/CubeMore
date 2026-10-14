@@ -15,8 +15,8 @@
  * re-render until the solve is over).
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot, TeamId } from "@cube-racing/shared";
 import { useNewScrambleAlert } from "../alerts";
 import { solveKey, useOutbox } from "../outbox";
 import { useLayout } from "../layout";
@@ -26,7 +26,7 @@ import { useSessionStats } from "../session";
 import type { TimerPhase } from "../timer/useSpeedTimer";
 import type { CubeMoves } from "../useRoom";
 import { useWakeLock } from "../wakeLock";
-import { CallAudio, CallPanel } from "./Call";
+import { CallAudio, CallBar, type CallDemo } from "./Call";
 import { ChatPanel } from "./ChatPanel";
 import { ConfirmButton } from "./ConfirmButton";
 import { DEBUG, DebugPanel } from "./DebugPanel";
@@ -37,6 +37,7 @@ import { useReactionPops, type Reaction, type ReactionPops } from "./Reactions";
 import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
 import { MixedEventPicker } from "./SettingsForm";
 import { Standings } from "./Standings";
+import { TeamScoreboard } from "./Teams";
 import { Timer, type TimerDemo } from "./Timer";
 import { TopBar } from "./TopBar";
 import { formatMark } from "../time";
@@ -49,6 +50,10 @@ export interface RoomActions {
   updateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
   /** Mixed rooms: the event you race. */
   chooseEvent: (cubeEvent: CubeEventId) => void;
+  /** Team rooms: the team you race for. */
+  chooseTeam: (team: TeamId) => void;
+  /** Host, team rooms: split everyone into two even teams. */
+  balanceTeams: () => void;
   /** Step away and just watch (true), or race again from the next set (false). */
   setWatching: (watching: boolean) => void;
   /** Host: setup done, open the room. */
@@ -76,6 +81,8 @@ export interface RoomDemo {
   unread?: number;
   inputMode?: InputMode;
   runningDisplay?: RunningDisplay;
+  /** The call bar: a made-up call (default: nobody in it). */
+  call?: CallDemo;
 }
 
 export interface RoomViewProps {
@@ -208,9 +215,9 @@ export function RoomView(props: RoomViewProps) {
       connected={props.connected}
       active={chatVisible}
       onSend={actions.sendChat}
-      call={demo ? undefined : <CallPanel />}
     />
   );
+  const callTeams = useCallTeams(room);
 
   return (
     <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={focus}>
@@ -230,6 +237,7 @@ export function RoomView(props: RoomViewProps) {
         watching={me ? me.watching : null}
         awayCostsSolves={awayCostsSolves}
         onSetWatching={actions.setWatching}
+        call={!room.setup && <CallBar youId={youId} teams={callTeams} focus={focus} demo={demo ? (demo.call ?? {}) : undefined} />}
       />
 
       <div className="banners" aria-live="polite">
@@ -282,6 +290,8 @@ export function RoomView(props: RoomViewProps) {
           onUpdateSettings={actions.updateSettings}
           onChooseEvent={actions.chooseEvent}
           onSetWatching={actions.setWatching}
+          onChooseTeam={actions.chooseTeam}
+          onBalanceTeams={actions.balanceTeams}
           chat={chatPanel}
         />
       ) : (
@@ -454,6 +464,22 @@ export function RoomView(props: RoomViewProps) {
       {DEBUG && <DebugPanel room={props.room} />}
     </div>
   );
+}
+
+/**
+ * Who is on which team, for the call (team talk and the tiles): the match's
+ * teams while one runs, else the teams picked in the lobby. null without teams.
+ * The same object until a team changes.
+ */
+function useCallTeams(room: RoomSnapshot): Record<string, TeamId> | null {
+  const live = room.match && room.match.phase !== "match_over" ? room.match.teams?.of : null;
+  const teams: Record<string, TeamId> | null = live
+    ? live
+    : room.settings.teams !== "off"
+      ? Object.fromEntries(room.players.filter((p) => p.team).map((p) => [p.id, p.team!]))
+      : null;
+  const key = teams ? JSON.stringify(Object.entries(teams).sort()) : "";
+  return useMemo(() => teams, [key]);
 }
 
 /** The header's live status: "3/5 Solved", "6 players", "Set 2 done"... */
@@ -645,6 +671,7 @@ function StandingsBlock(props: {
   const waiting = props.showWaiting && match.phase === "solving" ? waitingText(waitingNames(room, match, youId)) : null;
   return (
     <div className="standings-block">
+      {match.teams && <TeamScoreboard match={match} youId={youId} />}
       {waiting && <p className="waiting-line">{waiting}</p>}
       <Standings
         room={room}

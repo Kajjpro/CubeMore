@@ -1207,8 +1207,12 @@ p.banner {
 
 .rooms-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
+}
+
+.rooms-actions .join-form {
+  grid-column: 1 / -1;
 }
 
 .join-form .code-input {
@@ -1368,7 +1372,11 @@ p.banner {
 
 @media (min-width: 640px) {
   .rooms-actions {
-    grid-template-columns: auto minmax(0, 260px);
+    grid-template-columns: auto auto minmax(0, 260px);
+  }
+
+  .rooms-actions .join-form {
+    grid-column: auto;
   }
 
   .home-cards {
@@ -2288,6 +2296,7 @@ p.banner {
 
 .room[data-focus="true"] .topbar > *,
 .room[data-focus="true"] .banners,
+.room[data-focus="true"] .call-bar,
 .room[data-focus="true"] .scramble-wrap,
 .room[data-focus="true"] .limit-bar,
 .room[data-focus="true"] .side,
@@ -7048,44 +7057,131 @@ html.overlay-mode body {
 }
 
 /* ---------------------------------------------------------------------------
-   Voice and video call (top of the room chat)
+   Voice and video call: always in sight. In the room header on wide screens
+   and landscape phones; its own row under the header on portrait phones.
    --------------------------------------------------------------------------- */
 
 .call-audio {
   display: none;
 }
 
-.call-panel {
+.call-bar {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 12px 10px;
-  border-bottom: 1px solid var(--border);
 }
 
-.call-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+.call-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* What opens from the bar (the microphone list, "Mute for me", errors) drops down like the menu. */
+.call-drops {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  width: max-content;
+  max-width: min(380px, calc(100vw - 16px));
+}
+
+.call-drops > * {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.call-drops:empty,
+.call-team-note {
+  display: none;
+}
+
+.call-people {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
   padding: 0;
   list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.call-people::-webkit-scrollbar {
+  display: none;
 }
 
 .call-tile {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  display: flex;
+  flex: none;
+}
+
+.call-tile-button {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: var(--r-sm);
+  gap: 6px;
+  min-height: 36px;
+  max-width: 150px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  min-width: 0;
+  cursor: default;
+}
+
+button.call-tile-button {
+  cursor: pointer;
+}
+
+/* (The header's dense buttons get padding of their own; the faces keep theirs.) */
+.topbar button.call-tile-button[data-dense] {
+  min-height: 36px;
+  padding: 2px 8px 2px 2px;
+}
+
+button.call-tile-button:hover,
+.call-tile-button[aria-pressed="true"] {
   background: var(--surface-2);
 }
 
-.call-tile video {
+.call-face {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  /* The talking ring. */
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 120ms ease;
+}
+
+.call-tile[data-talking="true"] .call-face {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--green);
+}
+
+.call-face video {
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
+  background: var(--surface-2);
 }
 
 /* Your own camera, mirrored like a mirror. */
@@ -7093,44 +7189,214 @@ html.overlay-mode body {
   transform: scaleX(-1);
 }
 
-.call-name {
+.call-badge {
   position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 3px;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.call-team {
+  position: absolute;
+  left: -2px;
+  top: -2px;
+}
+
+.call-name {
   overflow: hidden;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12.5px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
-  text-shadow: 0 0 3px var(--surface);
 }
 
-.call-muted {
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.call-controls {
+.call-buttons,
+.call-join {
+  flex: none;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
-.call-controls button {
-  min-height: 32px;
+.call-join {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.call-join-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.call-bar[data-in-call="false"] .call-people + .call-join .call-join-text {
+  display: none;
+}
+
+.call-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  min-width: 34px;
   padding: 0 10px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
-.call-controls button[aria-pressed="true"] {
+.call-button[aria-pressed="true"] {
   border-color: var(--text);
+}
+
+/* Muted: the mic button says so loudly, so you never talk into a muted mic. */
+.call-button[data-off="true"] {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .call-leave {
   color: var(--red);
+}
+
+.call-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-extra select {
+  min-height: 34px;
+  max-width: 100%;
+}
+
+.call-note {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* In the header: small pictures, and names and button labels only where there's room. */
+.call-bar[data-video="true"] .call-tile[data-video="true"] .call-face {
+  width: 52px;
+  height: 39px;
+  border-radius: var(--r-xs);
+}
+
+.call-bar[data-video="true"] .call-tile[data-video="true"] .call-tile-button {
+  flex-direction: row;
+  gap: 6px;
+  padding: 2px 8px 2px 2px;
+  border-radius: var(--r-sm);
+}
+
+@media (max-width: 1279px) {
+  .call-button-label {
+    display: none;
+  }
+
+  .call-buttons .call-button,
+  .call-join .call-button:not(.primary) {
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .call-bar[data-in-call="true"] .call-name {
+    display: none;
+  }
+
+  .topbar .call-bar[data-in-call="true"] button.call-tile-button[data-dense] {
+    padding: 2px;
+  }
+}
+
+@media (max-width: 899px) {
+  .call-join-text > span {
+    display: none;
+  }
+}
+
+/* In the call on a smaller screen: the header drops the format (it's in the lobby and the Menu) to fit the faces. */
+@media (min-width: 641px) and (max-width: 1099px) {
+  .topbar:has(.call-bar[data-in-call="true"]) .format {
+    display: none;
+  }
+}
+
+/* Portrait phones: the header wraps, and the call gets its own full row under it. */
+@media (max-width: 640px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  /* The first line shrinks its text (not wraps it) to keep the Menu button on it. */
+  .topbar .format {
+    flex: 1 1 0;
+  }
+
+  .call-bar {
+    order: 10;
+    flex: 1 0 100%;
+    gap: 6px;
+    margin: 4px calc(-1 * max(8px, env(safe-area-inset-right))) 0 calc(-1 * max(8px, env(safe-area-inset-left)));
+    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+    border-top: 1px solid var(--border);
+  }
+
+  .call-row {
+    min-height: 36px;
+  }
+
+  .call-join-text > span {
+    display: inline;
+  }
+
+  .call-bar[data-video="true"] .call-tile[data-video="true"] .call-face {
+    width: 80px;
+    height: 60px;
+    border-radius: var(--r-sm);
+  }
+
+  .call-bar[data-video="true"] .call-tile[data-video="true"] .call-tile-button {
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .call-drops {
+    position: static;
+    width: auto;
+    max-width: none;
+  }
+
+  .call-drops > * {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .call-team-note {
+    display: block;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -7372,4 +7638,356 @@ a.trainer-case-title:hover {
 
 .case-page .button-link {
   margin-right: 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Team matches: two teams, Blue and Red (the cube's colours). The colour is
+   only a small square; the team's name is always written next to it.
+   --------------------------------------------------------------------------- */
+
+.team-swatch {
+  flex: none;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--sticker-4);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+
+.team-swatch[data-team="B"] {
+  background: var(--sticker-2);
+}
+
+.team-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.team-you {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.team-tag {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---- The lobby: a column per team ---- */
+
+.team-seats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.team-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--sticker-4);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.team-column[data-team="B"] {
+  border-top-color: var(--sticker-2);
+}
+
+.team-column[data-mine="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-top-color: var(--sticker-4);
+}
+
+.team-column[data-mine="true"][data-team="B"] {
+  border-top-color: var(--sticker-2);
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.team-head .team-name {
+  font-size: 15px;
+}
+
+.team-join {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.team-column .seats {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.team-column .seat {
+  min-height: 48px;
+}
+
+.team-empty {
+  margin: 0;
+  padding: 14px 4px;
+  text-align: center;
+}
+
+.team-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.team-tools p {
+  margin: 0;
+  min-width: 12em;
+}
+
+/* Narrow phones: the two columns stack. */
+@media (max-width: 420px) {
+  .team-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- During the match: the score above the standings ---- */
+
+.team-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.team-score-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.team-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-weight: 650;
+  color: var(--text-2);
+}
+
+.team-side.right {
+  justify-content: flex-end;
+}
+
+.team-side[data-lead="true"] {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.team-side .team-you {
+  margin: 0;
+}
+
+.team-points {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.team-score-note {
+  margin: 0;
+  text-align: center;
+}
+
+/* ---- The standings: a row per team above its players ---- */
+
+.standings.dense tr.team-row > * {
+  background: var(--surface-2);
+  font-weight: 700;
+  cursor: default;
+}
+
+.standings.dense tbody tr.team-row:hover > * {
+  background: var(--surface-2);
+}
+
+.standings.dense tr.team-row .name-col {
+  padding-left: 2px;
+}
+
+.team-row-name {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
+.standings.dense tr.team-row td.rank,
+.standings.dense tr.team-member td.rank {
+  text-align: center;
+}
+
+.standings.dense tr.team-row[data-team="A"] td.rank {
+  box-shadow: inset 3px 0 0 var(--sticker-4);
+}
+
+.standings.dense tr.team-row[data-team="B"] td.rank {
+  box-shadow: inset 3px 0 0 var(--sticker-2);
+}
+
+.standings.dense tr.team-member .team-swatch {
+  width: 8px;
+  height: 8px;
+  opacity: 0.7;
+}
+
+/* ---- Results ---- */
+
+.team-ranking .who {
+  font-size: 15px;
+}
+
+.team-final {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--sticker-4);
+  border-radius: var(--r);
+  background: var(--surface);
+  animation: rise 280ms var(--ease) both;
+}
+
+.team-card[data-team="B"] {
+  border-top-color: var(--sticker-2);
+}
+
+/* The winners: the one solid block, like first place on the podium. */
+.team-card[data-won="true"] {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+.team-card[data-won="true"][data-team="A"] {
+  border-top-color: var(--sticker-4);
+}
+
+.team-card[data-won="true"][data-team="B"] {
+  border-top-color: var(--sticker-2);
+}
+
+.team-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.team-card-points {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.team-card-won {
+  margin: 0;
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.team-card-members {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-card-members li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.team-card-members li .grow {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-card-members li.me {
+  color: var(--accent);
+}
+
+@media (max-width: 420px) {
+  .team-final {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-card {
+    animation: none;
+  }
+}
+
+/* Phones: the team score stays small, so the standings keep their room. */
+@media (max-width: 640px) {
+  .team-score {
+    gap: 0;
+    margin-top: 8px;
+    padding: 5px 10px;
+  }
+
+  .team-points {
+    font-size: 18px;
+  }
 }

@@ -50,7 +50,7 @@ async function roomWithTwo() {
 describe("voice and video calls", () => {
   it("joining, mic and camera, and leaving are seen by the whole room", async () => {
     const { host, guest } = await roomWithTwo();
-    const joined = await host.ask(ClientEvents.CALL_JOIN, { audio: true, video: false });
+    const joined = await host.ask(ClientEvents.CALL_JOIN, { audio: true, video: false, teamOnly: false });
     expect(joined.ok).toBe(true);
     expect(joined.iceServers.length).toBeGreaterThan(0);
     await until(() => guest.seen.call?.length === 1, "the guest to see the host in the call");
@@ -64,10 +64,10 @@ describe("voice and video calls", () => {
 
   it("passes connection messages only between two people in the same call", async () => {
     const { host, guest } = await roomWithTwo();
-    const a = await host.ask(ClientEvents.CALL_JOIN, { audio: true, video: false });
+    const a = await host.ask(ClientEvents.CALL_JOIN, { audio: true, video: false, teamOnly: false });
     // The guest isn't in the call yet: nothing reaches them, and they can't send.
     expect((await guest.ask(ClientEvents.CALL_SIGNAL, { to: a.peerId, candidate: null })).ok).toBe(false);
-    const b = await guest.ask(ClientEvents.CALL_JOIN, { audio: true, video: false });
+    const b = await guest.ask(ClientEvents.CALL_JOIN, { audio: true, video: false, teamOnly: false });
     const sent = await guest.ask(ClientEvents.CALL_SIGNAL, { to: a.peerId, description: { type: "offer", sdp: "v=0" } });
     expect(sent.ok).toBe(true);
     const got = await until(() => host.seen.signals[0], "the offer");
@@ -86,11 +86,11 @@ describe("voice and video calls", () => {
     const server = await startServer({ port: 0, timing, logs: false });
     servers.push(server);
     const outsider = tab(server);
-    expect((await outsider.ask(ClientEvents.CALL_JOIN, { audio: true, video: false })).ok).toBe(false);
+    expect((await outsider.ask(ClientEvents.CALL_JOIN, { audio: true, video: false, teamOnly: false })).ok).toBe(false);
 
     const calls = new CallRegistry();
-    for (let i = 0; i < MAX_CALL_SIZE; i++) expect(calls.join("R", { peerId: `p${i}`, playerId: `x${i}`, name: "n", audio: true, video: false })).toBe(true);
-    expect(calls.join("R", { peerId: "late", playerId: "y", name: "n", audio: true, video: false })).toBe(false);
+    for (let i = 0; i < MAX_CALL_SIZE; i++) expect(calls.join("R", { peerId: `p${i}`, playerId: `x${i}`, name: "n", audio: true, video: false, teamOnly: false })).toBe(true);
+    expect(calls.join("R", { peerId: "late", playerId: "y", name: "n", audio: true, video: false, teamOnly: false })).toBe(false);
     expect(calls.together("R", "p0", "p1")).toBe(true);
     expect(calls.together("R", "p0", "late")).toBe(false);
   });

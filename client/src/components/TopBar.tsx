@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { getCubeEvent, type RoomSettings } from "@cube-racing/shared";
 import { FORMAT_LABELS, roomEventShort, WIN_CONDITION_LABELS } from "../labels";
 import { setPref, usePrefs, type Prefs } from "../prefs";
@@ -80,6 +80,8 @@ interface TopBarProps {
   /** True if stepping away now turns your remaining solves in this set into DNFs. */
   awayCostsSolves: boolean;
   onSetWatching: (watching: boolean) => void;
+  /** The voice chat bar: in the header on wide screens, its own row under it on phones. */
+  call?: ReactNode;
 }
 
 /**
@@ -116,13 +118,16 @@ export const TopBar = memo(function TopBar(props: TopBarProps) {
       <span className="format">
         <span className="long">
           {FORMAT_LABELS[settings.format]}, {WIN_CONDITION_LABELS[settings.winCondition]}
+          {settings.teams !== "off" && ", Teams"}
           {settings.scoring === "handicap" && ", Handicap"}
         </span>
         <span className="short">
           {FORMAT_LABELS[settings.format]}, {bestOf}
+          {settings.teams !== "off" && ", Teams"}
         </span>
       </span>
       <span className="grow" />
+      {props.call}
       <span className="room-status" role="status">
         {props.status}
       </span>

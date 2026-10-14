@@ -8,3 +8,5 @@ export * from "./site";
 export * from "./practice";
 export * from "./stats";
 export * from "./call";
+export * from "./marks";
+export * from "./teams";
