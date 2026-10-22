@@ -14,7 +14,7 @@ import { formatMark, formatTime } from "../time";
 import { useSpeedTimer, type TimerPhase } from "../timer/useSpeedTimer";
 import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
 import { LobbySettings, MixedEventPicker } from "./SettingsForm";
-import { HoldMeter, RunningDigits } from "./Timer";
+import { HoldMeter, IdleHint, RunningDigits } from "./Timer";
 import { roomLink, useCopy } from "./TopBar";
 import { Icon, RoomEventIcon } from "./ui";
 
@@ -232,8 +232,7 @@ function WarmupTimer(props: { scrambleKey: string; onDone: (ms: number) => void;
   // Leaving the page mid-solve: the race mustn't wait for a timer nobody stops.
   useEffect(() => () => sendTimerStatus("idle"), []);
 
-  const hint =
-    phase === "holding" ? "Hold…" : phase === "ready" ? "Release to start" : phase === "running" ? "" : "Hold Space (or the timer), let go to start";
+  const hint = phase === "holding" ? "Hold…" : phase === "ready" ? "Release to start" : phase === "running" ? "" : <IdleHint />;
 
   return (
     <div className="timer-zone warmup-timer" data-phase={phase}>

@@ -1,10 +1,11 @@
 /*
  * CubeMore. Tokens and layouts are described in DESIGN.md.
  *
- * The palette is the cube: every status colour is one of the six faces.
- *   blue   = you, primary actions, links      green  = ready, fastest, connected
- *   red    = holding, DNF, errors             yellow = +2, reconnecting, warnings
- *   orange = live: racing rooms, running clocks, the countdown
+ * Plain greys (no blue tint) and one accent from the cube: orange. Every
+ * status colour is one of the six faces.
+ *   orange = you, primary actions, links, live (racing rooms, the countdown)
+ *   green  = ready, fastest, connected      red    = holding, DNF, muted, errors
+ *   yellow = +2, reconnecting, warnings     blue   = a team's colour (and red)
  *   white  = text
  */
 
@@ -32,51 +33,58 @@
   --bronze-ink: var(--text);
 
   /* The white face on light surfaces needs an edge. */
-  --stripe-white: #cfd5e0;
+  --stripe-white: #cbc8c0;
 
-  --bg: #f3f5fa;
+  --bg: #f4f3ef;
   --surface: #ffffff;
-  --surface-2: #f2f4f9;
-  --surface-3: #e8ebf3;
-  --glass: rgba(255, 255, 255, 0.8);
-  --border: #e1e5ee;
-  --border-strong: #cbd2df;
-  --track: #e6e9f1;
-  --text: #0d1220;
-  --text-2: #434c61;
-  --muted: #5f687d;
-  --accent: #1f5fe0;
-  --accent-bg: #2563eb;
-  --accent-bg-hover: #1d55d6;
-  --on-accent: #ffffff;
-  --accent-soft: #e6eeff;
-  --accent-ring: rgba(37, 99, 235, 0.28);
-  --accent-glow: rgba(37, 99, 235, 0.42);
+  --surface-2: #f0efea;
+  --surface-3: #e6e4de;
+  --glass: rgba(244, 243, 239, 0.94);
+  --border: #dfddd6;
+  --border-strong: #c3c0b7;
+  --track: #e6e4de;
+  --text: #161513;
+  --text-2: #46433d;
+  --muted: #6b675f;
+  /* Buttons: a clear edge on every surface, so every button looks like one. */
+  --btn: #ffffff;
+  --btn-hover: #f4f3ef;
+  --btn-border: #a9a59b;
+  --btn-shadow: 0 1px 0 rgba(22, 21, 19, 0.08);
+  /* The accent: cube orange. Fills carry dark text (white on orange is hard to read). */
+  --accent: #b83f0a;
+  --accent-bg: #ff6b1a;
+  --accent-bg-hover: #f25d08;
+  --on-accent: #1a0a00;
+  --accent-soft: #ffeadc;
+  --accent-ring: rgba(255, 107, 26, 0.34);
   --green: #0f8a43;
   --green-soft: #e2f5e9;
   --red: #d0252f;
   --red-soft: #fde7e8;
-  --amber: #946200;
+  --amber: #8a5a00;
   --amber-soft: #fcf1d4;
-  --orange: #c84d08;
-  --orange-soft: #ffeedf;
+  --orange: #b83f0a;
+  --orange-soft: #ffeadc;
   /* Player colours as text (chat names), readable on this theme's surfaces. */
-  --ink-0: #4a5368;
+  --ink-0: #4f4b44;
   --ink-1: #8a6500;
   --ink-2: #c4222b;
   --ink-3: #bf4f00;
   --ink-4: #1f5fe0;
   --ink-5: #0d7d3c;
-  --shadow-sm: 0 1px 2px rgba(13, 18, 32, 0.06), 0 2px 8px -2px rgba(13, 18, 32, 0.06);
-  --shadow: 0 12px 32px -12px rgba(13, 18, 32, 0.22);
-  --shadow-lg: 0 24px 60px -20px rgba(13, 18, 32, 0.35);
+  --shadow-sm: 0 1px 2px rgba(22, 21, 19, 0.06), 0 2px 8px -2px rgba(22, 21, 19, 0.06);
+  --shadow: 0 12px 32px -12px rgba(22, 21, 19, 0.22);
+  --shadow-lg: 0 24px 60px -20px rgba(22, 21, 19, 0.35);
   --hairline: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --scrim: rgba(12, 12, 13, 0.45);
 
   --font-ui: "Space Grotesk Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --topbar-h: 48px;
-  --handle-h: 56px;
+  /* Phones in a race: the bar at the bottom (Standings, Chat). */
+  --dock-h: 60px;
   --side-w: clamp(380px, 36vw, 540px);
   --r-xs: 6px;
   --r-sm: 8px;
@@ -95,33 +103,36 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --stripe-white: var(--sticker-0);
-    --bg: #07090d;
-    --surface: #0f1218;
-    --surface-2: #161a22;
-    --surface-3: #1e232d;
-    --glass: rgba(12, 15, 20, 0.78);
-    --border: #222835;
-    --border-strong: #2f3747;
-    --track: #1c212b;
-    --text: #eef1f7;
-    --text-2: #aeb6c8;
-    --muted: #7e879c;
-    --accent: #6ea2ff;
-    --accent-bg: #2f6bf0;
-    --accent-bg-hover: #3d78ff;
-    --on-accent: #ffffff;
-    --accent-soft: #14203a;
-    --accent-ring: rgba(110, 162, 255, 0.32);
-    --accent-glow: rgba(47, 107, 240, 0.55);
+    --bg: #0c0c0d;
+    --surface: #151517;
+    --surface-2: #1d1d20;
+    --surface-3: #27272b;
+    --glass: rgba(12, 12, 13, 0.94);
+    --border: #2a2a2f;
+    --border-strong: #3c3c43;
+    --track: #26262a;
+    --text: #f4f4f2;
+    --text-2: #c6c6cb;
+    --muted: #93939b;
+    --btn: #29292e;
+    --btn-hover: #333339;
+    --btn-border: #4a4a52;
+    --btn-shadow: none;
+    --accent: #ff8a3d;
+    --accent-bg: #ff6b1a;
+    --accent-bg-hover: #ff7e36;
+    --on-accent: #1a0a00;
+    --accent-soft: #2c1c12;
+    --accent-ring: rgba(255, 122, 47, 0.4);
     --green: #3ddc84;
     --green-soft: #0f2a1b;
     --red: #ff5c63;
-    --red-soft: #33141a;
+    --red-soft: #35161a;
     --amber: #ffd23f;
     --amber-soft: #2e260d;
-    --orange: #ff8c42;
-    --orange-soft: #33200f;
-    --ink-0: #e6e9f0;
+    --orange: #ff8a3d;
+    --orange-soft: #2c1c12;
+    --ink-0: #e8e8e6;
     --ink-1: #ffd84d;
     --ink-2: #ff7a7f;
     --ink-3: #ffa05a;
@@ -131,39 +142,43 @@
     --shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.7);
     --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.85);
     --hairline: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --scrim: rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
   --stripe-white: var(--sticker-0);
-  --bg: #07090d;
-  --surface: #0f1218;
-  --surface-2: #161a22;
-  --surface-3: #1e232d;
-  --glass: rgba(12, 15, 20, 0.78);
-  --border: #222835;
-  --border-strong: #2f3747;
-  --track: #1c212b;
-  --text: #eef1f7;
-  --text-2: #aeb6c8;
-  --muted: #7e879c;
-  --accent: #6ea2ff;
-  --accent-bg: #2f6bf0;
-  --accent-bg-hover: #3d78ff;
-  --on-accent: #ffffff;
-  --accent-soft: #14203a;
-  --accent-ring: rgba(110, 162, 255, 0.32);
-  --accent-glow: rgba(47, 107, 240, 0.55);
+  --bg: #0c0c0d;
+  --surface: #151517;
+  --surface-2: #1d1d20;
+  --surface-3: #27272b;
+  --glass: rgba(12, 12, 13, 0.94);
+  --border: #2a2a2f;
+  --border-strong: #3c3c43;
+  --track: #26262a;
+  --text: #f4f4f2;
+  --text-2: #c6c6cb;
+  --muted: #93939b;
+  --btn: #29292e;
+  --btn-hover: #333339;
+  --btn-border: #4a4a52;
+  --btn-shadow: none;
+  --accent: #ff8a3d;
+  --accent-bg: #ff6b1a;
+  --accent-bg-hover: #ff7e36;
+  --on-accent: #1a0a00;
+  --accent-soft: #2c1c12;
+  --accent-ring: rgba(255, 122, 47, 0.4);
   --green: #3ddc84;
   --green-soft: #0f2a1b;
   --red: #ff5c63;
-  --red-soft: #33141a;
+  --red-soft: #35161a;
   --amber: #ffd23f;
   --amber-soft: #2e260d;
-  --orange: #ff8c42;
-  --orange-soft: #33200f;
-  --ink-0: #e6e9f0;
+  --orange: #ff8a3d;
+  --orange-soft: #2c1c12;
+  --ink-0: #e8e8e6;
   --ink-1: #ffd84d;
   --ink-2: #ff7a7f;
   --ink-3: #ffa05a;
@@ -173,6 +188,7 @@
   --shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.7);
   --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.85);
   --hairline: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --scrim: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -338,10 +354,11 @@ button {
   min-height: 44px;
   min-width: 44px;
   padding: 0 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--btn-border);
   border-radius: var(--r-sm);
-  background: var(--surface-2);
-  box-shadow: var(--hairline);
+  background: var(--btn);
+  box-shadow: var(--btn-shadow);
+  color: var(--text);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -354,8 +371,8 @@ button {
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--surface-3);
+  border-color: var(--muted);
+  background: var(--btn-hover);
 }
 
 button:active:not(:disabled) {
@@ -399,11 +416,11 @@ button.quiet {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: var(--text-2);
+  color: var(--text);
 }
 
 button.quiet:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--surface-3);
   border-color: transparent;
   color: var(--text);
 }
@@ -432,9 +449,9 @@ button[data-armed="true"]:hover:not(:disabled) {
   place-items: center;
   border-radius: 50%;
   background: transparent;
-  border-color: var(--border);
+  border-color: var(--btn-border);
   box-shadow: none;
-  color: var(--text-2);
+  color: var(--text);
 }
 
 /* Small inline actions in dense places ("Reset" on the scramble). */
@@ -456,7 +473,7 @@ textarea {
   width: 100%;
   padding: 0 14px;
   font-size: 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   background: var(--surface-2);
   transition:
@@ -488,7 +505,7 @@ textarea::placeholder {
 select {
   appearance: none;
   padding-right: 38px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237e879c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a877f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   cursor: pointer;
@@ -537,12 +554,13 @@ select {
   color: var(--text);
 }
 
+/* The chosen option is raised, in plain colours (orange is for the main action and "you"). */
 .segmented button[aria-checked="true"] {
-  background: var(--surface);
-  color: var(--accent);
+  background: var(--btn);
+  color: var(--text);
   font-weight: 700;
   box-shadow:
-    0 0 0 1px var(--accent-ring),
+    0 0 0 1px var(--btn-border),
     var(--shadow-sm);
 }
 
@@ -632,8 +650,8 @@ kbd,
   height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: var(--orange);
-  color: #1d0d00;
+  background: var(--accent-bg);
+  color: var(--on-accent);
   font: 700 11px/20px var(--font-mono);
   text-align: center;
   letter-spacing: 0;
@@ -997,7 +1015,9 @@ p.banner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .join-form {
@@ -1632,16 +1652,17 @@ p.banner {
   transform: translateY(-2px) scale(1.08);
 }
 
+/* The chosen event: the one solid tile. */
 .event-tile[aria-checked="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+  box-shadow: none;
 }
 
 .event-tile[aria-checked="true"]:hover:not(:disabled) {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: var(--text);
+  border-color: var(--text);
 }
 
 /* The compact event menu (rematch, restart). */
@@ -1780,7 +1801,7 @@ p.banner {
   gap: 6px;
   border-radius: 999px;
   background: transparent;
-  border-color: var(--border);
+  border-color: var(--btn-border);
   box-shadow: none;
   font-family: var(--font-mono);
   font-weight: 600;
@@ -1993,22 +2014,75 @@ p.banner {
   overscroll-behavior: contain;
 }
 
-/* ---- Phone portrait: standings in a bottom sheet ---- */
+/* ---- Phone portrait: a bar at the bottom, and a sheet ----
+   The bar: Standings shows or hides everyone's times under the timer (the
+   timer pad grows when they're hidden), Chat and Host open the sheet. */
 
 .room.in-match .stage {
-  padding-bottom: calc(var(--handle-h) + env(safe-area-inset-bottom) + 10px);
+  padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom) + 10px);
+}
+
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 18;
+  display: flex;
+  gap: 8px;
+  min-height: calc(var(--dock-h) + env(safe-area-inset-bottom));
+  padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: var(--glass);
+  border-top: 1px solid var(--border);
+}
+
+/* Each as wide as its words, sharing what's left: "Standings 2/6" never gets cut for "Host". */
+.dock-button {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  border-radius: var(--r);
+  font-size: 14px;
+}
+
+.dock-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--text-2);
+}
+
+/* Standings on: the button stays pressed in. */
+.dock-button[aria-pressed="true"] {
+  border-color: var(--text);
+  background: var(--surface-3);
+}
+
+.dock-button[aria-pressed="true"] .dock-count {
+  background: var(--text);
+  color: var(--surface);
 }
 
 .scrim {
   position: fixed;
   inset: 0;
   z-index: 19;
-  background: rgba(3, 5, 9, 0.5);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  background: var(--scrim);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 220ms var(--ease);
 }
 
 .scrim[data-open="true"] {
@@ -2016,51 +2090,38 @@ p.banner {
   pointer-events: auto;
 }
 
+/* Fully away until Chat or Host opens it; then it covers the bar. A fixed
+   height, so switching tabs doesn't make it jump. */
 .sheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 20;
-  max-height: 84dvh;
+  height: min(78dvh, 640px);
   display: flex;
   flex-direction: column;
+  padding: 18px 0 env(safe-area-inset-bottom);
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: 0;
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: 0 -10px 30px -18px rgba(0, 0, 0, 0.6);
-  transform: translateY(calc(100% - var(--handle-h) - env(safe-area-inset-bottom)));
-  transition: transform 280ms var(--ease);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(100%);
+  visibility: hidden;
+  transition:
+    transform 260ms var(--ease),
+    opacity var(--fade) ease,
+    visibility 0s linear 260ms;
 }
 
 .sheet[data-open="true"] {
   transform: none;
-  box-shadow: var(--shadow-lg);
-}
-
-.sheet-handle {
-  flex: none;
-  position: relative;
-  width: 100%;
-  height: var(--handle-h);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px 0;
-  border: 0;
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  background: transparent;
-  box-shadow: none;
-  font-weight: 650;
-}
-
-.sheet-handle:hover:not(:disabled) {
-  background: transparent;
-}
-
-.sheet-handle:active:not(:disabled) {
-  transform: none;
+  visibility: visible;
+  transition:
+    transform 260ms var(--ease),
+    opacity var(--fade) ease,
+    visibility 0s;
 }
 
 .grabber {
@@ -2074,32 +2135,17 @@ p.banner {
   background: var(--border-strong);
 }
 
-.sheet-summary {
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--text-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.sheet-close {
+  flex: none;
+  width: 40px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
 }
 
-.sheet-chevron {
-  color: var(--muted);
-  transition: transform 280ms var(--ease);
-}
-
-.sheet[data-open="true"] .sheet-chevron {
-  transform: rotate(180deg);
-}
-
-/* A fixed height, so switching between Standings and Chat doesn't make the sheet jump. */
-.sheet-body {
-  height: min(70dvh, 580px);
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
+.sheet .tabs-row {
+  margin: 0 12px 4px;
 }
 
 /* ---- Phone landscape: stage 2/3, sidebar with Standings | Chat tabs 1/3 ---- */
@@ -2220,18 +2266,28 @@ p.banner {
   flex-direction: column;
 }
 
-.tabs {
+/* The tabs, and next to them the sheet's Close button. */
+.tabs-row {
   flex: none;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   margin: 0 10px;
-  padding: 3px;
-  border-radius: var(--r);
-  background: var(--surface-2);
 }
 
-.side .tabs {
+.side .tabs-row {
   margin: 8px;
+}
+
+.tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
 }
 
 .tabs button {
@@ -2242,6 +2298,8 @@ p.banner {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  padding: 0 8px;
+  white-space: nowrap;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -2252,10 +2310,10 @@ p.banner {
 }
 
 .tabs button[aria-selected="true"] {
-  background: var(--surface);
+  background: var(--btn);
   color: var(--text);
   box-shadow:
-    0 0 0 1px var(--border),
+    0 0 0 1px var(--btn-border),
     var(--shadow-sm);
 }
 
@@ -2284,9 +2342,10 @@ p.banner {
 .scramble-wrap,
 .limit-bar,
 .side,
-.sheet,
+.dock,
 .scrim,
 .timer-below,
+.timer-footer,
 .session-strip,
 .stage-standings {
   transition:
@@ -2301,11 +2360,14 @@ p.banner {
 .room[data-focus="true"] .limit-bar,
 .room[data-focus="true"] .side,
 .room[data-focus="true"] .sheet,
+.room[data-focus="true"] .dock,
 .room[data-focus="true"] .scrim,
 .room[data-focus="true"] .timer-below,
+.room[data-focus="true"] .timer-footer,
 .room[data-focus="true"] .session-strip,
 .room[data-focus="true"] .stage-standings,
 .room[data-focus="true"] .timer-tools,
+.room[data-focus="true"] .your-solves,
 .room[data-focus="true"] .warmup-invite,
 .room[data-focus="true"] .warmup-chat,
 .room[data-focus="true"] .warmup-times {
@@ -2645,7 +2707,10 @@ p.banner {
   gap: 10px;
 }
 
-/* The whole card is the touch target on phones. */
+/* The whole card is the touch target on phones. No scrolling or zooming starts
+   on it (touch-action: none): a resting finger drifts a little while you hold,
+   and the browser would take that as a scroll, cancel the touch, and the timer
+   would never start. */
 .timer-touch {
   flex: 1;
   min-height: 96px;
@@ -2663,7 +2728,7 @@ p.banner {
   box-shadow: var(--hairline), var(--shadow-sm);
   overflow: hidden;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -2767,6 +2832,51 @@ p.banner {
 .timer-zone[data-phase="ready"] .timer-hint {
   color: var(--green);
   font-weight: 700;
+}
+
+/* At the bottom of the pad (phones): your best, ao5 and ao12, like csTimer.
+   Part of the pad (a touch there starts the timer too); gone when the pad is short. */
+.timer-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@container (max-height: 230px) {
+  .timer-footer {
+    display: none;
+  }
+}
+
+.session-line {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+}
+
+.session-line div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.session-line dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.session-line dd {
+  margin: 0;
+  font: 600 13.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
 }
 
 .timer-below {
@@ -3602,9 +3712,9 @@ p.banner {
 }
 
 .penalty-editor button[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--text);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--text);
 }
 
 /* ---- Smart cube: the icon on a player's row, and their live cube ---- */
@@ -3869,9 +3979,10 @@ p.banner {
   cursor: default;
 }
 
+/* The one you react to: a plain dark edge (orange is "you"). */
 .finish-row[aria-pressed="true"] {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--text);
 }
 
 .finish-rows li.me .finish-row {
@@ -5230,7 +5341,7 @@ html.overlay-mode body {
 .debug-panel {
   position: fixed;
   left: 8px;
-  bottom: calc(var(--handle-h) + 8px + env(safe-area-inset-bottom));
+  bottom: calc(var(--dock-h) + 8px + env(safe-area-inset-bottom));
   z-index: 40;
   background: var(--text);
   color: var(--bg);
@@ -5663,6 +5774,7 @@ html.overlay-mode body {
   display: inline-flex;
   gap: 3px;
   padding: 3px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--r);
   background: var(--surface-2);
 }
@@ -5675,19 +5787,159 @@ html.overlay-mode body {
   border-radius: 9px;
   background: transparent;
   box-shadow: none;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-2);
 }
 
 .mini-toggle button[aria-checked="true"] {
-  background: var(--surface);
+  background: var(--btn);
   color: var(--text);
-  box-shadow: 0 0 0 1px var(--border);
+  box-shadow: 0 0 0 1px var(--btn-border);
 }
 
 .watch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13.5px;
+}
+
+/* ---- Under the timer: your times in this set; tap one to change its penalty ---- */
+
+.your-solves {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.your-solves-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.your-solves-label {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* One line; an ao12 scrolls sideways. */
+.your-solves-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.your-solves-list::-webkit-scrollbar {
+  display: none;
+}
+
+.your-solves-list li {
+  flex: none;
+}
+
+.your-solve {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 600 13.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+/* Yours to change: a real button. */
+button.your-solve[data-dense] {
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 9px;
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+button.your-solve[aria-expanded="true"] {
+  border-color: var(--text);
+  background: var(--surface-3);
+}
+
+.your-solve[data-penalty="DNF"] {
+  color: var(--muted);
+}
+
+.your-solve[data-empty] {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* The solve you're on now. */
+.your-solves-list li[data-current] .your-solve {
+  border-color: var(--text-2);
+}
+
+.your-solves-editor {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.your-solves-editor button[data-dense] {
   min-height: 36px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.your-solves-editor button:not(.quiet) .pen-time {
+  font-size: 11.5px;
+}
+
+.your-solves-editor .quiet {
+  margin-left: auto;
+}
+
+/* Phones on their side have no height to spare: your row is pinned first in the
+   sidebar's standings, and tapping it changes penalties there. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .your-solves {
+    display: none;
+  }
+}
+
+/* Phones: one line (the open time is highlighted above, so "Solve 1" can go). */
+@media (max-width: 420px) {
+  .your-solves-editor {
+    flex-wrap: nowrap;
+    gap: 5px;
+    padding: 6px 8px;
+  }
+
+  .your-solves-editor > .tiny {
+    display: none;
+  }
+
+  .your-solves-editor button[data-dense] {
+    padding: 0 8px;
+  }
 }
 
 /* ---- Mixed rooms: just joined, pick your event (over the lobby) ---- */
@@ -7240,7 +7492,7 @@ button.call-tile-button:hover,
   overflow: hidden;
   color: var(--text-2);
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -7249,14 +7501,15 @@ button.call-tile-button:hover,
   display: none;
 }
 
+/* Every call button says what it is: an icon and a word ("Mic on", "Camera off", "Settings"). */
 .call-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
-  min-width: 34px;
-  padding: 0 10px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 11px;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -7266,10 +7519,23 @@ button.call-tile-button:hover,
 }
 
 /* Muted: the mic button says so loudly, so you never talk into a muted mic. */
-.call-button[data-off="true"] {
+.call-button.call-mic[data-off="true"] {
   background: var(--red-soft);
   border-color: var(--red);
   color: var(--red);
+  font-weight: 700;
+}
+
+/* Your camera is on: the button is lit, so you know they can see you. */
+.call-button.call-camera[data-on="true"] {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.call-settings-button[aria-expanded="true"] {
+  border-color: var(--text);
+  background: var(--surface-3);
 }
 
 .call-leave {
@@ -7293,7 +7559,67 @@ button.call-tile-button:hover,
   color: var(--text-2);
 }
 
-/* In the header: small pictures, and names and button labels only where there's room. */
+/* Under the gear: microphone, camera, who hears you, mute someone for yourself. */
+.call-drops > .call-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(360px, calc(100vw - 16px));
+  padding: 12px 14px 14px;
+}
+
+.call-settings-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px -6px -4px 0;
+  font-size: 14px;
+}
+
+.call-settings-head .icon {
+  color: var(--muted);
+}
+
+.call-settings select {
+  font-size: 14px;
+}
+
+.call-settings .segmented button {
+  min-height: 38px;
+  font-size: 13.5px;
+}
+
+.call-hear {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.call-hear li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.call-hear-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-hear .call-button {
+  flex: none;
+  min-height: 34px;
+  font-size: 12.5px;
+}
+
+/* In the header: small pictures, and names only where there's room. */
 .call-bar[data-video="true"] .call-tile[data-video="true"] .call-face {
   width: 52px;
   height: 39px;
@@ -7305,17 +7631,6 @@ button.call-tile-button:hover,
   gap: 6px;
   padding: 2px 8px 2px 2px;
   border-radius: var(--r-sm);
-}
-
-@media (max-width: 1279px) {
-  .call-button-label {
-    display: none;
-  }
-
-  .call-buttons .call-button,
-  .call-join .call-button:not(.primary) {
-    padding: 0 9px;
-  }
 }
 
 @media (max-width: 1199px) {
@@ -7334,15 +7649,36 @@ button.call-tile-button:hover,
   }
 }
 
+/* Less room (tablets, small laptops, phones): the word goes under the icon, small. */
+@media (max-width: 1099px) {
+  .call-buttons .call-button {
+    flex-direction: column;
+    gap: 1px;
+    min-width: 50px;
+    padding: 2px 7px;
+  }
+
+  .topbar .call-buttons button.call-button[data-dense] {
+    min-height: 40px;
+    padding: 2px 7px;
+  }
+
+  .call-buttons .call-button-label {
+    font-size: 10.5px;
+    font-weight: 650;
+    line-height: 1.15;
+  }
+}
+
 /* In the call on a smaller screen: the header drops the format (it's in the lobby and the Menu) to fit the faces. */
-@media (min-width: 641px) and (max-width: 1099px) {
+@media (min-width: 901px) and (max-width: 1099px), (min-width: 641px) and (max-width: 1099px) and (max-height: 500px) {
   .topbar:has(.call-bar[data-in-call="true"]) .format {
     display: none;
   }
 }
 
-/* Portrait phones: the header wraps, and the call gets its own full row under it. */
-@media (max-width: 640px) {
+/* Phones and tablets held upright: the header wraps, and the call gets its own full row under it. */
+@media (max-width: 640px), (max-width: 900px) and (min-height: 501px) {
   .topbar {
     flex-wrap: wrap;
   }
@@ -7362,7 +7698,27 @@ button.call-tile-button:hover,
   }
 
   .call-row {
-    min-height: 36px;
+    min-height: 40px;
+  }
+
+  .call-buttons {
+    gap: 5px;
+  }
+
+  @media (max-width: 480px) {
+    .call-buttons .call-team-button {
+      display: none;
+    }
+  }
+
+  .topbar .call-buttons button.call-button[data-dense] {
+    min-height: 44px;
+    min-width: 48px;
+    padding: 2px 6px;
+  }
+
+  .topbar .call-join button.call-button[data-dense] {
+    min-height: 38px;
   }
 
   .call-join-text > span {
@@ -7392,6 +7748,23 @@ button.call-tile-button:hover,
     border: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  /* The settings float over the stage (the timer doesn't move). */
+  .call-drops > .call-settings {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    z-index: 40;
+    width: auto;
+    padding: 12px 14px 14px;
+    max-width: 420px;
+    margin-left: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
   }
 
   .call-team-note {
@@ -7537,9 +7910,9 @@ a.trainer-case-title:hover {
 }
 
 .trainer-case[aria-pressed="true"] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--text);
+  background: var(--surface-3);
 }
 
 .trainer-case-name {
@@ -7784,6 +8157,15 @@ a.trainer-case-title:hover {
   border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--surface);
+  container-type: inline-size;
+}
+
+/* Too narrow for "Blue you  1 – 0  Red" (a phone's sidebar on its side): the
+   team row in the standings under it still says "you". */
+@container (max-width: 300px) {
+  .team-score .team-you {
+    display: none;
+  }
 }
 
 .team-score-row {

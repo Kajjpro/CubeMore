@@ -33,20 +33,26 @@ latency, snapshot version and outbox size in the bottom-left corner.
 
 - [ ] Host presses **Start**: everyone sees the same scramble and picture at the same moment, with a beep.
 - [ ] Computer: hold **space**, the time turns red, then green after 0.3 s; let go to start; any key stops.
-- [ ] Phone: same with a finger on the big timer area. The page must not scroll or zoom.
+- [ ] Phone: same with a finger on the big timer area. The page must not scroll or zoom, and a finger that
+      slides a little while holding still starts the timer when it lets go.
+- [ ] Phone: start a solve, then stop it by slapping the screen **outside** the timer area (the top, the
+      bottom edge): it stops, and the OK / +2 / DNF that appear are not picked by that tap.
+- [ ] Phone: the timer fills the screen; **Standings** at the bottom shows everyone's times under it, and tapping
+      it again hides them. Reload: your choice is kept.
 - [ ] Letting go before it's green does NOT start the timer.
 - [ ] After stopping: **OK / +2 / DNF** (keys 1 / 2 / 3). Doing nothing sends OK after 5 s.
 - [ ] While others solve: "Waiting for N players: …", their status shows *solving* / *done*.
 - [ ] When everyone is done: 3 s review with everyone's times, then the next scramble.
 - [ ] Someone switches to **Type in** and types `12.34`, `1:02.34`, `DNF`; `12.345` or `1:75` is refused.
-- [ ] Tap one of your earlier times in the table and change it to +2 / DNF; the average updates at the set end.
+- [ ] Under the timer, **Your set**: tap one of your earlier times and change it to +2 / DNF; everyone's standings
+      show it at once, and the average uses it at the set end. After the set result, the times can't be changed.
 - [ ] After 5 solves: averages, the set winner highlighted, points, a 6 s countdown.
 - [ ] Check an average by hand: drop best and worst, average the other 3, truncate each time to hundredths.
 - [ ] Someone reaches 2 points (bo3) with more points than everyone: **match over**, winner shown.
 - [ ] Host: **Rematch** (points back to 0) and **Back to lobby** both work.
 - [ ] Chat: a message from a phone shows on the computer at once, and the other way round.
 - [ ] Chat notices appear: joins, match start, each submitted time, set and match winners.
-- [ ] Phone: a message arrives while the sheet is closed -> an unread badge on `Room (N)`; opening the Chat tab clears it.
+- [ ] Phone: a message arrives while the sheet is closed -> an unread badge on **Chat** at the bottom; opening the chat clears it.
 - [ ] Computer: type in the chat, press **Escape**, then hold space: the timer works (space in the chat box only types).
 - [ ] Holding the timer fades out the header, scramble, standings and chat; they come back after the solve.
 - [ ] Tap a player's row in the standings: their whole set shows; tap it again to close.
@@ -72,7 +78,11 @@ latency, snapshot version and outbox size in the bottom-left corner.
 ## 4. The extras
 
 - [ ] **Race now** on two phones with the same event: the second lands in the first one's room; the race starts 3 s later.
-- [ ] While someone solves, their row shows a ticking blue clock; it turns into their time when they stop.
+- [ ] While someone solves, their row shows a ticking grey clock; it turns into their time when they stop.
+- [ ] Voice: **Join voice** on two devices; each sees the other's face, a green ring while talking. **Mic on** turns
+      into a red **Muted** (and back; M on a keyboard); **Camera off** turns into a green **Camera on**.
+- [ ] Voice: **Settings** (the gear) lists your microphones and cameras; switching the camera with it on changes the
+      picture for the others without leaving the call. **Mute for me** silences one person for you only.
 - [ ] After each solve: the finish-line bars race, then the gaps show. Tap a player and send 🔥: it floats on their row and shows in chat.
 - [ ] Lobby → Scoring → **Handicap**: set 1 is the pace set (no points); from set 2 the biggest gain over your own pace wins.
 - [ ] Menu → **Copy overlay link**, open it in another browser (or OBS): the standings and clocks update live.

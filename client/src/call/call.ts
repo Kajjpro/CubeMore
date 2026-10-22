@@ -37,6 +37,9 @@ export interface CallView {
   /** The microphones to choose from (known once the browser allowed one), and the one in use. */
   mics: { id: string; label: string }[];
   micId: string | null;
+  /** The cameras to choose from, and the one picked (used whenever your camera is on). */
+  cameras: { id: string; label: string }[];
+  cameraId: string | null;
   /** Peers you muted for yourself only. */
   silenced: Record<string, true>;
 }
@@ -53,6 +56,8 @@ const OFF: CallView = {
   teamOnly: false,
   mics: [],
   micId: null,
+  cameras: [],
+  cameraId: null,
   silenced: {},
 };
 let view: CallView = OFF;
@@ -197,7 +202,13 @@ socket.on("disconnect", () => {
 // ---------------------------------------------------------------------------
 // Your mic and camera
 
-const CAMERA: MediaTrackConstraints = { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 }, facingMode: "user" };
+const CAMERA: MediaTrackConstraints = { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } };
+const CAMERA_KEY = "cube-racing:call-camera";
+
+/** The camera you picked last time if it's still there ("ideal": another one otherwise), else the front one. */
+function cameraConstraints(deviceId = localStorage.getItem(CAMERA_KEY)): MediaTrackConstraints {
+  return deviceId ? { ...CAMERA, deviceId: { ideal: deviceId } } : { ...CAMERA, facingMode: "user" };
+}
 
 function mediaError(error: unknown): string {
   const name = error instanceof Error ? error.name : "";
@@ -220,7 +231,7 @@ const VOICE = { echoCancellation: true, noiseSuppression: true };
 /** The mic you picked last time, if it's still there; otherwise the default one. */
 async function openMic(video: boolean): Promise<MediaStream> {
   const saved = localStorage.getItem(MIC_KEY);
-  const ask = (audio: MediaTrackConstraints) => navigator.mediaDevices.getUserMedia({ audio, video: video ? CAMERA : false });
+  const ask = (audio: MediaTrackConstraints) => navigator.mediaDevices.getUserMedia({ audio, video: video ? cameraConstraints() : false });
   if (!saved) return ask(VOICE);
   return ask({ ...VOICE, deviceId: { exact: saved } }).catch((error: unknown) => {
     if (error instanceof Error && (error.name === "OverconstrainedError" || error.name === "NotFoundError")) return ask(VOICE);
@@ -228,13 +239,21 @@ async function openMic(video: boolean): Promise<MediaStream> {
   });
 }
 
-/** The microphones there are (their names are only known once the browser allowed one). */
-async function refreshMics(): Promise<void> {
+/** The microphones and cameras there are (their names are only known once the browser allowed them). */
+async function refreshDevices(): Promise<void> {
   const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
-  const mics = devices.filter((d) => d.kind === "audioinput" && d.deviceId && d.deviceId !== "communications").map((d, i) => ({ id: d.deviceId, label: d.label || `Microphone ${i + 1}` }));
-  set({ mics, micId: micTrack?.getSettings().deviceId ?? view.micId });
+  const list = (kind: MediaDeviceKind, name: string) =>
+    devices
+      .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "communications")
+      .map((d, i) => ({ id: d.deviceId, label: d.label || `${name} ${i + 1}` }));
+  set({
+    mics: list("audioinput", "Microphone"),
+    micId: micTrack?.getSettings().deviceId ?? view.micId,
+    cameras: list("videoinput", "Camera"),
+    cameraId: cameraTrack?.getSettings().deviceId ?? localStorage.getItem(CAMERA_KEY) ?? view.cameraId,
+  });
 }
-if (typeof navigator !== "undefined") navigator.mediaDevices?.addEventListener?.("devicechange", () => void (view.status === "on" && refreshMics()));
+if (typeof navigator !== "undefined") navigator.mediaDevices?.addEventListener?.("devicechange", () => void (view.status === "on" && refreshDevices()));
 
 /** Joins the room's call: asks for the mic (and camera when `video`). */
 export async function joinCall(video: boolean): Promise<void> {
@@ -260,7 +279,7 @@ export async function joinCall(video: boolean): Promise<void> {
   set({ status: "on", peerId: answer.peerId, audio: true, video: !!cameraTrack, localVideo: cameraTrack ? new MediaStream([cameraTrack]) : null, teamOnly: false });
   if (micTrack) meter(answer.peerId, new MediaStream([micTrack]));
   onState({ participants: answer.participants });
-  void refreshMics();
+  void refreshDevices();
 }
 
 export function leaveCall(): void {
@@ -456,7 +475,7 @@ export async function toggleCamera(): Promise<void> {
     set({ video: false, localVideo: null });
   } else {
     try {
-      const media = await navigator.mediaDevices.getUserMedia({ video: CAMERA });
+      const media = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints() });
       cameraTrack = media.getVideoTracks()[0];
     } catch (error) {
       set({ error: mediaError(error) });
@@ -465,8 +484,39 @@ export async function toggleCamera(): Promise<void> {
     localStream.addTrack(cameraTrack);
     for (const { pc } of peers.values()) pc.addTrack(cameraTrack, localStream);
     set({ video: true, localVideo: new MediaStream([cameraTrack]), error: null });
+    // The cameras' names are known now that one is allowed.
+    void refreshDevices();
   }
   sendMedia();
+}
+
+/** Use another camera (remembered for next time). With the camera on, the picture switches right away. */
+export async function chooseCamera(deviceId: string): Promise<void> {
+  if (view.status !== "on" || !localStream || deviceId === view.cameraId) return;
+  localStorage.setItem(CAMERA_KEY, deviceId);
+  if (!cameraTrack) {
+    set({ cameraId: deviceId });
+    return;
+  }
+  let track: MediaStreamTrack;
+  try {
+    const media = await navigator.mediaDevices.getUserMedia({ video: { ...CAMERA, deviceId: { exact: deviceId } } });
+    track = media.getVideoTracks()[0];
+  } catch (error) {
+    set({ error: mediaError(error) });
+    return;
+  }
+  const old = cameraTrack;
+  // Same connections, new picture: no renegotiation needed.
+  for (const { pc } of peers.values()) {
+    const sender = pc.getSenders().find((s) => s.track === old);
+    if (sender) void sender.replaceTrack(track).catch(() => {});
+  }
+  localStream.removeTrack(old);
+  old.stop();
+  localStream.addTrack(track);
+  cameraTrack = track;
+  set({ cameraId: deviceId, localVideo: new MediaStream([track]), error: null });
 }
 
 /** Leaving the room: leave its call, and forget its list. */

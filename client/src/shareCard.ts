@@ -17,13 +17,13 @@ const W = 1200;
 const H = 630;
 // The dark theme's colours (the card looks the same whatever theme you use).
 const COLORS = {
-  bg: "#07090d",
-  surface: "#0f1218",
-  border: "#222835",
-  text: "#eef1f7",
-  text2: "#aeb6c8",
-  muted: "#7e879c",
-  accent: "#6ea2ff",
+  bg: "#0c0c0d",
+  surface: "#151517",
+  border: "#2a2a2f",
+  text: "#f4f4f2",
+  text2: "#c6c6cb",
+  muted: "#93939b",
+  accent: "#ff8a3d",
   green: "#3ddc84",
   gold: "#ffc83d",
 };
@@ -54,12 +54,6 @@ export async function drawResultCard({ match, settings, names }: CardData): Prom
   const nameOf = (id: string) => names[id] ?? "Player";
 
   ctx.fillStyle = COLORS.bg;
-  ctx.fillRect(0, 0, W, H);
-  // A soft blue glow in the top left corner, like the app.
-  const glow = ctx.createRadialGradient(120, -40, 0, 120, -40, 620);
-  glow.addColorStop(0, "rgba(42, 108, 245, 0.28)");
-  glow.addColorStop(1, "rgba(42, 108, 245, 0)");
-  ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
   // The six faces along the top.
   STICKERS.forEach((color, i) => {

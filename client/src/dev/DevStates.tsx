@@ -111,6 +111,11 @@ const IN_CALL = {
       { id: "b", label: "AirPods" },
     ],
     micId: "a",
+    cameras: [
+      { id: "c1", label: "FaceTime HD camera" },
+      { id: "c2", label: "iPhone camera" },
+    ],
+    cameraId: "c1",
   },
   speaking: new Set(["s1"]),
 };
@@ -126,6 +131,7 @@ const ROOM_STATES: Record<string, RoomState> = {
   "team-match-over": { mock: { ...TEAM_FULL, phase: "match_over", teamPoints: { A: 2, B: 1 } } },
   "team-match-over-lost": { mock: { ...TEAM_FULL, phase: "match_over", teamPoints: { A: 1, B: 2 } } },
   "call-in": { mock: SOLVING, demo: { call: IN_CALL } },
+  "call-settings": { mock: SOLVING, demo: { call: { ...IN_CALL, settingsOpen: true } } },
   "call-muted": { mock: SOLVING, demo: { call: { ...IN_CALL, call: { ...IN_CALL.call, audio: false } } } },
   "call-team-only": {
     mock: TEAM_SOLVING,
@@ -169,6 +175,7 @@ const ROOM_STATES: Record<string, RoomState> = {
     demo: { sheetOpen: true },
   },
   solving: { mock: { ...SOLVING, solveDeadlineIn: 90_000, settings: { solveTimeLimit: 2 } } },
+  "solving-standings": { mock: SOLVING, demo: { showStandings: true } },
   "timer-holding": { mock: SOLVING, demo: { timer: { phase: "holding" } } },
   "timer-ready": { mock: SOLVING, demo: { timer: { phase: "ready" } } },
   "timer-running": { mock: SOLVING, demo: { timer: { phase: "running", elapsedMs: 9870 } } },
@@ -184,6 +191,10 @@ const ROOM_STATES: Record<string, RoomState> = {
   "type-in": { mock: SOLVING, demo: { inputMode: "typing" } },
   "solve-review": {
     mock: { ...SOLVING, phase: "solve_review", times: AO5_TIMES.map((row) => [row[0], row[1], row[2] ?? 11_450]) },
+  },
+  "solve-review-standings": {
+    mock: { ...SOLVING, phase: "solve_review", times: AO5_TIMES.map((row) => [row[0], row[1], row[2] ?? 11_450]) },
+    demo: { showStandings: true },
   },
   "set-result": { mock: { ...SOLVING, phase: "set_result", times: AO5_FULL, solveIndex: 4, points: [0, 2, 0, 0, 1, 0] } },
   "match-over-host": {
