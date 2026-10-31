@@ -28,12 +28,18 @@ import {
   PIN_LENGTH,
   RECONNECT_GRACE_MS,
   SMART_CUBE_EVENTS,
+  balanceTeams as balancedTeams,
+  scoredTime,
+  TEAM_IDS,
+  teamName,
   type CubeEventId,
   type ErrorCode,
   type PublicRoomInfo,
   type RoomSettings,
   type RoomSnapshot,
   type Scramble,
+  type SolveResult,
+  type TeamId,
   type TimerStatus,
 } from "@cube-racing/shared";
 import * as matchLogic from "../match/matchLogic";
@@ -92,7 +98,8 @@ export function createRoom(
   now: number,
   pin: string | null = null,
 ): ServerRoom {
-  const hostPlayer = newPlayer(host, now);
+  // A team room from the start: the host is on the Blue team.
+  const hostPlayer = { ...newPlayer(host, now), team: settings.teams === "off" ? null : ("A" as const) };
   return {
     code,
     version: 1,
@@ -181,7 +188,8 @@ export function joinRoom(room: ServerRoom, player: PlayerInfo, now: number, pin?
   // until the next set starts, because they aren't in this set's roster.
   // Mixed rooms: someone joining the lobby picks their event before the race starts.
   const picking = room.settings.mixedEvents && !room.match && !room.scheduled;
-  const joined = { ...newPlayer(player, now), pickingEvent: picking };
+  const fresh = newPlayer(player, now);
+  const joined = { ...fresh, pickingEvent: picking, team: teamForNewcomer(room, fresh.publicId) };
   const players = [...room.players, joined];
   // Nobody joining starts the race: the host presses Start when everyone is there.
   // (Only the weekly race starts by itself, at its time.)
@@ -318,7 +326,10 @@ export function updateSettings(
 
   // Changed while the countdown runs: everyone gets the full 3 seconds to see the new settings.
   const autoStartAt = room.autoStartAt !== null && !room.scheduled ? Math.max(room.autoStartAt, now + AUTO_START_DELAY_MS) : room.autoStartAt;
-  return { ok: true, room: changeRoom(room, { settings, pin: nextPin, autoStartAt }) };
+  // Teams turned on: everyone is split into two even teams (they can switch after).
+  const teamsOn = settings.teams !== "off" && room.settings.teams === "off";
+  const players = teamsOn ? withBalancedTeams(room.players) : room.players;
+  return { ok: true, room: changeRoom(room, { settings, pin: nextPin, autoStartAt, players }) };
 }
 
 /** Host: setup is done. The room is listed (public) and others can join. */
@@ -335,6 +346,7 @@ export function openRoom(room: ServerRoom, requesterId: string): LogicResult {
  */
 export function settingsError(settings: RoomSettings): string | null {
   if (settings.mixedEvents && settings.smartOnly) return "Mixed rooms can't be smart-cube only.";
+  if (settings.teams !== "off" && settings.scoring === "handicap") return "Team matches can't use handicap scoring.";
   if (settings.mixedEvents && !MIXED_EVENTS.includes(settings.cubeEvent)) {
     return `Mixed rooms are for ${MIXED_EVENTS.map((id) => getCubeEvent(id).name).join(", ")}.`;
   }
@@ -365,6 +377,82 @@ export function chooseEvent(room: ServerRoom, playerId: string, cubeEvent: CubeE
   const restart = player.pickingEvent && room.autoStartAt !== null && !room.match && !room.scheduled;
   const autoStartAt = restart ? Math.max(room.autoStartAt!, now + AUTO_START_DELAY_MS) : room.autoStartAt;
   return { ok: true, room: changeRoom(room, { players, autoStartAt }) };
+}
+
+/**
+ * Team rooms: a player moves to a team. Once they've raced in a match, their
+ * team is fixed until it's over (like their event).
+ */
+export function chooseTeam(room: ServerRoom, playerId: string, team: TeamId): LogicResult {
+  const player = findPlayer(room, playerId);
+  if (!player) return fail("You are not in this room.");
+  if (room.settings.teams === "off") return fail("This room has no teams.");
+  if (teamLocked(room, player)) return fail("You can switch teams once this match is over.");
+  if (player.team === team) return { ok: true, room };
+  return { ok: true, room: changeRoom(room, { players: updatePlayer(room, playerId, { team }) }) };
+}
+
+/**
+ * Host, team rooms: everyone is split into two teams of the same size and,
+ * as far as their times in this room tell, the same speed.
+ */
+export function balanceTeams(room: ServerRoom, requesterId: string): LogicResult {
+  if (!isHost(room, requesterId)) return fail("Only the host can balance the teams.");
+  if (room.settings.teams === "off") return fail("This room has no teams.");
+  if (room.match && room.match.phase !== "match_over") return fail("Teams can be balanced once this match is over.");
+  const players = withBalancedTeams(room.players);
+  if (players.every((p, i) => p.team === room.players[i].team)) return { ok: true, room };
+  return { ok: true, room: changeRoom(room, { players }) };
+}
+
+/** A player in the running match keeps their team until it's over. */
+function teamLocked(room: ServerRoom, player: ServerPlayer): boolean {
+  const match = room.match;
+  return !!match && match.phase !== "match_over" && !!match.teams?.of[player.publicId];
+}
+
+/** Everyone racing gets a team, split evenly by their times; people just watching join the smaller team. */
+function withBalancedTeams(players: ServerPlayer[]): ServerPlayer[] {
+  const racers = racing(players);
+  const teams = balancedTeams(racers.map((p) => ({ id: p.playerId, paceMs: meanOf(p.recentMs) })));
+  const size = (team: TeamId) => Object.values(teams).filter((t) => t === team).length;
+  return players.map((p) => {
+    const team = teams[p.playerId] ?? (size("A") <= size("B") ? "A" : "B");
+    teams[p.playerId] = team;
+    return { ...p, team };
+  });
+}
+
+function meanOf(times: number[]): number | null {
+  return times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
+}
+
+/**
+ * The team someone joining a team room races for: their team in the running
+ * match if they were in it before, else the team with fewer racers.
+ */
+function teamForNewcomer(room: ServerRoom, publicId: string): TeamId | null {
+  if (room.settings.teams === "off") return null;
+  const before = room.match?.teams?.of[publicId];
+  if (before) return before;
+  const size = (team: TeamId) => racing(room.players).filter((p) => p.team === team).length;
+  return size("A") <= size("B") ? "A" : "B";
+}
+
+/** Team rooms: what's missing before a team match can start, or null. */
+function teamsError(room: ServerRoom): string | null {
+  if (room.settings.teams === "off") return null;
+  const racers = racing(room.players);
+  const empty = TEAM_IDS.filter((team) => !racers.some((p) => p.team === team));
+  if (empty.length === 0) return null;
+  return racers.length < 2
+    ? "A team match needs at least 2 racers, one on each team."
+    : `The ${teamName(empty[0])} has nobody. Move someone over, or tap "Balance teams".`;
+}
+
+/** The team each player races for (team rooms). */
+function teamPicks(room: ServerRoom): Record<string, TeamId> {
+  return Object.fromEntries(room.players.filter((p) => p.team).map((p) => [p.publicId, p.team!]));
 }
 
 /**
@@ -423,7 +511,7 @@ export function startMatchError(room: ServerRoom, requesterId: string): string |
   if (racingPlayerIds(room).length === 0) {
     return "Everyone is watching. Tap \"Race\" to race.";
   }
-  return null;
+  return teamsError(room);
 }
 
 /**
@@ -479,7 +567,7 @@ export function rematchError(room: ServerRoom, requesterId: string): string | nu
   if (!room.match) {
     return "There is no match to restart. Press Start.";
   }
-  return null;
+  return teamsError(room);
 }
 
 /**
@@ -501,6 +589,7 @@ export function roomList(rooms: ServerRoom[]): PublicRoomInfo[] {
       racing: room.match !== null && room.match.phase !== "match_over",
       visibility: room.settings.visibility,
       smartOnly: room.settings.smartOnly,
+      teams: room.settings.teams !== "off",
       hostName: hostName(room),
     }))
     .sort((a, b) => b.players - a.players || a.name.localeCompare(b.name))
@@ -558,6 +647,7 @@ function beginMatch(room: ServerRoom, start: MatchStartInfo, now: number): Logic
     timing: start.timing,
     roster,
     picks,
+    teamPicks: teamPicks(room),
     scrambles: start.scrambles,
     now,
   });
@@ -661,9 +751,19 @@ export function submitSolve(room: ServerRoom, playerId: string, submission: Solv
   if (!update.ok) {
     return update;
   }
-  const room2 = withMatch(room, update.match);
+  const before = room.match.results[player.publicId]?.[submission.solveIndex] ?? null;
+  const room2 = withRecentTime(withMatch(room, update.match), player, before, submission.solveIndex);
   // Their timer has stopped, so they're no longer "solving".
   return { ok: true, room: setPlayerTimerStatus(room2, playerId, "idle", now) };
+}
+
+/** Keeps a player's latest times in the room (to split teams evenly). Same room if nothing new. */
+function withRecentTime(room: ServerRoom, player: ServerPlayer, before: SolveResult | null, solveIndex: number): ServerRoom {
+  const result = room.match?.results[player.publicId]?.[solveIndex];
+  if (!result || result === before) return room;
+  const mark = scoredTime(result);
+  if (mark === "DNF") return room;
+  return { ...room, players: room.players.map((p) => (p.playerId === player.playerId ? { ...p, recentMs: [...p.recentMs, mark].slice(-12) } : p)) };
 }
 
 export function changePenalty(room: ServerRoom, playerId: string, change: PenaltyChange): LogicResult {
@@ -735,7 +835,7 @@ export function startNextSet(room: ServerRoom, scrambles: SetScrambles, now: num
   if (!matchLogic.scramblesFit(room.match.settings, matchLogic.setEvents(room.match, roster, picks), scrambles)) {
     return fail("The scrambles don't fit this match.");
   }
-  const update = matchLogic.startNextSet(room.match, roster, picks, scrambles, now);
+  const update = matchLogic.startNextSet(room.match, roster, picks, scrambles, now, teamPicks(room));
   return update.ok ? { ok: true, room: withMatch(room, update.match) } : update;
 }
 
@@ -793,6 +893,7 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       watching: p.watching,
       pickingEvent: p.pickingEvent && room.settings.mixedEvents && !match,
       cubeEvent: eventOf(room.settings, p),
+      team: room.settings.teams === "off" ? null : p.team,
     })),
     match: match && {
       matchId: match.matchId,
@@ -811,14 +912,16 @@ export function toSnapshot(room: ServerRoom, now: number): RoomSnapshot {
       standings: matchLogic.currentStandings(match),
       points: match.points,
       // Finished sets without every solve, to keep snapshots small.
-      finishedSets: match.finishedSets.map(({ setIndex, winnerIds, standings, paces }) => ({
+      finishedSets: match.finishedSets.map(({ setIndex, winnerIds, standings, paces, teams }) => ({
         setIndex,
         winnerIds,
         standings,
         paces,
+        teams,
       })),
-      paces: match.settings.scoring === "handicap" ? matchLogic.currentPaces(match) : null,
+      paces: match.settings.scoring === "handicap" && !match.teams ? matchLogic.currentPaces(match) : null,
       winnerIds: match.winnerIds,
+      teams: match.teams,
     },
     autoStartAt: match ? null : room.autoStartAt,
     bestOfLocked: room.hasRaced,
@@ -882,6 +985,8 @@ function newPlayer(info: PlayerInfo, now: number): ServerPlayer {
     watching: false,
     pickingEvent: false,
     cubeEvent: info.cubeEvent && MIXED_EVENTS.includes(info.cubeEvent) ? info.cubeEvent : null,
+    team: null,
+    recentMs: [],
   };
 }
 

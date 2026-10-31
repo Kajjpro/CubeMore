@@ -14,6 +14,9 @@ import {
   type Scramble,
   type SetStanding,
   type SolveResult,
+  teamStandings,
+  setWinnersOfTeams,
+  type TeamId,
 } from "@cube-racing/shared";
 import { scoredMs, trimmedAverage } from "../stats";
 
@@ -118,6 +121,10 @@ export interface MockRoomOptions {
   setup?: boolean;
   /** Mixed rooms: just joined, still picking their event. */
   picking?: number[];
+  /** Team rooms (settings.teams): each player's team (default: Blue, Red, Blue, Red...). */
+  teamOf?: TeamId[];
+  /** Team rooms: the teams' points. */
+  teamPoints?: Record<TeamId, number>;
 }
 
 export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: string } {
@@ -141,6 +148,7 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     guest: !!o.guests?.includes(i),
     watching: !!o.watching?.includes(i),
     pickingEvent: !!o.picking?.includes(i),
+    team: settings.teams === "off" ? null : (o.teamOf?.[i] ?? (i % 2 ? "B" : "A")),
   }));
   const youId = ids[o.meIndex ?? 0];
   const base = {
@@ -188,7 +196,19 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     const score = ([id, s]: (typeof valid)[0]) => (s.result as number) / (paces ? paces[id]! : 1);
     const bestValue = Math.min(...valid.map(score));
     const winnerIds = valid.filter((entry) => score(entry) === bestValue).map(([id]) => id);
-    finishedSets.push({ setIndex, winnerIds, standings: setStandings, paces });
+    finishedSets.push({ setIndex, winnerIds, standings: setStandings, paces, teams: null });
+  }
+  const teamOf = Object.fromEntries(players.filter((p) => p.team && roster.includes(p.id)).map((p) => [p.id, p.team!]));
+  const teams: MatchSnapshot["teams"] =
+    settings.teams === "off"
+      ? null
+      : { mode: settings.teams, of: teamOf, points: o.teamPoints ?? { A: 1, B: 0 }, winners: [] };
+  if (teams && finishedSets.length) {
+    const done = Object.fromEntries(roster.map((id) => [id, results[id].map((r) => r ?? { timeMs: 0, penalty: "DNF" as const, source: "submitted" as const })]));
+    const st = teamStandings(teams.mode, settings.format, roster, teamOf, done, perSet) as Partial<Record<TeamId, SetStanding>>;
+    const winners = setWinnersOfTeams(st);
+    finishedSets[0] = { ...finishedSets[0], teams: { standings: st, winners }, winnerIds: roster.filter((id) => winners.includes(teamOf[id])) };
+    if (o.phase === "match_over") teams.winners = [teams.points.A >= teams.points.B ? "A" : "B"];
   }
   const winner = roster.reduce((a, b) => ((points[b] ?? 0) > (points[a] ?? 0) ? b : a), roster[0]);
 
@@ -209,7 +229,8 @@ export function mockRoom(o: MockRoomOptions = {}): { room: RoomSnapshot; youId: 
     points,
     finishedSets,
     paces,
-    winnerIds: o.phase === "match_over" ? [winner] : [],
+    winnerIds: o.phase === "match_over" ? (teams ? roster.filter((id) => teams.winners.includes(teamOf[id])) : [winner]) : [],
+    teams,
   };
   return { room: { ...base, match, autoStartAt: null }, youId };
 }

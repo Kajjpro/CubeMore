@@ -76,6 +76,10 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
                 <Icon name="plus" size={18} />
                 {racer.creating ? "Creating…" : "Create a room"}
               </button>
+              <button type="button" className="create-button" onClick={() => void racer.createRoom({ teams: "all" })} disabled={racer.creating}>
+                <Icon name="users" size={18} />
+                Team match
+              </button>
               <form className="join-form" onSubmit={join}>
                 <label className="sr-only" htmlFor="join-code">
                   Join with a room code
@@ -132,7 +136,7 @@ function AboutCubeMore() {
         <p>
           CubeMore (also written Cube More) is a free online speedcubing race. Everyone in a room gets the same random-state WCA scramble, solves it on a
           real cube and stops a stackmat-style timer. Your times, ao5 and ao12 averages and points show up live next to
-          everyone else's, so you know who's ahead before the last solve. Race friends in a private room with a PIN, join a
+          everyone else's, so you know who's ahead before the last solve. Play 2 vs 2 team matches with voice chat. Race friends in a private room with a PIN, join a
           public room, or practise alone. It works in your browser on a phone or a computer, with a keyboard, a touch screen,
           a Bluetooth timer or a smart cube.
         </p>

@@ -10,7 +10,7 @@
  */
 
 import type { Pool } from "pg";
-import type { PracticeKind, PracticeSessionInfo, PracticeSolve } from "@cube-racing/shared";
+import type { CaseTime, PracticeKind, PracticeSessionInfo, PracticeSolve } from "@cube-racing/shared";
 import { PRACTICE_SIZE } from "@cube-racing/shared";
 
 export interface SessionRow {
@@ -31,6 +31,12 @@ export interface PracticeStore {
   getSession(userId: string, id: string): Promise<{ session: SessionRow; solves: PracticeSolve[] } | null>;
   deleteSession(userId: string, id: string): Promise<void>;
   setCoach(userId: string, id: string, text: string, model: string): Promise<void>;
+  /** The analyses of the user's newest kept solves (for the case trainer), newest first. */
+  recentAnalyses(userId: string, limit: number): Promise<{ at: number; analysis: PracticeSolve["analysis"] }[]>;
+  /** Case trainer times (drills, and a guest's times brought in on sign-in). */
+  addCaseTimes(userId: string, times: CaseTime[]): Promise<void>;
+  /** The user's newest case trainer times, oldest first. */
+  listCaseTimes(userId: string, limit: number): Promise<CaseTime[]>;
 }
 
 /** The single's time, or the ao5 (best and worst dropped) once complete. */
@@ -90,6 +96,26 @@ export class MemoryPracticeStore implements PracticeStore {
     const session = this.sessions.get(id);
     if (session?.userId === userId) session.coach = text;
   }
+
+  async recentAnalyses(userId: string, limit: number) {
+    const mine = new Set([...this.sessions.values()].filter((s) => s.userId === userId).map((s) => s.id));
+    return [...this.solves.entries()]
+      .filter(([sessionId]) => mine.has(sessionId))
+      .flatMap(([, list]) => list)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit)
+      .map((s) => ({ at: s.createdAt, analysis: s.analysis }));
+  }
+
+  private caseTimes = new Map<string, CaseTime[]>();
+
+  async addCaseTimes(userId: string, times: CaseTime[]): Promise<void> {
+    this.caseTimes.set(userId, [...(this.caseTimes.get(userId) ?? []), ...times]);
+  }
+
+  async listCaseTimes(userId: string, limit: number): Promise<CaseTime[]> {
+    return [...(this.caseTimes.get(userId) ?? [])].sort((a, b) => a.at - b.at).slice(-limit);
+  }
 }
 
 const SCHEMA = `
@@ -114,6 +140,18 @@ const SCHEMA = `
     analysis JSONB NOT NULL,
     UNIQUE (session_id, idx)
   );
+  CREATE TABLE IF NOT EXISTS case_times (
+    user_id TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    at BIGINT NOT NULL,
+    source TEXT NOT NULL,
+    recognition_ms INTEGER,
+    execution_ms INTEGER NOT NULL,
+    moves INTEGER,
+    looks SMALLINT NOT NULL,
+    missed BOOLEAN NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS case_times_by_user ON case_times (user_id, at);
 `;
 
 interface SessionDbRow {
@@ -216,5 +254,51 @@ export class PostgresPracticeStore implements PracticeStore {
 
   async setCoach(userId: string, id: string, text: string, model: string): Promise<void> {
     await this.pool.query("UPDATE practice_sessions SET coach_text = $1, coach_model = $2 WHERE id = $3 AND user_id = $4", [text, model, id, userId]);
+  }
+
+  async recentAnalyses(userId: string, limit: number) {
+    const { rows } = await this.pool.query<{ created_at: string | number; analysis: SolveDbRow["analysis"] }>(
+      `SELECT s.created_at, s.analysis FROM practice_solves s JOIN practice_sessions p ON p.id = s.session_id
+       WHERE p.user_id = $1 ORDER BY s.created_at DESC LIMIT $2`,
+      [userId, limit],
+    );
+    return rows.map((r) => ({ at: Number(r.created_at), analysis: json(r.analysis) }));
+  }
+
+  async addCaseTimes(userId: string, times: CaseTime[]): Promise<void> {
+    if (times.length === 0) return;
+    const values: unknown[] = [];
+    const rows = times.map((t, i) => {
+      values.push(userId, t.caseId, t.at, t.source, t.recognitionMs, t.executionMs, t.moves, t.looks, t.missed);
+      const n = i * 9;
+      return `($${n + 1}, $${n + 2}, $${n + 3}, $${n + 4}, $${n + 5}, $${n + 6}, $${n + 7}, $${n + 8}, $${n + 9})`;
+    });
+    await this.pool.query(
+      `INSERT INTO case_times (user_id, case_id, at, source, recognition_ms, execution_ms, moves, looks, missed) VALUES ${rows.join(", ")}`,
+      values,
+    );
+  }
+
+  async listCaseTimes(userId: string, limit: number): Promise<CaseTime[]> {
+    const { rows } = await this.pool.query<{
+      case_id: string;
+      at: string | number;
+      source: CaseTime["source"];
+      recognition_ms: number | null;
+      execution_ms: number;
+      moves: number | null;
+      looks: number;
+      missed: boolean;
+    }>("SELECT * FROM case_times WHERE user_id = $1 ORDER BY at DESC LIMIT $2", [userId, limit]);
+    return rows.reverse().map((r) => ({
+      caseId: r.case_id,
+      at: Number(r.at),
+      source: r.source,
+      recognitionMs: r.recognition_ms,
+      executionMs: r.execution_ms,
+      moves: r.moves,
+      looks: r.looks === 2 ? 2 : 1,
+      missed: r.missed,
+    }));
   }
 }

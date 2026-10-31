@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AUTO_CONFIRM_MS, ClientEvents, SMART_CUBE_EVENTS, type MatchSnapshot, type Penalty, type SolveResult } from "@cube-racing/shared";
 import { turnsPerSecond, type SmartSolveData } from "@cube-racing/shared/smartSolve";
@@ -32,6 +32,8 @@ interface Props {
   /** "Waiting for Bat, Nomin and 3 others", shown once your time is in. */
   waiting: string | null;
   onPhaseChange: (phase: TimerPhase) => void;
+  /** At the bottom of the timer pad (phones: your best, ao5 and ao12). Hidden while you solve. */
+  footer?: ReactNode;
   demo?: TimerDemo;
 }
 
@@ -40,7 +42,7 @@ function sendTimerStatus(status: "solving" | "idle"): void {
   void request(ClientEvents.TIMER_STATUS, { status });
 }
 
-export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smartOnly, waiting, onPhaseChange, demo }: Props) {
+export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smartOnly, waiting, onPhaseChange, footer, demo }: Props) {
   const [touchArea, setTouchArea] = useState<HTMLDivElement | null>(null);
   const outbox = useOutbox();
 
@@ -147,6 +149,7 @@ export function Timer({ roomCode, match, youId, inputMode, runningDisplay, smart
           <HoldMeter />
           {smart?.phase === "running" && <LiveTurns view={smart} />}
           <p className="timer-hint">{hintFor(phase, canStart, !!myResult, smart, !!bt)}</p>
+          {footer && <div className="timer-footer">{footer}</div>}
         </div>
       )}
 
@@ -206,14 +209,14 @@ function hintFor(phase: TimerPhase, canStart: boolean, done: boolean, smart: Flo
   return <IdleHint />;
 }
 
-/** "Space Hold to get ready" with a keyboard, "Hold the timer to get ready" on touch screens. */
+/** "Space Hold to get ready" with a keyboard, "Hold anywhere here to get ready" on touch screens. */
 export function IdleHint() {
   return (
     <>
       <span className="hint-keys">
         <kbd>Space</kbd> Hold to get ready
       </span>
-      <span className="hint-touch">Hold the timer to get ready</span>
+      <span className="hint-touch">Hold anywhere here to get ready</span>
     </>
   );
 }

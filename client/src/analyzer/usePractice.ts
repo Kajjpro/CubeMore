@@ -6,14 +6,17 @@
  *   3. Signed in: the server checks it, analyzes it again and keeps it.
  *   4. Next scramble, until the session has its solves.
  *
- * Guests get the same analysis; their solves just aren't kept.
+ * Guests get the same analysis; their solves just aren't kept (only their
+ * OLL and PLL times, in this browser, for the case trainer).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClientEvents, PRACTICE_SIZE, type PracticeKind } from "@cube-racing/shared";
 import type { SolveAnalysis } from "@cube-racing/shared/analysis";
+import { caseTimesFromAnalysis } from "@cube-racing/shared/analysis/trainer";
 import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import { request, socket } from "../socket";
+import { addLocalTimes } from "../trainer/times";
 import { analyzeInBackground } from "./analyze";
 
 export type SaveState = "guest" | "saving" | "saved" | "error";
@@ -94,7 +97,11 @@ export function usePractice(signedIn: boolean) {
       setState((s) => (s.sessionId !== sessionId ? s : { ...s, solves: [...s.solves, solve], scramble: null }));
 
       analyzeInBackground(scramble.text, smart.moves, smart.times).then(
-        (analysis) => update(sessionId, solve.key, { analysis }),
+        (analysis) => {
+          update(sessionId, solve.key, { analysis });
+          // Signed in, the server reads them from the kept solve.
+          if (!signedIn) addLocalTimes(caseTimesFromAnalysis(analysis, Date.now()));
+        },
         (error: Error) => update(sessionId, solve.key, { analysisError: error.message }),
       );
       if (signedIn) {

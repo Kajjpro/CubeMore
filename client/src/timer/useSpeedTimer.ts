@@ -4,7 +4,10 @@
  *   idle ──hold space / touch──> holding (red) ──300 ms──> ready (green)
  *     ^                            │ let go too early           │ let go
  *     └────────────────────────────┘                            v
- *   stopped <──────────── any key / touch ─────────────────── running
+ *   stopped <──────── any key / a touch anywhere ──────────── running
+ *
+ * Starting needs the timer area (a big pad); stopping takes a touch anywhere
+ * on the screen, so a hurried slap at the end of a solve never misses.
  *
  * The time is measured with performance.now() timestamps:
  *   final time = stop timestamp - start timestamp
@@ -165,6 +168,23 @@ export function useSpeedTimer({ canStart, onStart, onStop, touchArea }: Options)
       touchArea.removeEventListener("selectstart", block);
     };
   }, [touchArea, press, release, reset]);
+
+  // ---- While running: a touch anywhere stops it ----
+  // The end of a solve is a quick slap at the screen, and it often lands
+  // outside the timer area. Buttons and fields that are still on screen keep
+  // their own job (in a race nothing else is on screen while the timer runs).
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent): void {
+      if (phaseRef.current !== "running") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && touchArea?.contains(target)) return; // the timer area's own listener stops it
+      if (target?.closest("button, a[href], input, select, textarea, summary, [contenteditable]")) return;
+      event.preventDefault();
+      stop();
+    }
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+  }, [touchArea, stop]);
 
   // If starting stops being allowed (a new phase, the host skipped us...) while
   // getting ready or running, drop it. A stopped time is kept (it's in the outbox).

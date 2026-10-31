@@ -18,6 +18,8 @@ const AlgorithmPage = lazy(() => import("./pages/AlgorithmPage").then((m) => ({ 
 
 // The analyzer brings the analysis engine and the 3D cube: loaded only when opened.
 const AnalyzerPage = lazy(() => import("./pages/AnalyzerPage").then((m) => ({ default: m.AnalyzerPage })));
+// The case trainer brings the case pictures and algorithms.
+const TrainerPage = lazy(() => import("./pages/TrainerPage").then((m) => ({ default: m.TrainerPage })));
 
 const DevStates = import.meta.env.DEV ? lazy(() => import("./dev/DevStates").then((m) => ({ default: m.DevStates }))) : null;
 
@@ -50,6 +52,13 @@ export function App() {
     return (
       <Suspense fallback={<div className="home" />}>
         <AnalyzerPage />
+      </Suspense>
+    );
+  }
+  if (path === "/train" || path === "/train/") {
+    return (
+      <Suspense fallback={<div className="home" />}>
+        <TrainerPage />
       </Suspense>
     );
   }

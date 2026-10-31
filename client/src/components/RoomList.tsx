@@ -134,6 +134,11 @@ export function RoomCards(props: {
                   {room.name}
                 </span>
                 {isPrivate && <span className="tag tag-lock">PIN</span>}
+                {room.teams && (
+                  <span className="tag" title="Two teams race each other">
+                    Teams
+                  </span>
+                )}
                 {room.smartOnly && (
                   <span className="tag tag-smart" title="Smart cubes only: every solve is verified">
                     Smart

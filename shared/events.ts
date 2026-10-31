@@ -30,6 +30,7 @@ import type {
   changePenaltySchema,
   chatSchema,
   chooseEventSchema,
+  chooseTeamSchema,
   watchSchema,
   contactIdSchema,
   contactSchema,
@@ -48,6 +49,8 @@ import type {
   callSignalSchema,
   practiceSaveSchema,
   practiceSessionSchema,
+  trainerSaveSchema,
+  trainerScrambleSchema,
   replaySchema,
   restartSchema,
   submitSolveSchema,
@@ -56,7 +59,7 @@ import type {
   updateSettingsSchema,
 } from "./schemas";
 import type { ChatMessage, ContactMessage, DailyStatus, Scramble, LeaderboardRow, PublicRoomInfo, Replay, RoomSnapshot, WeeklyStatus } from "./types";
-import type { PracticeSession, PracticeSessionInfo, PracticeSolve, TopSolve } from "./practice";
+import type { CaseTime, PracticeSession, PracticeSessionInfo, PracticeSolve, TopSolve } from "./practice";
 import type { SiteStats } from "./stats";
 import type { CallParticipant, CallSignal, IceServer } from "./call";
 
@@ -68,6 +71,10 @@ export const ClientEvents = {
   UPDATE_SETTINGS: "room:update_settings",
   /** Mixed rooms: pick the event you race. */
   CHOOSE_EVENT: "room:choose_event",
+  /** Team rooms: race for the other team. */
+  CHOOSE_TEAM: "room:choose_team",
+  /** Host, team rooms: split everyone into two even teams (by their times in the room). */
+  BALANCE_TEAMS: "room:balance_teams",
   /** Step away and only watch, or race again (from the next set). */
   SET_WATCHING: "room:set_watching",
   /** Host: setup is done, open the room (listed, joinable). */
@@ -123,6 +130,13 @@ export const ClientEvents = {
   PRACTICE_COACH: "practice:coach",
   /** The fastest verified solves on CubeMore, analyzed, to compare with. */
   PRACTICE_TOP: "practice:top",
+
+  /** The case trainer: a scramble that lands on one OLL or PLL case (any visitor). */
+  TRAINER_SCRAMBLE: "trainer:scramble",
+  /** Your OLL and PLL times: from kept analyzer solves and drills (signed in; guests keep theirs in the browser). */
+  TRAINER_TIMES: "trainer:times",
+  /** Keep drill times (signed in). */
+  TRAINER_SAVE: "trainer:save",
 
   /** The contact form. */
   CONTACT_SEND: "contact:send",
@@ -190,6 +204,7 @@ export type CreateRoomPayload = z.input<typeof createRoomSchema>;
 export type JoinRoomPayload = z.input<typeof joinRoomSchema>;
 export type UpdateSettingsPayload = z.input<typeof updateSettingsSchema>;
 export type ChooseEventPayload = z.input<typeof chooseEventSchema>;
+export type ChooseTeamPayload = z.input<typeof chooseTeamSchema>;
 export type WatchPayload = z.input<typeof watchSchema>;
 export type ContactPayload = z.input<typeof contactSchema>;
 export type ContactIdPayload = z.input<typeof contactIdSchema>;
@@ -211,6 +226,8 @@ export type ReplayPayload = z.input<typeof replaySchema>;
 export type PracticeSavePayload = z.input<typeof practiceSaveSchema>;
 export type PracticeSessionPayload = z.input<typeof practiceSessionSchema>;
 export type PracticeListPayload = z.input<typeof practiceListSchema>;
+export type TrainerScramblePayload = z.input<typeof trainerScrambleSchema>;
+export type TrainerSavePayload = z.input<typeof trainerSaveSchema>;
 export type CallMediaPayload = z.input<typeof callMediaSchema>;
 export type CallSignalPayload = z.input<typeof callSignalSchema>;
 export type EmptyPayload = Record<string, never>;
@@ -235,6 +252,8 @@ export interface ClientRequests {
   [ClientEvents.LEAVE_ROOM]: { payload: EmptyPayload; response: object };
   [ClientEvents.UPDATE_SETTINGS]: { payload: UpdateSettingsPayload; response: object };
   [ClientEvents.CHOOSE_EVENT]: { payload: ChooseEventPayload; response: object };
+  [ClientEvents.CHOOSE_TEAM]: { payload: ChooseTeamPayload; response: object };
+  [ClientEvents.BALANCE_TEAMS]: { payload: EmptyPayload; response: object };
   [ClientEvents.SET_WATCHING]: { payload: WatchPayload; response: object };
   [ClientEvents.OPEN_ROOM]: { payload: EmptyPayload; response: object };
   [ClientEvents.WARMUP_SCRAMBLE]: { payload: EmptyPayload; response: { scramble: Scramble } };
@@ -269,6 +288,10 @@ export interface ClientRequests {
   [ClientEvents.PRACTICE_DELETE]: { payload: PracticeSessionPayload; response: object };
   [ClientEvents.PRACTICE_COACH]: { payload: PracticeSessionPayload; response: { text: string } };
   [ClientEvents.PRACTICE_TOP]: { payload: EmptyPayload; response: { solves: TopSolve[] } };
+  [ClientEvents.TRAINER_SCRAMBLE]: { payload: TrainerScramblePayload; response: { scramble: string } };
+  /** kept: the times are kept in a database (not just until a restart). */
+  [ClientEvents.TRAINER_TIMES]: { payload: EmptyPayload; response: { times: CaseTime[]; kept: boolean } };
+  [ClientEvents.TRAINER_SAVE]: { payload: TrainerSavePayload; response: object };
   [ClientEvents.CONTACT_SEND]: { payload: ContactPayload; response: object };
   [ClientEvents.ADMIN_MESSAGES]: { payload: EmptyPayload; response: { messages: ContactMessage[] } };
   [ClientEvents.ADMIN_DELETE_MESSAGE]: { payload: ContactIdPayload; response: object };

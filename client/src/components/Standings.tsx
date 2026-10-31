@@ -1,6 +1,17 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { serverNow } from "../clock";
-import { getCubeEvent, type MatchSnapshot, type Penalty, type PlayerSnapshot, type RoomSnapshot, type SolveResult } from "@cube-racing/shared";
+import {
+  getCubeEvent,
+  TEAM_IDS,
+  teamName,
+  type Mark,
+  type MatchSnapshot,
+  type Penalty,
+  type PlayerSnapshot,
+  type RoomSnapshot,
+  type SolveResult,
+  type TeamId,
+} from "@cube-racing/shared";
 import { FORMAT_LABELS } from "../labels";
 import { solveKey, useOutbox } from "../outbox";
 import { droppedIndexes, fastestInColumn, SOLVE_COLUMNS, solveColumns } from "../stats";
@@ -10,6 +21,7 @@ import { Pops, ReactionTray, type Reaction, type ReactionPops } from "./Reaction
 import { LiveCube } from "./Scramble";
 import { isMixed } from "../mixed";
 import { Avatar, EventIcon, Icon } from "./ui";
+import { currentTeamTimes, TeamSwatch } from "./Teams";
 
 interface Props {
   room: RoomSnapshot;
@@ -35,6 +47,12 @@ export function rowOrder(room: RoomSnapshot, match: MatchSnapshot, youId: string
   const spectators = room.players.filter((p) => p.spectator).map((p) => p.id);
   const ids = [...match.roster, ...spectators];
   const position = (id: string) => joinOrder.get(id) ?? 1000 + match.roster.indexOf(id);
+  // Team matches: Blue's players, then Red's (in join order), then everyone watching.
+  if (match.teams) {
+    const teamOf = match.teams.of;
+    const order = (id: string) => (match.roster.includes(id) && teamOf[id] ? TEAM_IDS.indexOf(teamOf[id]) : TEAM_IDS.length);
+    return ids.sort((a, b) => order(a) - order(b) || position(a) - position(b));
+  }
   ids.sort((a, b) => (match.points[b] ?? 0) - (match.points[a] ?? 0) || position(a) - position(b));
   if (pinMe && youId && ids.includes(youId)) return [youId, ...ids.filter((id) => id !== youId)];
   return ids;
@@ -74,6 +92,9 @@ export const Standings = memo(function Standings(props: Props) {
   const mixed = isMixed(match);
 
   const solveKeyNow = `${match.matchId}/${match.setIndex}/${match.solveIndex}`;
+  // Team matches: a row per team (its time for each solve, its average, its points) above its players.
+  const teamTimes = match.teams ? currentTeamTimes(match) : null;
+  const teamOf = (id: string): TeamId | null => (match.teams && match.roster.includes(id) ? (match.teams.of[id] ?? null) : null);
   const liveMovesOf = (id: string) => {
     const entry = props.cubeMoves[id];
     return match.phase === "solving" && entry?.solveKey === solveKeyNow ? entry.moves : null;
@@ -111,17 +132,38 @@ export const Standings = memo(function Standings(props: Props) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((id) => {
+          {rows.map((id, index) => {
             const player = players.get(id);
+            const team = teamOf(id);
+            const firstOfTeam = !!teamTimes && !!team && teamOf(rows[index - 1] ?? "") !== team;
             const row = match.results[id];
             const isMe = id === youId;
             const expanded = open === id;
             const dropped = droppedIndexes(row, room.settings.format);
             return (
               <Fragment key={id}>
-                <tr className={`${isMe ? "me" : ""} ${expanded ? "open" : ""}`} onClick={() => setOpen(expanded ? null : id)}>
+                {firstOfTeam && teamTimes && (
+                  <TeamRow
+                    team={team!}
+                    solves={solves}
+                    currentSolve={match.solveIndex}
+                    marks={teamTimes[team!].marks}
+                    average={hasAverage ? (teamTimes[team!].standing?.result ?? null) : undefined}
+                    points={match.teams!.points[team!]}
+                    mine={!!youId && teamOf(youId) === team}
+                  />
+                )}
+                <tr
+                  className={`${isMe ? "me" : ""} ${expanded ? "open" : ""} ${team ? "team-member" : ""}`}
+                  data-team={team ?? undefined}
+                  onClick={() => setOpen(expanded ? null : id)}
+                >
                   <td className="rank">
-                    <span className={`rank-badge ${rankOf.get(id) === 1 && match.points[id] ? "leader" : ""}`}>{rankOf.get(id)}</span>
+                    {team ? (
+                      <TeamSwatch team={team} />
+                    ) : (
+                      <span className={`rank-badge ${rankOf.get(id) === 1 && match.points[id] ? "leader" : ""}`}>{rankOf.get(id)}</span>
+                    )}
                   </td>
                   <th scope="row" className="name-col">
                     <button type="button" className="row-toggle" aria-expanded={expanded} data-dense title={player?.nickname ?? names[id]}>
@@ -177,7 +219,8 @@ export const Standings = memo(function Standings(props: Props) {
                   })}
                   {hasAverage && <td className="num avg">{formatMark(match.standings[id]?.result)}</td>}
                   <td className="num pts">
-                    <span className={(match.points[id] ?? 0) > 0 ? "pts-some" : "pts-zero"}>{match.points[id] ?? 0}</span>
+                    {/* Team matches: the points are the team's (on its row). */}
+                    {!team && <span className={(match.points[id] ?? 0) > 0 ? "pts-some" : "pts-zero"}>{match.points[id] ?? 0}</span>}
                   </td>
                 </tr>
                 {expanded && (
@@ -210,6 +253,45 @@ export const Standings = memo(function Standings(props: Props) {
     </div>
   );
 });
+
+/** A team's row in the standings: its time for each solve, its average so far and its points. */
+function TeamRow(props: {
+  team: TeamId;
+  solves: number[];
+  currentSolve: number;
+  marks: (Mark | null)[];
+  /** The team's ao5 / ao12 (null until the set is done); undefined for single. */
+  average?: Mark | null;
+  points: number;
+  mine: boolean;
+}) {
+  return (
+    <tr className="team-row" data-team={props.team} data-mine={props.mine}>
+      <td className="rank">
+        <TeamSwatch team={props.team} />
+      </td>
+      <th scope="row" className="name-col">
+        <span className="team-row-name">
+          {teamName(props.team)}
+          {props.mine && <span className="team-you">you</span>}
+        </span>
+      </th>
+      {props.solves.map((i) => (
+        <td key={i} className={`time-cell ${i === props.currentSolve ? "current" : ""}`}>
+          {props.marks[i] != null ? (
+            <span className={props.marks[i] === "DNF" ? "dnf" : ""}>{formatMark(props.marks[i])}</span>
+          ) : i > props.currentSolve ? null : (
+            <span className="muted">–</span>
+          )}
+        </td>
+      ))}
+      {props.average !== undefined && <td className="num avg">{props.average === null ? "–" : formatMark(props.average)}</td>}
+      <td className="num pts">
+        <span className={props.points > 0 ? "pts-some" : "pts-zero"}>{props.points}</span>
+      </td>
+    </tr>
+  );
+}
 
 /**
  * How many solve columns fit next to the names, the average and the points

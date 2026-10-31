@@ -2,10 +2,11 @@
  * RoomView: the whole room screen, built only from props.
  * The real room (pages/RoomPage.tsx) and the /dev/states page both render it.
  *
- * Layouts (see DESIGN.md). The standings are the most important thing after
- * the timer, so they are always on screen:
- *  phone     = stage with the standings right under the timer, plus a bottom
- *              sheet for the chat, your stats and the host controls
+ * Layouts (see DESIGN.md):
+ *  phone     = the stage (scramble and a big timer) and a bar at the bottom:
+ *              Standings shows or hides everyone's times under the timer (your
+ *              choice, remembered), Chat (and Host) open a sheet with the chat,
+ *              your stats and the host controls
  *  landscape = stage + sidebar (Standings | Chat tabs)
  *  wide      = stage + a wide standings column (Standings | Chat tabs)
  *
@@ -15,8 +16,8 @@
  * re-render until the solve is over).
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ChatMessage, CubeEventId, Penalty, PlayerSnapshot, RoomSettings, RoomSnapshot, TeamId } from "@cube-racing/shared";
 import { useNewScrambleAlert } from "../alerts";
 import { solveKey, useOutbox } from "../outbox";
 import { useLayout } from "../layout";
@@ -26,7 +27,7 @@ import { useSessionStats } from "../session";
 import type { TimerPhase } from "../timer/useSpeedTimer";
 import type { CubeMoves } from "../useRoom";
 import { useWakeLock } from "../wakeLock";
-import { CallAudio, CallPanel } from "./Call";
+import { CallAudio, CallBar, type CallDemo } from "./Call";
 import { ChatPanel } from "./ChatPanel";
 import { ConfirmButton } from "./ConfirmButton";
 import { DEBUG, DebugPanel } from "./DebugPanel";
@@ -37,8 +38,10 @@ import { useReactionPops, type Reaction, type ReactionPops } from "./Reactions";
 import { preloadScramblePreview, ScrambleBlock } from "./Scramble";
 import { MixedEventPicker } from "./SettingsForm";
 import { Standings } from "./Standings";
+import { TeamScoreboard } from "./Teams";
 import { Timer, type TimerDemo } from "./Timer";
 import { TopBar } from "./TopBar";
+import { YourSolves } from "./YourSolves";
 import { formatMark } from "../time";
 import { Icon, ProgressBar } from "./ui";
 
@@ -49,6 +52,10 @@ export interface RoomActions {
   updateSettings: (changes: Partial<RoomSettings>, pin?: string) => void;
   /** Mixed rooms: the event you race. */
   chooseEvent: (cubeEvent: CubeEventId) => void;
+  /** Team rooms: the team you race for. */
+  chooseTeam: (team: TeamId) => void;
+  /** Host, team rooms: split everyone into two even teams. */
+  balanceTeams: () => void;
   /** Step away and just watch (true), or race again from the next set (false). */
   setWatching: (watching: boolean) => void;
   /** Host: setup done, open the room. */
@@ -76,6 +83,10 @@ export interface RoomDemo {
   unread?: number;
   inputMode?: InputMode;
   runningDisplay?: RunningDisplay;
+  /** Phones: the standings under the timer. */
+  showStandings?: boolean;
+  /** The call bar: a made-up call (default: nobody in it). */
+  call?: CallDemo;
 }
 
 export interface RoomViewProps {
@@ -128,6 +139,12 @@ export function RoomView(props: RoomViewProps) {
   const [tab, setTab] = useState<SideTab>(demo?.tab ?? "standings");
   // The phone sheet has no Standings tab (they're on the stage): it opens on the chat.
   const [sheetTab, setSheetTab] = useState<SideTab>(demo?.tab && demo.tab !== "standings" ? demo.tab : "chat");
+  const openSheet = (tab: SideTab) => {
+    setSheetTab(tab);
+    setSheetOpen(true);
+  };
+  // Phones: everyone's times under the timer, or just the timer (a bigger pad to hold).
+  const showStandings = demo?.showStandings ?? prefs.showStandings;
   useEffect(() => {
     // Getting ready or solving: never cover the timer.
     if (timerPhase === "holding" || timerPhase === "ready" || timerPhase === "running") {
@@ -208,9 +225,9 @@ export function RoomView(props: RoomViewProps) {
       connected={props.connected}
       active={chatVisible}
       onSend={actions.sendChat}
-      call={demo ? undefined : <CallPanel />}
     />
   );
+  const callTeams = useCallTeams(room);
 
   return (
     <div className={`room ${match ? "in-match" : "in-lobby"} format-${room.settings.format}`} data-focus={focus}>
@@ -230,6 +247,7 @@ export function RoomView(props: RoomViewProps) {
         watching={me ? me.watching : null}
         awayCostsSolves={awayCostsSolves}
         onSetWatching={actions.setWatching}
+        call={!room.setup && <CallBar youId={youId} teams={callTeams} focus={focus} demo={demo ? (demo.call ?? {}) : undefined} />}
       />
 
       <div className="banners" aria-live="polite">
@@ -282,6 +300,8 @@ export function RoomView(props: RoomViewProps) {
           onUpdateSettings={actions.updateSettings}
           onChooseEvent={actions.chooseEvent}
           onSetWatching={actions.setWatching}
+          onChooseTeam={actions.chooseTeam}
+          onBalanceTeams={actions.balanceTeams}
           chat={chatPanel}
         />
       ) : (
@@ -325,6 +345,7 @@ export function RoomView(props: RoomViewProps) {
                     smartOnly={room.settings.smartOnly}
                     waiting={waitingText(waitingNames(props.room, live, youId))}
                     onPhaseChange={onPhaseChange}
+                    footer={layout === "phone" && <SessionLine stats={stats} />}
                     demo={demo?.timer}
                   />
                 ) : (
@@ -373,6 +394,9 @@ export function RoomView(props: RoomViewProps) {
                 </div>
               )}
             </div>
+            {(match.phase === "solving" || match.phase === "solve_review") && youId && match.roster.includes(youId) && (
+              <YourSolves match={match} youId={youId} format={room.settings.format} onChangePenalty={actions.changePenalty} />
+            )}
             {match.phase === "solving" && youId && match.roster.includes(youId) && (
               <TimerTools
                 inputMode={demo?.inputMode ?? prefs.inputMode}
@@ -381,7 +405,7 @@ export function RoomView(props: RoomViewProps) {
                 onWatch={() => actions.setWatching(true)}
               />
             )}
-            {match.phase === "solving" && layout === "phone" && (
+            {layout === "phone" && showStandings && (match.phase === "solving" || match.phase === "solve_review") && (
               <section className="stage-standings" aria-label="Standings">
                 {standings}
               </section>
@@ -392,32 +416,48 @@ export function RoomView(props: RoomViewProps) {
           {layout === "phone" ? (
             <>
               <div className="scrim" data-open={sheetOpen} onClick={() => setSheetOpen(false)} aria-hidden />
-              <div className="sheet" data-open={sheetOpen}>
-                <button
-                  type="button"
-                  className="sheet-handle"
-                  aria-expanded={sheetOpen}
-                  onClick={() => setSheetOpen((open) => !open)}
-                >
-                  <span className="grabber" aria-hidden />
-                  <span>{isHost ? "Chat, stats and host" : "Chat and stats"}</span>
-                  {unread > 0 && !sheetOpen && <span className="badge">{unread}</span>}
-                  <span className="grow" />
-                  {sheetOpen && <span className="sheet-summary">Close</span>}
-                  <Icon name="chevronUp" className="sheet-chevron" />
-                </button>
-                <div className="sheet-body" inert={!sheetOpen}>
-                  <SideTabs
-                    tab={sheetTab}
-                    onTab={setSheetTab}
-                    items={[
-                      { id: "chat", label: "Chat", badge: unread, content: chatPanel },
-                      { id: "stats", label: "Your stats", content: <SessionPanel stats={stats} open /> },
-                      ...(hostPanel ? [{ id: "host" as const, label: "Host", content: hostPanel }] : []),
-                    ]}
-                  />
-                </div>
+              <div className="sheet" data-open={sheetOpen} inert={!sheetOpen} role="dialog" aria-label="Chat and stats">
+                <span className="grabber" aria-hidden />
+                <SideTabs
+                  tab={sheetTab}
+                  onTab={setSheetTab}
+                  items={[
+                    { id: "chat", label: "Chat", badge: unread, content: chatPanel },
+                    { id: "stats", label: "Your stats", content: <SessionPanel stats={stats} open /> },
+                    ...(hostPanel ? [{ id: "host" as const, label: "Host", content: hostPanel }] : []),
+                  ]}
+                  end={
+                    <button type="button" className="sheet-close" onClick={() => setSheetOpen(false)} aria-label="Close" data-dense>
+                      <Icon name="x" size={18} />
+                    </button>
+                  }
+                />
               </div>
+              <nav className="dock" aria-label="Standings and chat">
+                {(match.phase === "solving" || match.phase === "solve_review") && (
+                  <button
+                    type="button"
+                    className="dock-button"
+                    aria-pressed={showStandings}
+                    onClick={() => setPref("showStandings", !showStandings)}
+                  >
+                    <Icon name="podium" size={18} />
+                    <span className="dock-label">Standings</span>
+                    <span className="dock-count mono">{solvedCount(room)}</span>
+                  </button>
+                )}
+                <button type="button" className="dock-button" aria-expanded={sheetOpen && sheetTab !== "host"} onClick={() => openSheet("chat")}>
+                  <Icon name="message" size={18} />
+                  <span className="dock-label">Chat</span>
+                  {unread > 0 && <span className="badge">{unread}</span>}
+                </button>
+                {hostPanel && (
+                  <button type="button" className="dock-button" aria-expanded={sheetOpen && sheetTab === "host"} onClick={() => openSheet("host")}>
+                    <Icon name="crown" size={18} />
+                    <span className="dock-label">Host</span>
+                  </button>
+                )}
+              </nav>
             </>
           ) : (
             <aside className="side" aria-label="Room">
@@ -456,14 +496,37 @@ export function RoomView(props: RoomViewProps) {
   );
 }
 
+/**
+ * Who is on which team, for the call (team talk and the tiles): the match's
+ * teams while one runs, else the teams picked in the lobby. null without teams.
+ * The same object until a team changes.
+ */
+function useCallTeams(room: RoomSnapshot): Record<string, TeamId> | null {
+  const live = room.match && room.match.phase !== "match_over" ? room.match.teams?.of : null;
+  const teams: Record<string, TeamId> | null = live
+    ? live
+    : room.settings.teams !== "off"
+      ? Object.fromEntries(room.players.filter((p) => p.team).map((p) => [p.id, p.team!]))
+      : null;
+  const key = teams ? JSON.stringify(Object.entries(teams).sort()) : "";
+  return useMemo(() => teams, [key]);
+}
+
 /** The header's live status: "3/5 Solved", "6 players", "Set 2 done"... */
 function roomStatus(room: RoomSnapshot): string {
   const match = room.match;
   if (!match) return `${room.players.length} player${room.players.length === 1 ? "" : "s"}`;
   if (match.phase === "set_result") return `Set ${match.setIndex + 1} done`;
   if (match.phase === "match_over") return "Match over";
+  return `${solvedCount(room)} Solved`;
+}
+
+/** "3/5": how many racers have a time for the current solve. */
+function solvedCount(room: RoomSnapshot): string {
+  const match = room.match;
+  if (!match) return "";
   const solved = match.roster.filter((id) => match.results[id]?.[match.solveIndex]).length;
-  return `${solved}/${match.roster.length} Solved`;
+  return `${solved}/${match.roster.length}`;
 }
 
 /**
@@ -496,9 +559,18 @@ function TimerTools(props: { inputMode: InputMode; smartOnly: boolean; awayCosts
       )}
       <span className="grow" />
       {props.awayCostsSolves ? (
-        <ConfirmButton className="quiet watch-button" label="Watch" confirmLabel="Tap again: rest of set is DNF" onConfirm={props.onWatch} dense />
+        <ConfirmButton
+          className="watch-button"
+          label="Watch"
+          confirmLabel="Tap again: rest of set is DNF"
+          onConfirm={props.onWatch}
+          icon={<Icon name="eye" size={16} />}
+          ariaLabel="Watch: step away from the race"
+          dense
+        />
       ) : (
-        <button type="button" className="quiet watch-button" onClick={props.onWatch} data-dense>
+        <button type="button" className="watch-button" onClick={props.onWatch} aria-label="Watch: step away from the race" data-dense>
+          <Icon name="eye" size={16} />
           Watch
         </button>
       )}
@@ -570,6 +642,28 @@ function SessionStrip({ stats }: { stats: ReturnType<typeof useSessionStats> }) 
   );
 }
 
+/** Phones, at the bottom of the timer: "best 9.54  ao5 10.59  ao12 –", like csTimer. */
+function SessionLine({ stats }: { stats: ReturnType<typeof useSessionStats> }) {
+  if (stats.solves === 0) return null;
+  const show = (value: number | null | undefined) => (value === undefined ? "–" : formatMark(value ?? "DNF"));
+  return (
+    <dl className="session-line" aria-label="Your session">
+      <div>
+        <dt>best</dt>
+        <dd>{show(stats.best)}</dd>
+      </div>
+      <div>
+        <dt>ao5</dt>
+        <dd>{show(stats.ao5)}</dd>
+      </div>
+      <div>
+        <dt>ao12</dt>
+        <dd>{show(stats.ao12)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 /**
  * How many chat messages from other players arrived while the chat was not on
  * screen. Messages from before you joined (the history) count as read.
@@ -590,26 +684,31 @@ function SideTabs(props: {
   tab: SideTab;
   onTab: (tab: SideTab) => void;
   items: { id: SideTab; label: string; badge?: number; content: ReactNode }[];
+  /** Next to the tabs (the sheet's Close button). */
+  end?: ReactNode;
 }) {
   const current = props.items.some((item) => item.id === props.tab) ? props.tab : props.items[0].id;
   return (
     <div className="side-tabs">
-      <div className="tabs" role="tablist" aria-label="Room">
-        {props.items.map(({ id, label, badge }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            id={`tab-${id}`}
-            aria-selected={current === id}
-            aria-controls={`tabpanel-${id}`}
-            onClick={() => props.onTab(id)}
-            data-dense
-          >
-            {label}
-            {!!badge && current !== id && <span className="badge">{badge}</span>}
-          </button>
-        ))}
+      <div className="tabs-row">
+        <div className="tabs" role="tablist" aria-label="Room">
+          {props.items.map(({ id, label, badge }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`tab-${id}`}
+              aria-selected={current === id}
+              aria-controls={`tabpanel-${id}`}
+              onClick={() => props.onTab(id)}
+              data-dense
+            >
+              {label}
+              {!!badge && current !== id && <span className="badge">{badge}</span>}
+            </button>
+          ))}
+        </div>
+        {props.end}
       </div>
       {props.items.map(({ id, content }) => (
         <div
@@ -645,6 +744,7 @@ function StandingsBlock(props: {
   const waiting = props.showWaiting && match.phase === "solving" ? waitingText(waitingNames(room, match, youId)) : null;
   return (
     <div className="standings-block">
+      {match.teams && <TeamScoreboard match={match} youId={youId} />}
       {waiting && <p className="waiting-line">{waiting}</p>}
       <Standings
         room={room}

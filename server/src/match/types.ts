@@ -2,9 +2,11 @@ import type { SmartSolveData } from "@cube-racing/shared/smartSolve";
 import type {
   CubeEventId,
   MatchPhase,
+  MatchTeams,
   RoomSettings,
   Scramble,
   SetStanding,
+  SetTeams,
   SolveResult,
 } from "@cube-racing/shared";
 
@@ -25,6 +27,8 @@ export interface FinishedSet {
   winnerIds: string[];
   /** Handicap only: each player's pace going into this set. */
   paces: Record<string, number | null> | null;
+  /** Team matches: each team's set result and the set's winning team(s). */
+  teams: SetTeams | null;
 }
 
 /**
@@ -60,6 +64,11 @@ export interface Match {
   /** When the current solve's time limit runs out (server time), or null. */
   solveDeadline: number | null;
   winnerIds: string[];
+  /**
+   * Team matches (settings.teams isn't "off"): everyone's team, the team
+   * points and the winning team. Players' own points still count their team's set wins.
+   */
+  teams: MatchTeams | null;
   /**
    * Verified smart cube solves of the CURRENT set (every move, for replays and
    * the history), by replayKey(). Never sent in snapshots.

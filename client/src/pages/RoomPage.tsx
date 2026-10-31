@@ -102,6 +102,8 @@ function Room({ code, nickname }: { code: string; nickname: string }) {
         setPref("mixedEvent", cubeEvent); // remembered for the next mixed room
         void send(ClientEvents.CHOOSE_EVENT, { cubeEvent });
       },
+      chooseTeam: (team) => void send(ClientEvents.CHOOSE_TEAM, { team }),
+      balanceTeams: () => void send(ClientEvents.BALANCE_TEAMS, {}),
       kick: (player) => void send(ClientEvents.KICK_PLAYER, { targetId: player.id }),
       skip: (player) => void send(ClientEvents.SKIP_PLAYER, { targetId: player.id }),
       endMatch: () => void send(ClientEvents.END_MATCH, {}),

@@ -1,4 +1,4 @@
-import type { CubeEventId, RoomFormat, RoomSettings, SolveTimeLimit, WinCondition } from "@cube-racing/shared";
+import type { CubeEventId, RoomFormat, RoomSettings, SolveTimeLimit, TeamMode, WinCondition } from "@cube-racing/shared";
 
 /** Short event names, as cubers say them. */
 export const EVENT_SHORT: Record<CubeEventId, string> = {
@@ -47,6 +47,12 @@ export function paceDelta(result: number | "DNF" | undefined, pace: number | nul
   return percent < 0 ? `−${text}%` : `+${text}%`;
 }
 
+/** How a team's time is counted, short. */
+export const TEAM_MODE_LABELS: Record<Exclude<TeamMode, "off">, string> = {
+  all: "Teams, all count",
+  fastest: "Teams, fastest counts",
+};
+
 export function timeLimitLabel(limit: SolveTimeLimit): string {
   return limit === "off" ? "Off" : `${limit} min`;
 }
@@ -59,6 +65,7 @@ export function roomEventShort(settings: Pick<RoomSettings, "cubeEvent" | "mixed
 /** The one-line summary used everywhere: "3x3, ao5, Best of 3". */
 export function settingsSummary(settings: RoomSettings): string {
   const parts = [roomEventShort(settings), FORMAT_LABELS[settings.format], WIN_CONDITION_LABELS[settings.winCondition]];
+  if (settings.teams !== "off") parts.push(TEAM_MODE_LABELS[settings.teams]);
   if (settings.scoring === "handicap") parts.push("Handicap");
   if (settings.smartOnly) parts.push("Smart cubes only");
   if (settings.solveTimeLimit !== "off") parts.push(`${settings.solveTimeLimit} min limit`);

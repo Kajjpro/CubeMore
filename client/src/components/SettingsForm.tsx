@@ -178,6 +178,43 @@ export function MoreOptions(props: { settings: RoomSettings; onChange: (changes:
   );
 }
 
+/** Solo or two teams, and how a team's time is counted. */
+function TeamsField({ settings, onChange }: { settings: RoomSettings; onChange: (changes: Partial<RoomSettings>) => void }) {
+  return (
+    <>
+      <Segmented
+        label="Play"
+        value={settings.teams === "off" ? "solo" : "teams"}
+        options={[
+          { value: "solo", label: "Everyone for themselves" },
+          { value: "teams", label: "Two teams" },
+        ]}
+        // Teams always score by time (no handicap).
+        onChange={(value) => onChange(value === "teams" ? { teams: "all", scoring: "fastest" } : { teams: "off" })}
+      />
+      {settings.teams !== "off" && (
+        <>
+          <Segmented
+            label="Team time"
+            value={settings.teams}
+            options={[
+              { value: "all", label: "Everyone counts" },
+              { value: "fastest", label: "Fastest counts" },
+            ]}
+            onChange={(teams) => onChange({ teams })}
+          />
+          <p className="tiny muted">
+            {settings.teams === "all"
+              ? "Each solve, a team's time is the mean of its players' times, so everyone matters. A DNF makes it DNF."
+              : "Each solve, only the team's fastest time counts. Good when a beginner teams up with someone fast."}{" "}
+            The better team wins the set.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 /** A random 4-digit PIN (the host can change it). */
 export function randomPin(): string {
   return String(crypto.getRandomValues(new Uint32Array(1))[0] % 10 ** PIN_LENGTH).padStart(PIN_LENGTH, "0");
@@ -265,20 +302,25 @@ export function LobbySettings(props: {
         ) : (
           <BestOfField value={settings.winCondition} onChange={(winCondition) => onChange({ winCondition })} />
         )}
-        <Segmented
-          label="Scoring"
-          value={settings.scoring}
-          options={[
-            { value: "fastest", label: "Fastest wins" },
-            { value: "handicap", label: "Handicap" },
-          ]}
-          onChange={(scoring) => onChange({ scoring })}
-        />
-        <p className="tiny muted">
-          {settings.scoring === "handicap"
-            ? "Everyone races their own pace (their average from earlier sets). Set 1 sets the pace; after that, whoever beats their pace by the most wins. Fair for mixed levels."
-            : "The best average wins each set, like a WCA round."}
-        </p>
+        <TeamsField settings={settings} onChange={onChange} />
+        {settings.teams === "off" && (
+          <>
+            <Segmented
+              label="Scoring"
+              value={settings.scoring}
+              options={[
+                { value: "fastest", label: "Fastest wins" },
+                { value: "handicap", label: "Handicap" },
+              ]}
+              onChange={(scoring) => onChange({ scoring })}
+            />
+            <p className="tiny muted">
+              {settings.scoring === "handicap"
+                ? "Everyone races their own pace (their average from earlier sets). Set 1 sets the pace; after that, whoever beats their pace by the most wins. Fair for mixed levels."
+                : "The best average wins each set, like a WCA round."}
+            </p>
+          </>
+        )}
       </Group>
 
       <Group title="Room">

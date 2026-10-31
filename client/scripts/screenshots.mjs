@@ -121,7 +121,7 @@ function checkPage() {
   }
 
   // Overlapping controls / key elements (overlays like an open sheet or the menu are expected).
-  const overlay = document.querySelector(".sheet[data-open='true'], .menu, .pick-event-overlay, .choose-overlay");
+  const overlay = document.querySelector(".sheet[data-open='true'], .menu, .call-settings, .pick-event-overlay, .choose-overlay");
   // Tiles scrolled out of the sideways event strip aren't drawn, so they can't overlap anything.
   const outOfStrip = (el) => {
     const strip = el.closest(".event-strip");
@@ -133,14 +133,29 @@ function checkPage() {
   const keys = [...document.querySelectorAll("button, input, .timer-digits, .scramble-text, .preview, h1, h2, .big-code, .waiting-line, .status-line")].filter(
     (el) => visible(el) && !el.closest(".start-bar") && !outOfStrip(el),
   );
+  // The part of an element that is really drawn: a scrolling or clipping parent
+  // cuts off rows scrolled out of its box (they can't overlap anything there).
+  const drawnRect = (el) => {
+    let { left, top, right, bottom } = el.getBoundingClientRect();
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const cs = getComputedStyle(p);
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const r = p.getBoundingClientRect();
+      left = Math.max(left, r.left);
+      top = Math.max(top, r.top);
+      right = Math.min(right, r.right);
+      bottom = Math.min(bottom, r.bottom);
+    }
+    return { left, top, right, bottom };
+  };
   for (let i = 0; i < keys.length; i++) {
     for (let j = i + 1; j < keys.length; j++) {
       const a = keys[i];
       const b = keys[j];
       if (a.contains(b) || b.contains(a)) continue;
       if (overlay && (overlay.contains(a) !== overlay.contains(b))) continue;
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
+      const ra = drawnRect(a);
+      const rb = drawnRect(b);
       const overlapX = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
       const overlapY = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
       if (overlapX > 1 && overlapY > 1) issues.push(`overlap: ${describe(a)} / ${describe(b)}`);

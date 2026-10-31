@@ -27,7 +27,9 @@ import {
 } from "./constants";
 import { CUBE_EVENT_IDS, type CubeEventId } from "./cubeEvents";
 import { SMART_SOLVE_LIMITS } from "./smartSolve";
-import { PRACTICE_KINDS } from "./practice";
+import { PRACTICE_KINDS, TRAINER_SAVE_MAX } from "./practice";
+import { FACES } from "./cube3";
+import { TEAM_IDS, TEAM_MODES } from "./teams";
 import { PENALTIES, ROOM_FORMATS, ROOM_VISIBILITIES, SCORING_MODES, SOLVE_TIME_LIMITS, WIN_CONDITIONS } from "./types";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,6 +92,7 @@ export const settingsChangesSchema = z.object({
   scoring: z.enum(SCORING_MODES).optional(),
   smartOnly: z.boolean().optional(),
   mixedEvents: z.boolean().optional(),
+  teams: z.enum(TEAM_MODES).optional(),
 });
 
 /** Which solve: (matchId, setIndex, solveIndex) identifies every solve exactly. */
@@ -140,6 +143,11 @@ export const watchSchema = z.object({
 /** Mixed rooms: the event you race (from the next match, or the next set if you're new). */
 export const chooseEventSchema = z.object({
   cubeEvent: cubeEventSchema,
+});
+
+/** Team rooms: the team you race for. */
+export const chooseTeamSchema = z.object({
+  team: z.enum(TEAM_IDS),
 });
 
 /**
@@ -316,9 +324,30 @@ export const practiceSessionSchema = z.object({ sessionId: uuidSchema });
 /** The history, newest first; `before` (ms) for the next page. */
 export const practiceListSchema = z.object({ before: z.number().int().min(0).optional() });
 
+// ---- The case trainer ----
+
+/** "OLL 27", "PLL T", "PLL Gb". */
+const caseIdSchema = z.string().regex(/^(OLL [1-9][0-9]?|PLL [A-Z][a-z]?)$/, "Unknown case.");
+
+export const trainerScrambleSchema = z.object({ caseId: caseIdSchema, cross: z.enum(FACES) });
+
+const caseTimeSchema = z.object({
+  caseId: caseIdSchema,
+  at: z.number().int().min(0),
+  source: z.enum(["solve", "drill"]),
+  recognitionMs: z.number().int().min(0).max(60_000).nullable(),
+  executionMs: z.number().int().min(0).max(120_000),
+  moves: z.number().int().min(0).max(200).nullable(),
+  looks: z.union([z.literal(1), z.literal(2)]),
+  missed: z.boolean(),
+});
+
+export const trainerSaveSchema = z.object({ times: z.array(caseTimeSchema).min(1).max(TRAINER_SAVE_MAX) });
+
 // ---- Voice and video calls ----
 
-export const callMediaSchema = z.object({ audio: z.boolean(), video: z.boolean() });
+/** Mic and camera on or off; `teamOnly`: in a team match, your voice only goes to your team. */
+export const callMediaSchema = z.object({ audio: z.boolean(), video: z.boolean(), teamOnly: z.boolean().optional() });
 
 /** A WebRTC offer / answer or network candidate for one other peer (relayed as is). */
 export const callSignalSchema = z

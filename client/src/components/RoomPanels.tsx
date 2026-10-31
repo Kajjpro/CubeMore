@@ -2,7 +2,7 @@
 // the solve review / set result / match over screens.
 
 import { memo, useState, type CSSProperties, type ReactNode } from "react";
-import type { CubeEventId, MatchSnapshot, PlayerSnapshot, RoomSettings, RoomSnapshot } from "@cube-racing/shared";
+import { compareMarks, teamName, type CubeEventId, type MatchSnapshot, type PlayerSnapshot, type RoomSettings, type RoomSnapshot } from "@cube-racing/shared";
 import { EVENT_SHORT, FORMAT_LABELS, nameList, paceDelta, roomEventShort } from "../labels";
 import type { SessionStats } from "../stats";
 import { formatMark, formatResultLong, formatTime } from "../time";
@@ -14,6 +14,7 @@ import { EventSelect, MixedEventPicker } from "./SettingsForm";
 import { AUTH_ENABLED } from "../auth";
 import { isMixed } from "../mixed";
 import { Avatar, EventTag, playerColor, ProgressBar } from "./ui";
+import { currentTeamTimes, TeamFinal, teamMatchHeading, TeamSetResult, TeamTag } from "./Teams";
 
 type RestartChanges = Partial<Pick<RoomSettings, "cubeEvent" | "format" | "solveTimeLimit">>;
 
@@ -46,6 +47,8 @@ export const PlayerList = memo(function PlayerList(props: {
   showEvents?: boolean;
   /** Your own card gets "Just watch" / "Race". */
   onSetWatching?: (watching: boolean) => void;
+  /** No "Waiting for a racer" seat (the team columns say it themselves). */
+  noEmptySeat?: boolean;
 }) {
   return (
     <ul className={props.seats ? "seats" : "list player-list"}>
@@ -93,7 +96,7 @@ export const PlayerList = memo(function PlayerList(props: {
           )}
         </li>
       ))}
-      {props.seats && props.players.length < 2 && (
+      {props.seats && !props.noEmptySeat && props.players.length < 2 && (
         <li className="seat empty">
           <span className="seat-avatar">
             <span className="avatar avatar-md avatar-empty" aria-hidden />
@@ -252,7 +255,7 @@ export function FinishLine(props: {
         <p className="small muted">
           Solve {match.solveIndex + 1} of {match.solvesPerSet}
         </p>
-        <h2>{finishHeadline(rows, names, youId)}</h2>
+        <h2>{match.teams ? teamSolveHeadline(match) : finishHeadline(rows, names, youId)}</h2>
       </div>
       <ol className="finish-rows">
         {rows.map((row, index) => {
@@ -275,6 +278,7 @@ export function FinishLine(props: {
                   <Avatar id={row.id} name={nameOf(row.id, names)} size="xs" />
                   <span className="who-name">{isMe ? "You" : nameOf(row.id, names)}</span>
                   {mixed && match.events[row.id] && <EventTag id={match.events[row.id]} />}
+                  {match.teams?.of[row.id] && <TeamTag team={match.teams.of[row.id]} />}
                   <Pops pops={props.pops[row.id]} />
                 </span>
                 <span className="track" aria-hidden>
@@ -302,6 +306,16 @@ export function FinishLine(props: {
       )}
     </div>
   );
+}
+
+/** Team matches: "Blue team wins the solve, 9.87 vs 10.40". */
+function teamSolveHeadline(match: MatchSnapshot): string {
+  const times = currentTeamTimes(match);
+  const [a, b] = [times.A.marks[match.solveIndex], times.B.marks[match.solveIndex]];
+  if (a == null || b == null) return `Solve ${match.solveIndex + 1}`;
+  const versus = `${formatMark(a)} vs ${formatMark(b)}`;
+  if (compareMarks(a, b) === 0) return a === "DNF" ? "Both teams DNF" : `A tie, ${versus}`;
+  return `${teamName(compareMarks(a, b) < 0 ? "A" : "B")} wins the solve, ${versus}`;
 }
 
 /** "Nomin finished first, 0.42 ahead of Anu" / "You finished first…" / "Everyone DNF". */
@@ -355,6 +369,7 @@ function Podium({ entries, youId, size = "lg" }: { entries: PodiumEntry[]; youId
 export function SetResult({ match, names, youId }: { match: MatchSnapshot; names: Names; youId: string | null }) {
   const set = match.finishedSets[match.finishedSets.length - 1];
   if (!set) return null;
+  if (set.teams) return <TeamSetResult match={match} names={names} youId={youId} />;
   if (set.paces) return <HandicapSetResult match={match} set={set} names={names} youId={youId} />;
   const valueOf = (m: number | "DNF") => (m === "DNF" ? Infinity : m);
   const rows = Object.entries(set.standings).sort(
@@ -549,33 +564,41 @@ export function MatchOver(props: {
   const rows = Object.entries(match.points).sort(([, a], [, b]) => b - a);
   const setsWon = (id: string) => match.finishedSets.filter((s) => s.winnerIds.includes(id)).length;
   const youWon = !!props.youId && match.winnerIds.includes(props.youId);
-  const score = rows.length > 1 ? `${rows[0][1]}–${rows[1][1]}` : null;
+  const teams = match.teams;
+  const teamScore = teams ? [teams.points.A, teams.points.B].sort((a, b) => b - a).join("–") : null;
+  const score = teamScore ?? (rows.length > 1 ? `${rows[0][1]}–${rows[1][1]}` : null);
 
   return (
     <div className="result-screen match-over">
       <div className="result-head centered">
         <p className="small muted">Match over{score ? `, ${score}` : ""}</p>
         <h2>
-          {youWon && winners.length === 1
-            ? "You win the match!"
-            : winners.length
-              ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} the match`
-              : "Match over. No winner"}
+          {teams
+            ? teamMatchHeading(teams, props.youId)
+            : youWon && winners.length === 1
+              ? "You win the match!"
+              : winners.length
+                ? `${nameList(winners)} ${winners.length > 1 ? "win" : "wins"} the match`
+                : "Match over. No winner"}
         </h2>
         <p className="small muted">
           {roomEventShort(props.settings)}, {FORMAT_LABELS[props.settings.format]}, {match.finishedSets.length} set
           {match.finishedSets.length === 1 ? "" : "s"} played
         </p>
       </div>
-      <Podium
-        youId={props.youId}
-        entries={rows.map(([id, points]) => ({
-          id,
-          name: nameOf(id, names),
-          value: `${points} pt${points === 1 ? "" : "s"}`,
-          sub: `${setsWon(id)} set${setsWon(id) === 1 ? "" : "s"} won`,
-        }))}
-      />
+      {teams ? (
+        <TeamFinal match={match} names={names} youId={props.youId} />
+      ) : (
+        <Podium
+          youId={props.youId}
+          entries={rows.map(([id, points]) => ({
+            id,
+            name: nameOf(id, names),
+            value: `${points} pt${points === 1 ? "" : "s"}`,
+            sub: `${setsWon(id)} set${setsWon(id) === 1 ? "" : "s"} won`,
+          }))}
+        />
+      )}
       <div className="match-actions panel">
         <button type="button" onClick={share}>
           {shared ?? "Share result card"}
@@ -608,7 +631,7 @@ export function MatchOver(props: {
           </p>
         )}
       </div>
-      {rows.length > 3 && (
+      {!teams && rows.length > 3 && (
         <table className="ranking">
           <caption className="sr-only">The rest of the field</caption>
           <thead>

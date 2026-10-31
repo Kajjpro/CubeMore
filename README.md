@@ -120,10 +120,27 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
   players keep their sessions; an optional AI coach writes a short summary. See "The solve
   analyzer" in DEPLOY.md.
 
+- **OLL and PLL trainer** (`/train`): your time on every OLL and PLL case, from analyzer
+  solves and drills; the cases that cost you the most (slower than your average, missed, or
+  still done in 2-look) on top. Drills use real scrambles that land on each case (random
+  angle; an OLL comes with a random PLL), and slow and missed cases come back more often.
+  Time with the spacebar / touch, a Stackmat, a GAN timer, or a smart cube (recognition timed
+  apart). Guests keep their times in the browser; signed-in players with their account.
+
 - **Race now**: one tap puts you in an open public room for your event (or opens one for
   the next racer). The room's host starts the race when people have joined.
-- **Voice and video**: everyone in a room can join its call (up to 8), with mic and
-  camera buttons; voices keep playing while you race. Browser to browser (WebRTC).
+- **Voice and video**: everyone in a room can join its call (up to 8). The call is always in
+  sight in the room header (its own row on phones): who's in it, a green ring on whoever is
+  talking, and one tap to join, mute (or press M), turn the camera on, pick the microphone,
+  "Mute for me" one person, or leave. It only fades while you solve; voices keep playing.
+  In a team match, "Team only" sends your voice to your team alone. Browser to browser (WebRTC).
+- **Team matches** (home → "Team match", or lobby → Play → "Two teams"): Blue against Red,
+  2 vs 2, 3 vs 3 or uneven. Each solve the team gets one time: "Everyone counts" = the mean
+  of its players' times (a DNF makes it DNF), or "Fastest counts". The team times make the
+  team's single or average, and the better team wins the set; first to the Best of target
+  wins. Newcomers join the smaller team; "Join" switches; the host's "Balance teams" splits
+  everyone evenly by their times in the room. Teams are fixed during a match. Rules:
+  `shared/teams.ts`.
 - **Live clocks**: while others solve, their running time ticks in the standings, so you
   know whether you're ahead before anyone stops.
 - **Finish line**: after each solve, a short replay: every bar runs at its player's speed
@@ -173,8 +190,10 @@ Vite prints a `Network:` address like `http://192.168.1.20:5173`. Open it on you
     solve. Needs `DATABASE_URL`.
   - Without a cube: add `?simcube=1` to the address, and the Menu offers a keyboard cube
     (i/k = R/R', j/f = U/U', h/g = F/F', d/e = L/L', s/l = D/D', w/o = B/B').
-- **Bluetooth timer (beta)**: Menu → "Connect timer" (GAN Smart Timer, GAN Halo). Hands on,
-  lift to start, stop like at a competition; the time is the timer's own.
+- **Competition timer (beta)**: Menu → "Competition timer": a Stackmat (Gen 2 to 5, through a
+  3.5 mm cable into the headset / mic jack; read from the sound, works on iPhone too) or a GAN
+  Smart Timer / Halo over Bluetooth. Hands on, lift to start, stop like at a competition; the
+  time is the timer's own.
 
 ## How a match works
 
@@ -204,6 +223,9 @@ shared/          Used by BOTH server and client
   cube3.ts         a 3x3 model in GAN's facelets format (smart cube guide + verification)
   smartSolve.ts    verifying a smart cube solve (shared, so both sides use the same rules)
   practice.ts      the analyzer's sessions and solves (types)
+  marks.ts         scored times and averages, WCA-style (whole numbers only)
+  teams.ts         team matches: a team's time per solve and per set, even teams
+  call.ts          voice and video call types
   analysis/        THE SOLVE ANALYZER (pure; the browser runs it, the server checks it)
     analyze.ts       a solve -> CFOP stages for any cross colour, cases, shortest cross/pairs
     state.ts         reading a state the CFOP way (cross, slots, oriented) for each face
@@ -248,7 +270,12 @@ client/src/
   smartCube.ts          the smart cube connection (gan-web-bluetooth, cubing.js)
   smart/                the scramble guide, the solve flow (inspection...), exact timing
   analyzer/             the analyzer in a web worker, and one practice session's flow
-  btTimer.ts            the Bluetooth timer connection (GAN)
+  call/call.ts          the room's voice and video call (WebRTC), team talk, who's talking
+  components/Call.tsx   the call bar in the room header
+  components/Teams.tsx  team matches on screen: lobby columns, score, results
+  btTimer.ts            the real timer connection (GAN over Bluetooth, Stackmat over sound)
+  timer/stackmat.ts     reading a Stackmat's signal from the audio input
+  trainer/              the OLL and PLL trainer: your case times, a smart cube drill
   shareCard.ts          draws the result card image
   time.ts               formatting and typing times
   clock.ts              the server's clock (for countdowns)

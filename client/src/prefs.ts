@@ -17,6 +17,8 @@ export interface Prefs {
   inputMode: InputMode;
   sound: boolean;
   preview: PreviewPref;
+  /** Phones: the others' times under the timer (true), or only the timer (false; a tap on Standings shows them). */
+  showStandings: boolean;
   /** The event "Race now" looks for. */
   raceEvent: CubeEventId;
   /** Your event in mixed rooms (your last pick), sent when you join one. */
@@ -30,6 +32,7 @@ const DEFAULTS: Prefs = {
   inputMode: "timer",
   sound: true,
   preview: "2d",
+  showStandings: false,
   raceEvent: "333",
   mixedEvent: "222",
 };

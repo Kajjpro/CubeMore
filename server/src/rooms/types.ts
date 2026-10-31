@@ -1,4 +1,4 @@
-import type { CubeEventId, PlayerStatus, RoomSettings, TimerStatus } from "@cube-racing/shared";
+import type { CubeEventId, PlayerStatus, RoomSettings, TeamId, TimerStatus } from "@cube-racing/shared";
 import type { Match } from "../match/types";
 
 // These are the SERVER's own copies of rooms and players. They hold a few
@@ -27,6 +27,10 @@ export interface ServerPlayer {
   pickingEvent: boolean;
   /** The event they picked for mixed rooms, or null (= the room's event). Ignored in other rooms. */
   cubeEvent: CubeEventId | null;
+  /** Team rooms: the team they race for. null outside team rooms. */
+  team: TeamId | null;
+  /** Their latest scored times in this room (ms, no DNFs), to split teams evenly. */
+  recentMs: number[];
 }
 
 export interface ServerRoom {

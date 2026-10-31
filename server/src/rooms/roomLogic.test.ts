@@ -11,7 +11,9 @@ import {
   autoStart,
   autoStartDue,
   backToLobby,
+  balanceTeams,
   chooseEvent,
+  chooseTeam,
   createRoom as createSetupRoom,
   endMatch,
   joinRoom,
@@ -676,4 +678,74 @@ describe("mixed rooms: a newcomer picks their event", () => {
     expect(room.autoStartAt).toBeNull();
   });
 
+});
+
+describe("team rooms", () => {
+  const dave = { playerId: "dave-id", nickname: "Dave" };
+  const teamsOf = (room: ServerRoom) => Object.fromEntries(room.players.map((p) => [p.nickname, p.team]));
+
+  function teamRoom(): ServerRoom {
+    let room = createRoom("TEAM23", DEFAULT_SETTINGS, alice, START);
+    room = ok(joinRoom(room, bob, START + 1));
+    room = ok(updateSettings(room, alice.playerId, { teams: "all" }, undefined, START + 2));
+    return room;
+  }
+
+  it("turning teams on splits everyone; newcomers join the smaller team", () => {
+    let room = teamRoom();
+    expect(teamsOf(room)).toEqual({ Alice: "A", Bob: "B" });
+    room = ok(joinRoom(room, carol, START + 3));
+    room = ok(joinRoom(room, dave, START + 4));
+    expect(teamsOf(room)).toEqual({ Alice: "A", Bob: "B", Carol: "A", Dave: "B" });
+    expect(toSnapshot(room, START).players.map((p) => p.team)).toEqual(["A", "B", "A", "B"]);
+  });
+
+  it("a room made as a team room puts its host on the Blue team", () => {
+    let room = createRoom("TEAM24", { ...DEFAULT_SETTINGS, teams: "fastest" }, alice, START);
+    room = ok(joinRoom(room, bob, START + 1));
+    expect(teamsOf(room)).toEqual({ Alice: "A", Bob: "B" });
+  });
+
+  it("no teams outside team rooms, and no handicap in team rooms", () => {
+    const room = roomWithThreePlayers();
+    expect(toSnapshot(room, START).players.every((p) => p.team === null)).toBe(true);
+    expect(chooseTeam(room, bob.playerId, "A").ok).toBe(false);
+    expect(updateSettings(teamRoom(), alice.playerId, { scoring: "handicap" }).ok).toBe(false);
+  });
+
+  it("a team match needs someone on each team", () => {
+    let room = teamRoom();
+    room = ok(chooseTeam(room, bob.playerId, "A"));
+    const refused = startMatch(room, alice.playerId, matchStart(), START + 10);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error).toContain("Red team has nobody");
+    room = ok(balanceTeams(room, alice.playerId));
+    expect(teamsOf(room)).toEqual({ Alice: "A", Bob: "B" });
+    room = ok(startMatch(room, alice.playerId, matchStart(), START + 10));
+    expect(room.match!.teams).toMatchObject({ mode: "all", of: { [publicIdFor(alice.playerId)]: "A", [publicIdFor(bob.playerId)]: "B" } });
+  });
+
+  it("teams are fixed during the match, and only the host balances them, between matches", () => {
+    let room = ok(startMatch(teamRoom(), alice.playerId, matchStart(), START + 10));
+    expect(chooseTeam(room, bob.playerId, "A").ok).toBe(false);
+    expect(balanceTeams(room, alice.playerId).ok).toBe(false);
+    expect(balanceTeams(teamRoom(), bob.playerId).ok).toBe(false);
+    // Someone who joins mid-match can still pick a side for the next set.
+    room = ok(joinRoom(room, carol, START + 20));
+    room = ok(chooseTeam(room, carol.playerId, "B"));
+    expect(teamsOf(room).Carol).toBe("B");
+  });
+
+  it("balancing uses the times in the room: the two fastest end up apart", () => {
+    let room = teamRoom();
+    room = ok(joinRoom(room, carol, START + 3));
+    room = ok(joinRoom(room, dave, START + 4));
+    room = ok(startMatch(room, alice.playerId, matchStart(), START + 10));
+    const times: Record<string, number> = { [alice.playerId]: 8_000, [bob.playerId]: 9_000, [carol.playerId]: 20_000, [dave.playerId]: 25_000 };
+    for (const [id, t] of Object.entries(times)) room = submit(room, id, t, START + 11);
+    room = ok(endMatch(room, alice.playerId));
+    room = ok(balanceTeams(room, alice.playerId));
+    // Snake draft: Alice (8) A, Bob (9) B, Carol (20) B, Dave (25) A.
+    expect(teamsOf(room)).toEqual({ Alice: "A", Bob: "B", Carol: "B", Dave: "A" });
+  });
 });

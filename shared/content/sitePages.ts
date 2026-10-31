@@ -39,6 +39,14 @@ export const ANALYZER_FAQ: Faq[] = [
   { q: "Is it free?", a: "Yes. Sign in to keep your solves and see your sessions later." },
 ];
 
+export const TRAINER_FAQ: Faq[] = [
+  { q: "How does it find my slow cases?", a: "From every OLL and PLL you time: in the solve analyzer with a smart cube, and in drills here. A case slower than your own average, or one you still do in two looks, goes to the top." },
+  { q: "Do I need a smart cube?", a: "No. With any cube, scramble it, then time the case with the spacebar, a touch, a GAN timer or a Stackmat. A smart cube also times your recognition and counts your moves." },
+  { q: "How are the scrambles made?", a: "Each one is a normal-looking scramble that lands on the case, from a random angle. An OLL comes with a random PLL after it, like in a real solve." },
+  { q: "Which cases come up?", a: "The cases you pick. New cases come first, then the slow and missed ones come back more often until they're as fast as the rest." },
+  { q: "Is it free?", a: "Yes. Guests keep their times in the browser; sign in to keep them on every device." },
+];
+
 function faqHtml(faqs: Faq[], heading: string): string {
   return `<section class="about-block faq"><h2>${esc(heading)}</h2><dl>${faqs.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join("")}</dl></section>`;
 }
@@ -69,6 +77,19 @@ function analyzer(): string {
 <li>For an average of 5: your average stages and the three things to work on.</li>
 </ul></section>
 ${faqHtml(ANALYZER_FAQ, "Questions")}`;
+}
+
+function trainer(): string {
+  return `<h1>OLL and PLL trainer</h1>
+<p class="intro">Find the OLL and PLL cases that slow you down, then drill them until they're fast.</p>
+<section class="about-block"><h2>How it works</h2><ul>
+<li>Your time on each of the 57 OLL and 21 PLL cases, from your smart cube solves and your drills.</li>
+<li>The cases to train first: slower than your average, missed, or still done in two looks.</li>
+<li>Drills with real scrambles for each case. Slow and missed cases come back more often.</li>
+<li>Time with the spacebar, a touch, a GAN timer, a Stackmat, or a smart cube (recognition timed apart).</li>
+</ul></section>
+<p>Learn the algorithms first on the <a href="/algorithms">OLL and PLL algorithm pages</a>.</p>
+${faqHtml(TRAINER_FAQ, "Questions")}`;
 }
 
 function event(page: EventPage): string {
@@ -108,6 +129,7 @@ ${faqHtml(HOME_FAQ_MN, "Түгээмэл асуулт")}
 export function sitePageHtml(path: string): string | null {
   if (path === "/") return home();
   if (path === "/analyze") return analyzer();
+  if (path === "/train") return trainer();
   if (path === "/daily") return daily();
   if (path === "/mn") return mongolian();
   const race = path.match(/^\/race\/([\w-]+)$/);

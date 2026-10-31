@@ -7,10 +7,11 @@
  */
 
 import { useEffect, useState } from "react";
-import { ClientEvents, ServerEvents, type RoomSnapshot } from "@cube-racing/shared";
+import { ClientEvents, ServerEvents, TEAM_NAMES, teamName, type RoomSnapshot } from "@cube-racing/shared";
 import { updateServerOffset } from "../clock";
 import { RoomEventIcon } from "../components/ui";
 import { LiveClock, ranks, rowOrder } from "../components/Standings";
+import { TeamSwatch } from "../components/Teams";
 import { FORMAT_LABELS, nameList, roomEventShort } from "../labels";
 import { applyTheme } from "../prefs";
 import { request, socket } from "../socket";
@@ -108,10 +109,18 @@ function OverlayStandings({ room }: { room: RoomSnapshot }) {
   const players = new Map(room.players.map((p) => [p.id, p]));
   const hasAverage = match.solvesPerSet > 1;
   const winners = match.phase === "match_over" ? match.winnerIds.map((id) => players.get(id)?.nickname ?? "?") : [];
+  const teams = match.teams;
 
   return (
     <>
-      {winners.length > 0 && <p className="overlay-note">{nameList(winners)} {winners.length > 1 ? "win" : "wins"} the match</p>}
+      {teams && (
+        <p className="overlay-note overlay-teams">
+          {teams.winners.length === 1 && match.phase === "match_over"
+            ? `${teamName(teams.winners[0])} wins ${Math.max(teams.points.A, teams.points.B)}–${Math.min(teams.points.A, teams.points.B)}`
+            : `${TEAM_NAMES.A} ${teams.points.A} – ${teams.points.B} ${TEAM_NAMES.B}`}
+        </p>
+      )}
+      {!teams && winners.length > 0 && <p className="overlay-note">{nameList(winners)} {winners.length > 1 ? "win" : "wins"} the match</p>}
       <ol className="overlay-rows">
         {ids.map((id) => {
           const player = players.get(id);
@@ -119,7 +128,7 @@ function OverlayStandings({ room }: { room: RoomSnapshot }) {
           const solving = match.phase === "solving" && !result && player?.timerStatus === "solving" && player.solvingSince !== null;
           return (
             <li key={id} className={winners.length && match.winnerIds.includes(id) ? "winner" : ""}>
-              <span className="rank">{rankOf.get(id)}</span>
+              <span className="rank">{teams?.of[id] ? <TeamSwatch team={teams.of[id]} /> : rankOf.get(id)}</span>
               <span className="name">{player?.nickname ?? "Left"}</span>
               <span className="now">
                 {result ? (
@@ -131,7 +140,7 @@ function OverlayStandings({ room }: { room: RoomSnapshot }) {
                 )}
               </span>
               {hasAverage && <span className="avg">{formatMark(match.standings[id]?.result)}</span>}
-              <span className="pts">{match.points[id] ?? 0}</span>
+              <span className="pts">{teams ? "" : (match.points[id] ?? 0)}</span>
             </li>
           );
         })}

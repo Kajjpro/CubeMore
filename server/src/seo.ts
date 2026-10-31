@@ -156,7 +156,7 @@ export function canonicalRedirect(host: string | undefined, path: string, query:
  * engines, but not drawn until the app replaces it.
  */
 function frame(main: string, shown: boolean): string {
-  return `<div class="home static-page"${shown ? "" : ' style="visibility:hidden"'}><header class="site-head"><a class="brand" href="/">${SITE_NAME}</a><span class="grow"></span><a class="head-link" href="/analyze">Solve analyzer</a><a class="head-link" href="/algorithms">Algorithms</a></header><main class="static-main">${main}</main><footer class="home-foot site-foot"><nav class="foot-links" aria-label="More"><a href="/">Race now</a><a href="/analyze">Solve analyzer</a><a href="/algorithms">OLL and PLL algorithms</a><a href="/daily">Daily scramble</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a></nav></footer></div>`;
+  return `<div class="home static-page"${shown ? "" : ' style="visibility:hidden"'}><header class="site-head"><a class="brand" href="/">${SITE_NAME}</a><span class="grow"></span><a class="head-link" href="/analyze">Solve analyzer</a><a class="head-link" href="/train">Trainer</a><a class="head-link" href="/algorithms">Algorithms</a></header><main class="static-main">${main}</main><footer class="home-foot site-foot"><nav class="foot-links" aria-label="More"><a href="/">Race now</a><a href="/analyze">Solve analyzer</a><a href="/train">OLL and PLL trainer</a><a href="/algorithms">OLL and PLL algorithms</a><a href="/daily">Daily scramble</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a></nav></footer></div>`;
 }
 
 /** Prerendered content for a page, or null (the app alone). */

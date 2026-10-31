@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CHAT_HISTORY_LENGTH, DEFAULT_SETTINGS, type ChatMessage } from "@cube-racing/shared";
 import { chatNotices } from "./chatNotices";
 import { LiveRoom } from "./liveRoom";
-import { createRoom as createSetupRoom, joinRoom, leaveRoom, startMatch, submitSolve, tickRoom, type LogicResult } from "./roomLogic";
+import { chooseTeam, createRoom as createSetupRoom, joinRoom, leaveRoom, startMatch, submitSolve, tickRoom, updateSettings, type LogicResult } from "./roomLogic";
 import type { ServerRoom } from "./types";
 
 /** A room its host has already set up and opened (most tests start there; setup has its own tests). */
@@ -61,6 +61,29 @@ describe("chat notices", () => {
     const setResult = room;
     room = tickRoom(room, setResult.match!.phaseEndsAt!); // Alice reached 1 point in a best of 1
     expect(chatNotices(setResult, room)).toEqual(["Alice wins the match"]);
+  });
+
+  it("team rooms: new teams, switching, and the winning team", () => {
+    let room = createRoom("ABC234", { ...DEFAULT_SETTINGS, format: "single", winCondition: "bo1" }, alice, 0);
+    room = ok(joinRoom(room, bob, 1));
+    const teams = ok(updateSettings(room, alice.playerId, { teams: "fastest" }));
+    expect(chatNotices(room, teams)).toEqual(["New teams. Blue team: Alice. Red team: Bob"]);
+    const carol = { playerId: "carol-id", nickname: "Carol" };
+    const joined = ok(joinRoom(teams, carol, 2));
+    expect(chatNotices(teams, joined)).toEqual(["Carol joined the room, Blue team"]);
+    const moved = ok(chooseTeam(joined, carol.playerId, "B"));
+    expect(chatNotices(joined, moved)).toEqual(["Carol moved to the Red team"]);
+
+    const scrambles = { "333": [{ cubeEvent: "333" as const, text: "R U R' U'" }] };
+    let match = ok(startMatch(moved, alice.playerId, { matchId: "m1", scrambles, timing }, 3));
+    expect(chatNotices(moved, match)).toEqual(["Team match started: 3x3x3, single, Best of 1"]);
+    match = submit(submit(submit(match, alice.playerId, 9000), bob.playerId, 10000), carol.playerId, 8000);
+    const review = match;
+    match = tickRoom(match, review.match!.phaseEndsAt!);
+    expect(chatNotices(review, match)).toEqual(["Red team wins set 1 (9.00 vs 8.00)"]);
+    const setResult = match;
+    match = tickRoom(match, setResult.match!.phaseEndsAt!);
+    expect(chatNotices(setResult, match)).toEqual(["Red team wins the match 1–0"]);
   });
 
   it("says nothing when nothing worth announcing changed", () => {

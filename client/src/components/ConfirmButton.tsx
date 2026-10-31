@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * A button that asks for a second tap instead of opening a dialog (no modals
@@ -13,6 +13,8 @@ export function ConfirmButton(props: {
   ariaLabel?: string;
   /** A compact control in the race layout (see DESIGN.md, tap targets). */
   dense?: boolean;
+  /** Before the label (not while asking for the second tap). */
+  icon?: ReactNode;
 }) {
   const [armed, setArmed] = useState(false);
 
@@ -38,6 +40,7 @@ export function ConfirmButton(props: {
         }
       }}
     >
+      {!armed && props.icon}
       {armed ? props.confirmLabel : props.label}
     </button>
   );
