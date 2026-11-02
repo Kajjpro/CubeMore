@@ -105,6 +105,8 @@ export function HomePage({ demo }: { demo?: HomeDemo }) {
           <RoomTabs rooms={rooms} connected={connected} onJoin={openRoom} initialTab={demo?.tab} />
         </section>
 
+        <MadeBy />
+
         <AnalyzerPromo />
 
         <div className="home-cards">
@@ -197,6 +199,45 @@ function AboutCubeMore() {
           <dt>Цаг хэмжигч яаж ажилладаг вэ?</dt>
           <dd>Space товчийг (утсан дээр дэлгэцийг) дараад суллахад цаг эхэлнэ, дурын товч дарахад зогсоно. Хугацаагаа гараар оруулж ч болно.</dd>
         </dl>
+      </div>
+    </section>
+  );
+}
+
+const MAKER = {
+  name: "Khaliun Bolortuya",
+  github: "Kajjpro",
+  email: "khaliunbolortuya@gmail.com",
+};
+
+/**
+ * Who made CubeMore, with the GitHub and email spelled out. Drawn inverted (dark
+ * on a light page, light on a dark one) with the six faces on top, so it's
+ * easy to spot.
+ */
+function MadeBy() {
+  return (
+    <section className="made-by" aria-labelledby="made-by-title">
+      <div className="made-by-faces" aria-hidden="true">
+        <span /><span /><span /><span /><span /><span />
+      </div>
+      <div className="made-by-body">
+        <div className="made-by-text">
+          <p className="made-by-kicker">Made by</p>
+          <h2 id="made-by-title" className="made-by-name">
+            {MAKER.name}
+          </h2>
+        </div>
+        <div className="made-by-links">
+          <a className="made-by-link" href={`https://github.com/${MAKER.github}`} target="_blank" rel="noopener noreferrer author">
+            <span className="made-by-label">GitHub</span>
+            <span className="made-by-value">github.com/{MAKER.github}</span>
+          </a>
+          <a className="made-by-link" href={`mailto:${MAKER.email}`}>
+            <span className="made-by-label">Email</span>
+            <span className="made-by-value">{MAKER.email}</span>
+          </a>
+        </div>
       </div>
     </section>
   );

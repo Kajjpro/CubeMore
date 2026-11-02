@@ -54,6 +54,7 @@ function structuredData(meta: PageMeta, siteUrl: string): object[] {
         applicationCategory: "GameApplication",
         operatingSystem: "Any (in a web browser)",
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        author: { "@type": "Person", name: "Khaliun Bolortuya", email: "mailto:khaliunbolortuya@gmail.com", url: "https://github.com/Kajjpro", sameAs: ["https://github.com/Kajjpro"] },
         keywords: "CubeMore, Cube More, speedcubing, Rubik's cube timer, online cube race, cubing competition, csTimer alternative, WCA, Рубик шоо, кубик",
       },
     ];

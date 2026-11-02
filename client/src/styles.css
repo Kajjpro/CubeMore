@@ -6850,6 +6850,96 @@ button.your-solve[aria-expanded="true"] {
   }
 }
 
+/* ---- Made by: inverted (the one solid block), with the six faces on top ---- */
+
+.made-by {
+  overflow: hidden;
+  border-radius: var(--r-lg, 16px);
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.made-by-faces {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  height: 6px;
+}
+
+.made-by-faces span:nth-child(1) { background: var(--sticker-0); }
+.made-by-faces span:nth-child(2) { background: var(--sticker-1); }
+.made-by-faces span:nth-child(3) { background: var(--sticker-2); }
+.made-by-faces span:nth-child(4) { background: var(--sticker-3); }
+.made-by-faces span:nth-child(5) { background: var(--sticker-4); }
+.made-by-faces span:nth-child(6) { background: var(--sticker-5); }
+
+.made-by-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  padding: 18px 20px 20px;
+}
+
+.made-by-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.made-by-name {
+  margin: 2px 0 0;
+  font-size: clamp(22px, 4.5vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: inherit;
+}
+
+.made-by-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.made-by-link {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 48px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--surface) 35%, transparent);
+  border-radius: var(--r-sm, 8px);
+  color: inherit;
+  text-decoration: none;
+}
+
+.made-by-link:hover,
+.made-by-link:focus-visible {
+  border-color: var(--sticker-3);
+  background: color-mix(in srgb, var(--surface) 10%, transparent);
+}
+
+.made-by-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.made-by-value {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
 .analyzer-promo {
   display: flex;
   flex-wrap: wrap;
